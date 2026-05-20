@@ -38,10 +38,19 @@ from app.schemas.subtask_context import (
     TruncationInfo,
 )
 from app.services.attachment.parser import DocumentParseError, DocumentParser
+from app.services.attachment.storage_factory import (
+    get_storage_backend,
+    is_external_storage_configured,
+)
 from app.services.auth.task_token import extract_token_from_header, verify_task_token
 from app.services.context import context_service
 from app.services.context.context_service import NotFoundException
 from app.services.shared_task import shared_task_service
+
+# Lifetime for presigned URLs returned to the Executor. Long enough to
+# tolerate retries and concurrent downloads during a single task run, but
+# short enough that leaked links expire quickly.
+_EXECUTOR_DOWNLOAD_URL_TTL_SECONDS = 30 * 60
 
 logger = logging.getLogger(__name__)
 
@@ -679,6 +688,32 @@ async def executor_download_attachment(
     # Verify it's an attachment type
     if context.context_type != ContextType.ATTACHMENT.value:
         raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # When attachments live in an external object store (S3/MinIO), redirect
+    # the Executor straight to a presigned URL so the large body never flows
+    # through this process. This also matches the future ECI topology where
+    # the Executor cannot reach the Backend from the public cloud.
+    #
+    # Encrypted attachments must NOT be redirected: decryption happens in
+    # context_service before the bytes leave this process, and the Executor
+    # has no access to the AES key. In that case fall through to streaming.
+    if (
+        is_external_storage_configured()
+        and context.storage_key
+        and not context.is_encrypted
+    ):
+        backend = get_storage_backend(db)
+        presigned_url = backend.get_url(
+            context.storage_key, expires=_EXECUTOR_DOWNLOAD_URL_TTL_SECONDS
+        )
+        if presigned_url:
+            logger.info(
+                "Redirecting executor download to presigned URL: "
+                "attachment_id=%d storage_backend=%s",
+                attachment_id,
+                backend.backend_type,
+            )
+            return RedirectResponse(url=presigned_url, status_code=302)
 
     # Get binary data from the appropriate storage backend
     binary_data = context_service.get_attachment_binary_data(
