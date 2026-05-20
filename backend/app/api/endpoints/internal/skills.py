@@ -15,7 +15,7 @@ import io
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -27,12 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/skills", tags=["internal-skills"])
 
 
-# Lifetime for presigned download URLs returned to internal callers. Kept
-# short because callers (chat_shell, executor) consume the URL immediately.
-# 10 minutes leaves headroom for retries without exposing long-lived links.
-_PRESIGNED_URL_TTL_SECONDS = 600
-
-
 @router.get("/{skill_id}/binary")
 def get_skill_binary(
     skill_id: int,
@@ -41,10 +35,10 @@ def get_skill_binary(
     """
     Download skill binary for internal service use.
 
-    Returns either:
-    - a 302 redirect to a presigned S3 URL (when the skill lives in object
-      storage), so the caller fetches the ZIP straight from S3/MinIO, or
-    - a streaming response with the ZIP bytes (legacy MySQL backend).
+    Always streams ZIP bytes through the backend (MySQL or S3-backed rows).
+    Internal callers such as chat_shell must not rely on 302 redirects:
+    older httpx clients treat redirects as errors unless follow_redirects
+    is enabled.
 
     Only public skills (user_id=0) are accessible via this endpoint.
     """
@@ -61,19 +55,6 @@ def get_skill_binary(
 
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-
-    # Prefer the presigned-URL path so large packages are not proxied
-    # through the backend process.
-    download_url = skill_binary_storage.get_download_url(
-        db, kind_id=skill_id, expires=_PRESIGNED_URL_TTL_SECONDS
-    )
-    if download_url:
-        logger.info(
-            "[internal_skills] Redirecting skill binary: skill_id=%d, name=%s",
-            skill_id,
-            skill.name,
-        )
-        return RedirectResponse(url=download_url, status_code=302)
 
     data = skill_binary_storage.get_bytes(db, kind_id=skill_id)
     if not data:

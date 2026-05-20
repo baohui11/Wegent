@@ -156,9 +156,18 @@ class SkillBinaryStorage:
         return record.binary_data or None
 
     def get_download_url(
-        self, db: Session, *, kind_id: int, expires: int = 600
+        self,
+        db: Session,
+        *,
+        kind_id: int,
+        expires: int = 600,
+        public: bool = False,
     ) -> Optional[str]:
         """Return a presigned download URL when the skill lives in S3.
+
+        Args:
+            public: Use the public endpoint rewrite for browser downloads.
+                Leave False for executor / chat_shell on the Docker network.
 
         Returns None for rows still stored in MySQL, in which case callers
         should fall back to streaming bytes through the backend.
@@ -166,7 +175,9 @@ class SkillBinaryStorage:
         record = db.query(SkillBinary).filter(SkillBinary.kind_id == kind_id).first()
         if record is None or not record.storage_key:
             return None
-        return self._object_backend(db).get_url(record.storage_key, expires=expires)
+        return self._object_backend(db).get_url(
+            record.storage_key, expires=expires, public=public
+        )
 
     def delete(self, db: Session, *, kind_id: int) -> None:
         """Delete the SkillBinary row and the underlying object (if any).

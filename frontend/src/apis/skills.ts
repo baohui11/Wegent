@@ -245,6 +245,8 @@ export async function downloadSkill(
 
   const queryParams = new URLSearchParams()
   if (namespace) queryParams.append('namespace', namespace)
+  // Browser must follow presigned URLs via the host-published MinIO port.
+  queryParams.append('presign_host', 'public')
 
   const queryString = queryParams.toString()
   const url = `${getApiUrl()}/v1/kinds/skills/${skillId}/download${queryString ? `?${queryString}` : ''}`
