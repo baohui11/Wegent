@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models.kind import Kind
 from app.models.skill_binary import SkillBinary
 from app.schemas.kind import ObjectMeta, Skill, SkillList, SkillSpec, SkillStatus
+from app.services.skill_binary_storage import skill_binary_storage
 from app.services.skill_service import SkillValidator
 
 logger = logging.getLogger(__name__)
@@ -325,22 +326,13 @@ class SkillKindsService:
             flag_modified(existing, "json")
             db.flush()
 
-            # Update or create SkillBinary
-            skill_binary = (
-                db.query(SkillBinary).filter(SkillBinary.kind_id == existing.id).first()
+            skill_binary_storage.save(
+                db,
+                kind_id=existing.id,
+                file_content=file_content,
+                file_size=metadata["file_size"],
+                file_hash=metadata["file_hash"],
             )
-            if skill_binary:
-                skill_binary.binary_data = file_content
-                skill_binary.file_size = metadata["file_size"]
-                skill_binary.file_hash = metadata["file_hash"]
-            else:
-                skill_binary = SkillBinary(
-                    kind_id=existing.id,
-                    binary_data=file_content,
-                    file_size=metadata["file_size"],
-                    file_hash=metadata["file_hash"],
-                )
-                db.add(skill_binary)
 
             result = self._kind_to_skill(existing)
             db.commit()
@@ -358,14 +350,13 @@ class SkillKindsService:
         db.add(skill_kind)
         db.flush()  # Get skill_kind.id
 
-        # Create SkillBinary
-        skill_binary = SkillBinary(
+        skill_binary_storage.save(
+            db,
             kind_id=skill_kind.id,
-            binary_data=file_content,
+            file_content=file_content,
             file_size=metadata["file_size"],
             file_hash=metadata["file_hash"],
         )
-        db.add(skill_binary)
 
         # Build result before commit to avoid lazy loading issues
         result = self._kind_to_skill(skill_kind)
@@ -437,18 +428,13 @@ class SkillKindsService:
         db.add(new_skill)
         db.flush()  # get new_skill.id
 
-        # Copy the SkillBinary
-        source_binary = (
-            db.query(SkillBinary).filter(SkillBinary.kind_id == source.id).first()
+        # Copy the SkillBinary (also copies the underlying S3 object when
+        # using the object-storage backend).
+        skill_binary_storage.copy(
+            db,
+            source_kind_id=source.id,
+            target_kind_id=new_skill.id,
         )
-        if source_binary:
-            new_binary = SkillBinary(
-                kind_id=new_skill.id,
-                binary_data=source_binary.binary_data,
-                file_size=source_binary.file_size,
-                file_hash=source_binary.file_hash,
-            )
-            db.add(new_binary)
 
         db.commit()
         db.refresh(new_skill)
@@ -705,23 +691,13 @@ class SkillKindsService:
         # Mark JSON field as modified for SQLAlchemy to detect the change
         flag_modified(skill_kind, "json")
 
-        # Update or create SkillBinary
-        skill_binary = (
-            db.query(SkillBinary).filter(SkillBinary.kind_id == skill_id).first()
+        skill_binary_storage.save(
+            db,
+            kind_id=skill_id,
+            file_content=file_content,
+            file_size=metadata["file_size"],
+            file_hash=metadata["file_hash"],
         )
-
-        if skill_binary:
-            skill_binary.binary_data = file_content
-            skill_binary.file_size = metadata["file_size"]
-            skill_binary.file_hash = metadata["file_hash"]
-        else:
-            skill_binary = SkillBinary(
-                kind_id=skill_id,
-                binary_data=file_content,
-                file_size=metadata["file_size"],
-                file_hash=metadata["file_hash"],
-            )
-            db.add(skill_binary)
 
         # Build result before commit to avoid lazy loading issues
         result = self._kind_to_skill(skill_kind)
@@ -819,8 +795,9 @@ class SkillKindsService:
             "[delete_skill] No ghost references found for skill_id=%s", skill_kind.id
         )
 
-        # Delete associated SkillBinary (hard delete to free storage)
-        db.query(SkillBinary).filter(SkillBinary.kind_id == skill_id).delete()
+        # Delete associated SkillBinary (also removes the S3 object when
+        # the skill was uploaded to object storage).
+        skill_binary_storage.delete(db, kind_id=skill_id)
 
         # Soft delete the Kind record
         skill_kind.is_active = False
@@ -931,6 +908,9 @@ class SkillKindsService:
         """
         Get Skill ZIP binary data.
 
+        Reads from MySQL or S3 transparently depending on where the bytes
+        actually live (controlled by ``ATTACHMENT_STORAGE_BACKEND``).
+
         Args:
             db: Database session
             skill_id: Skill ID
@@ -954,15 +934,7 @@ class SkillKindsService:
         if not skill_kind:
             return None
 
-        # Get binary data
-        skill_binary = (
-            db.query(SkillBinary).filter(SkillBinary.kind_id == skill_id).first()
-        )
-
-        if not skill_binary:
-            return None
-
-        return skill_binary.binary_data
+        return skill_binary_storage.get_bytes(db, kind_id=skill_id)
 
     def get_skill_binary_in_namespace(
         self, db: Session, *, skill_id: int, namespace: str
@@ -996,15 +968,7 @@ class SkillKindsService:
         if not skill_kind:
             return None
 
-        # Get binary data
-        skill_binary = (
-            db.query(SkillBinary).filter(SkillBinary.kind_id == skill_id).first()
-        )
-
-        if not skill_binary:
-            return None
-
-        return skill_binary.binary_data
+        return skill_binary_storage.get_bytes(db, kind_id=skill_id)
 
     def _kind_to_skill(self, kind: Kind) -> Skill:
         """Convert Kind model to Skill CRD"""

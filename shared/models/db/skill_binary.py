@@ -14,7 +14,21 @@ from .base import Base
 
 
 class SkillBinary(Base):
-    """Skill binary data storage for ZIP packages."""
+    """Skill binary data storage for ZIP packages.
+
+    Storage location is selected at write time:
+
+    - When the configured attachment storage backend is ``mysql`` (the
+      default), the ZIP bytes are stored in ``binary_data`` and
+      ``storage_key`` stays NULL.
+    - When the backend is ``s3``/``minio``, the ZIP is uploaded to object
+      storage and ``storage_key`` holds the object key. ``binary_data`` is
+      left NULL so MySQL is not bloated by large blobs.
+
+    ``binary_data`` is nullable to support the S3 path; the column is kept
+    on the table to remain forward-compatible with the upstream Wegent
+    schema and avoid breaking ``MySQLStorageBackend`` behaviour.
+    """
 
     __tablename__ = "skill_binaries"
 
@@ -22,7 +36,10 @@ class SkillBinary(Base):
     kind_id = Column(
         Integer, ForeignKey("kinds.id", ondelete="CASCADE"), nullable=False, unique=True
     )
-    binary_data = Column(LargeBinary, nullable=False)  # ZIP package binary data
+    # ZIP package binary data (only populated when using the MySQL backend).
+    binary_data = Column(LargeBinary, nullable=True)
+    # Object storage key (populated when using the S3/MinIO backend).
+    storage_key = Column(String(512), nullable=True)
     file_size = Column(Integer, nullable=False)  # File size in bytes
     file_hash = Column(String(64), nullable=False)  # SHA256 hash
     created_at = Column(DateTime, default=datetime.now)
