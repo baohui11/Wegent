@@ -75,11 +75,20 @@ class StorageBackendRegistry:
         self._register_default_backends()
 
     def _register_default_backends(self) -> None:
-        """Register the default MySQL backend."""
+        """Register built-in backends (MySQL and S3/MinIO).
+
+        S3 and MinIO share a single ``S3StorageBackend`` implementation but
+        are exposed under two aliases so ``ATTACHMENT_STORAGE_BACKEND`` can
+        be set to either value without forcing operators to remember which
+        flavour of object storage they are using.
+        """
         # Import here to avoid circular imports
         from app.services.attachment.mysql_storage import MySQLStorageBackend
+        from app.services.attachment.s3_storage import S3StorageBackend
 
         self.register("mysql", lambda db: MySQLStorageBackend(db))
+        self.register("s3", lambda db: S3StorageBackend(db))
+        self.register("minio", lambda db: S3StorageBackend(db))
 
     def register(
         self,
