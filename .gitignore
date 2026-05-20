@@ -106,3 +106,5 @@ executor/build/
 executor/dist/
 docs/superpowers/
 .worktrees/
+
+temp/
