@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -35,8 +35,33 @@ from app.schemas.kind import (
 from app.services.adapters.public_skill import public_skill_service
 from app.services.adapters.skill_kinds import skill_kinds_service
 from app.services.git_skill import git_skill_service
+from app.services.skill_binary_storage import skill_binary_storage
 
 router = APIRouter()
+
+
+# Lifetime for presigned download URLs returned from download endpoints.
+# 10 minutes is comfortably longer than any expected client download while
+# keeping the link short-lived enough to limit accidental sharing.
+_SKILL_PRESIGNED_URL_TTL_SECONDS = 600
+
+
+def _try_redirect_to_object_storage(
+    db: Session, *, skill_id: int
+) -> Optional[RedirectResponse]:
+    """If the skill ZIP lives in object storage, return a 302 redirect.
+
+    Returning ``None`` means the caller must fall back to streaming the
+    bytes through this process (legacy MySQL backend, or a row that still
+    has ``binary_data`` populated). Keeping this logic in one place avoids
+    sprinkling backend-detection branches across every download endpoint.
+    """
+    url = skill_binary_storage.get_download_url(
+        db, kind_id=skill_id, expires=_SKILL_PRESIGNED_URL_TTL_SECONDS
+    )
+    if not url:
+        return None
+    return RedirectResponse(url=url, status_code=302)
 
 
 def _resolve_manageable_skill(
@@ -757,6 +782,12 @@ def download_public_skill(
     if not skill:
         raise HTTPException(status_code=404, detail="Public skill not found")
 
+    # Prefer a presigned-URL redirect so large ZIPs are not proxied
+    # through this process.
+    redirect = _try_redirect_to_object_storage(db, skill_id=skill_id)
+    if redirect is not None:
+        return redirect
+
     # Get binary data using service with user_id=0
     binary_data = skill_kinds_service.get_skill_binary(
         db=db, skill_id=skill_id, user_id=0
@@ -1303,6 +1334,13 @@ def download_skill(
 
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+
+    # Prefer a presigned-URL redirect when the ZIP lives in object storage.
+    # The four lookup branches above already enforced authorization, so
+    # by the time we get here it is safe to hand out a presigned URL.
+    redirect = _try_redirect_to_object_storage(db, skill_id=skill_id)
+    if redirect is not None:
+        return redirect
 
     if not binary_data:
         raise HTTPException(status_code=404, detail="Skill binary not found")
