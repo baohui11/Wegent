@@ -44,6 +44,46 @@ services:
       retries: 5
       start_period: 10s
 
+  minio:
+    image: minio/minio:latest
+    container_name: wegent-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - wegent-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: wegent-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - wegent-network
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}"
+        for bucket in "${ATTACHMENT_S3_BUCKET:-attachments}" "${ATTACHMENT_S3_SKILL_BUCKET:-skills}" "${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}"; do
+          mc mb --ignore-existing "local/$$bucket"
+        done
+
   elasticsearch:
     image: elastic/elasticsearch:8.18.8
     container_name: wegent-elasticsearch
@@ -103,6 +143,22 @@ services:
       INIT_DATA_ENABLED: "${BACKEND_INIT_DATA_ENABLED:-True}"
       MAX_UPLOAD_FILE_SIZE_MB: ${BACKEND_MAX_UPLOAD_FILE_SIZE_MB:-50}
       MAX_EXTRACTED_TEXT_LENGTH: ${BACKEND_MAX_EXTRACTED_TEXT_LENGTH:-1000000}
+      # Attachment / Skill storage backend (mysql | s3 | minio)
+      # Defaults to "mysql" so the stack stays compatible with the upstream
+      # configuration; flip to "s3" (or "minio") to route blobs to MinIO.
+      ATTACHMENT_STORAGE_BACKEND: ${ATTACHMENT_STORAGE_BACKEND:-mysql}
+      ATTACHMENT_S3_ENDPOINT: ${ATTACHMENT_S3_ENDPOINT:-http://minio:9000}
+      # Public endpoint used to rewrite presigned URLs for browsers and
+      # off-cluster executors. When the backend reaches MinIO through the
+      # service name (http://minio:9000), this should be the host:port that
+      # is published to the host (default ${WEGENT_MINIO_PUBLIC_HOST}).
+      ATTACHMENT_S3_PUBLIC_ENDPOINT: ${ATTACHMENT_S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
+      ATTACHMENT_S3_ACCESS_KEY: ${ATTACHMENT_S3_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
+      ATTACHMENT_S3_SECRET_KEY: ${ATTACHMENT_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
+      ATTACHMENT_S3_BUCKET: ${ATTACHMENT_S3_BUCKET:-attachments}
+      ATTACHMENT_S3_SKILL_BUCKET: ${ATTACHMENT_S3_SKILL_BUCKET:-skills}
+      ATTACHMENT_S3_REGION: ${ATTACHMENT_S3_REGION:-us-east-1}
+      ATTACHMENT_S3_USE_SSL: ${ATTACHMENT_S3_USE_SSL:-False}
       TEAM_SHARE_BASE_URL: ${TEAM_SHARE_BASE_URL:-http://localhost:3000/chat}
       TASK_SHARE_BASE_URL: ${TASK_SHARE_BASE_URL:-http://localhost:3000}
       TEAM_SHARE_QUERY_PARAM: ${TEAM_SHARE_QUERY_PARAM:-teamShare}
@@ -130,6 +186,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     networks:
       - wegent-network
@@ -310,6 +368,8 @@ volumes:
   redis_data:
     driver: local
   es_data:
+    driver: local
+  minio_data:
     driver: local
 
 networks:
