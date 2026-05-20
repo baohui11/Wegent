@@ -808,7 +808,9 @@ async def executor_download_attachment(
     ):
         backend = get_storage_backend(db)
         presigned_url = backend.get_url(
-            context.storage_key, expires=_EXECUTOR_DOWNLOAD_URL_TTL_SECONDS
+            context.storage_key,
+            expires=_EXECUTOR_DOWNLOAD_URL_TTL_SECONDS,
+            public=False,
         )
         if presigned_url:
             logger.info(

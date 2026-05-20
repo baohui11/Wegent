@@ -184,7 +184,7 @@ class TestS3StorageBackendUrls:
             "attachments", "attachments/k", expires=timedelta(seconds=120)
         )
 
-    def test_get_url_rewrites_public_endpoint(self, backend, monkeypatch):
+    def test_get_url_keeps_internal_endpoint_by_default(self, backend, monkeypatch):
         from app.core import config
 
         monkeypatch.setattr(
@@ -195,6 +195,23 @@ class TestS3StorageBackendUrls:
         )
 
         url = backend.get_url("attachments/k")
+
+        assert url.startswith("http://minio:9000/")
+        assert "X-Amz-Signature=abc" in url
+
+    def test_get_url_rewrites_public_endpoint_when_requested(
+        self, backend, monkeypatch
+    ):
+        from app.core import config
+
+        monkeypatch.setattr(
+            config.settings, "ATTACHMENT_S3_PUBLIC_ENDPOINT", "http://localhost:9000"
+        )
+        backend._client.presigned_get_object.return_value = (
+            "http://minio:9000/attachments/k?X-Amz-Signature=abc"
+        )
+
+        url = backend.get_url("attachments/k", public=True)
 
         assert url.startswith("http://localhost:9000/")
         assert "X-Amz-Signature=abc" in url

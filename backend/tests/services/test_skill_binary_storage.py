@@ -175,7 +175,9 @@ class TestDownloadUrl:
         url = storage.get_download_url(db, kind_id=3, expires=120)
 
         assert url == "https://example/abc"
-        storage._s3_backend.get_url.assert_called_once_with("skills/3.zip", expires=120)
+        storage._s3_backend.get_url.assert_called_once_with(
+            "skills/3.zip", expires=120, public=False
+        )
 
     def test_returns_none_for_mysql_row(self, storage):
         row = MagicMock(spec=["storage_key"])

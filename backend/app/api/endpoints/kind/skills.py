@@ -47,7 +47,7 @@ _SKILL_PRESIGNED_URL_TTL_SECONDS = 600
 
 
 def _try_redirect_to_object_storage(
-    db: Session, *, skill_id: int
+    db: Session, *, skill_id: int, public: bool = False
 ) -> Optional[RedirectResponse]:
     """If the skill ZIP lives in object storage, return a 302 redirect.
 
@@ -55,9 +55,17 @@ def _try_redirect_to_object_storage(
     bytes through this process (legacy MySQL backend, or a row that still
     has ``binary_data`` populated). Keeping this logic in one place avoids
     sprinkling backend-detection branches across every download endpoint.
+
+    Args:
+        public: When True, presigned URLs use ``ATTACHMENT_S3_PUBLIC_ENDPOINT``
+            for browser downloads. Executor / in-cluster callers should use
+            the default (False) so redirects target ``minio:9000``.
     """
     url = skill_binary_storage.get_download_url(
-        db, kind_id=skill_id, expires=_SKILL_PRESIGNED_URL_TTL_SECONDS
+        db,
+        kind_id=skill_id,
+        expires=_SKILL_PRESIGNED_URL_TTL_SECONDS,
+        public=public,
     )
     if not url:
         return None
@@ -784,7 +792,7 @@ def download_public_skill(
 
     # Prefer a presigned-URL redirect so large ZIPs are not proxied
     # through this process.
-    redirect = _try_redirect_to_object_storage(db, skill_id=skill_id)
+    redirect = _try_redirect_to_object_storage(db, skill_id=skill_id, public=True)
     if redirect is not None:
         return redirect
 
@@ -1248,6 +1256,14 @@ def download_skill(
         description="Task ID for task-based authorization. "
         "If provided, allows downloading skills owned by the task owner.",
     ),
+    presign_host: str = Query(
+        "internal",
+        description=(
+            "Presigned URL host selection: 'internal' (default, in-cluster MinIO "
+            "hostname for executor/chat_shell) or 'public' (browser downloads "
+            "via ATTACHMENT_S3_PUBLIC_ENDPOINT)."
+        ),
+    ),
     current_user: User = Depends(security.get_current_user_jwt_apikey_tasktoken),
     db: Session = Depends(get_db),
 ):
@@ -1338,7 +1354,10 @@ def download_skill(
     # Prefer a presigned-URL redirect when the ZIP lives in object storage.
     # The four lookup branches above already enforced authorization, so
     # by the time we get here it is safe to hand out a presigned URL.
-    redirect = _try_redirect_to_object_storage(db, skill_id=skill_id)
+    use_public_presign = presign_host.strip().lower() == "public"
+    redirect = _try_redirect_to_object_storage(
+        db, skill_id=skill_id, public=use_public_presign
+    )
     if redirect is not None:
         return redirect
 

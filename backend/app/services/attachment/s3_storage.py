@@ -205,12 +205,20 @@ class S3StorageBackend(StorageBackend):
             logger.error("Unexpected error stat-ing object key=%s: %s", key, exc)
             return False
 
-    def get_url(self, key: str, expires: int = 3600) -> Optional[str]:
+    def get_url(
+        self, key: str, expires: int = 3600, *, public: bool = False
+    ) -> Optional[str]:
         """Generate a presigned GET URL.
 
-        If ``ATTACHMENT_S3_PUBLIC_ENDPOINT`` is set, rewrite the URL host so
-        that callers outside the cluster (browsers, ECI workers, ...) can
-        reach the object store directly.
+        Args:
+            key: Object key in the bucket.
+            expires: URL lifetime in seconds.
+            public: When True and ``ATTACHMENT_S3_PUBLIC_ENDPOINT`` is set,
+                rewrite the host for browsers / off-cluster executors
+                (e.g. ``http://localhost:9000``). When False (default),
+                keep the in-cluster endpoint (e.g. ``http://minio:9000``) so
+                Docker-network callers (executor, chat_shell) can follow the
+                redirect without hitting ``localhost``.
         """
         try:
             url = self.client.presigned_get_object(
@@ -218,7 +226,9 @@ class S3StorageBackend(StorageBackend):
                 key,
                 expires=timedelta(seconds=expires),
             )
-            return self._rewrite_public_url(url)
+            if public:
+                return self._rewrite_public_url(url)
+            return url
         except S3Error as exc:
             logger.error("Failed to presign GET url for key=%s: %s", key, exc)
             return None
