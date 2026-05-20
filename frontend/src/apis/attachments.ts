@@ -356,27 +356,222 @@ export function getAttachmentPreviewUrl(attachmentId: number, shareToken?: strin
 }
 
 /**
- * Upload a file attachment
- *
- * @param file - File to upload
- * @param onProgress - Optional progress callback (0-100)
- * @returns Attachment response
+ * Server-advertised upload capabilities.
  */
-export async function uploadAttachment(
-  file: File,
-  onProgress?: (progress: number) => void
+export interface UploadCapabilities {
+  direct_upload: boolean
+  max_file_size_mb: number
+  storage_backend: string
+}
+
+/**
+ * Response from POST /api/attachments/presign-upload.
+ */
+export interface PresignUploadResponse {
+  attachment_id: number
+  upload_url: string
+  storage_key: string
+  method: string
+  expires_at: string
+}
+
+/**
+ * In-process cache for the capabilities endpoint. Cleared on token change.
+ * The capabilities are not expected to flip during a session, and the
+ * direct-upload path falls back to multipart on any error, so a short
+ * cache is safe.
+ */
+let _capabilitiesCache: { token: string | null; value: UploadCapabilities } | null = null
+
+/**
+ * Fetch the server's upload capabilities. Cached per-token for the
+ * lifetime of the page.
+ */
+export async function getUploadCapabilities(): Promise<UploadCapabilities> {
+  const token = getToken()
+
+  if (_capabilitiesCache && _capabilitiesCache.token === token) {
+    return _capabilitiesCache.value
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/attachments/upload-capabilities`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  })
+
+  if (!response.ok) {
+    // Treat any failure as "direct upload unsupported" so callers fall back
+    // to the multipart path silently.
+    const fallback: UploadCapabilities = {
+      direct_upload: false,
+      max_file_size_mb: MAX_FILE_SIZE / (1024 * 1024),
+      storage_backend: 'mysql',
+    }
+    _capabilitiesCache = { token, value: fallback }
+    return fallback
+  }
+
+  const value: UploadCapabilities = await response.json()
+  _capabilitiesCache = { token, value }
+  return value
+}
+
+/**
+ * Allocate a SubtaskContext row and obtain a presigned PUT URL.
+ */
+export async function presignAttachmentUpload(args: {
+  filename: string
+  fileSize: number
+  mimeType?: string
+  subtaskId?: number
+  overwriteAttachmentId?: number
+}): Promise<PresignUploadResponse> {
+  const token = getToken()
+
+  const response = await fetch(`${API_BASE_URL}/api/attachments/presign-upload`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify({
+      filename: args.filename,
+      file_size: args.fileSize,
+      mime_type: args.mimeType ?? null,
+      subtask_id: args.subtaskId ?? 0,
+      overwrite_attachment_id: args.overwriteAttachmentId ?? null,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    let message = 'Failed to allocate upload slot'
+    if (error.detail) {
+      message = typeof error.detail === 'string' ? error.detail : error.detail.message || message
+    }
+    throw new Error(message)
+  }
+
+  return response.json()
+}
+
+/**
+ * Confirm a direct upload, triggering server-side parsing.
+ */
+export async function confirmAttachmentUpload(
+  attachmentId: number
 ): Promise<AttachmentResponse> {
   const token = getToken()
 
-  // Validate file size before upload
-  if (!isValidFileSize(file.size)) {
-    throw new Error(`文件大小超过 ${MAX_FILE_SIZE / (1024 * 1024)} MB 限制`)
+  const response = await fetch(
+    `${API_BASE_URL}/api/attachments/${attachmentId}/confirm-upload`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    let message = 'Failed to confirm upload'
+    if (error.detail) {
+      message = typeof error.detail === 'string' ? error.detail : error.detail.message || message
+    }
+    throw new Error(message)
   }
+
+  return response.json()
+}
+
+/**
+ * PUT a file body to a presigned URL with XHR-based progress tracking.
+ *
+ * Internal helper for the direct-upload flow. Returns the resulting
+ * status code so the caller can decide whether to confirm the upload.
+ */
+function putFileToPresignedUrl(
+  uploadUrl: string,
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+
+    xhr.upload.addEventListener('progress', event => {
+      if (event.lengthComputable && onProgress) {
+        // Reserve a small slice (0-95) for the upload itself, leaving
+        // 95-100 for the confirm round trip below.
+        onProgress(Math.round((event.loaded / event.total) * 95))
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(`Direct upload failed: HTTP ${xhr.status}`))
+      }
+    })
+
+    xhr.addEventListener('error', () => reject(new Error('Network error during direct upload')))
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
+
+    xhr.open('PUT', uploadUrl)
+    // Browsers infer Content-Type from File when set explicitly. MinIO
+    // accepts any content-type for presigned PUTs.
+    if (file.type) {
+      xhr.setRequestHeader('Content-Type', file.type)
+    }
+    xhr.send(file)
+  })
+}
+
+/**
+ * Upload a file via the direct-to-S3 flow.
+ *
+ * 1. Ask the backend for a presigned URL
+ * 2. PUT the body straight to MinIO/S3 (skips the backend process)
+ * 3. POST /confirm-upload so the backend can parse the file
+ */
+async function uploadAttachmentDirect(
+  file: File,
+  onProgress?: (progress: number) => void,
+  overwriteAttachmentId?: number
+): Promise<AttachmentResponse> {
+  const presigned = await presignAttachmentUpload({
+    filename: file.name,
+    fileSize: file.size,
+    mimeType: file.type || undefined,
+    overwriteAttachmentId,
+  })
+
+  await putFileToPresignedUrl(presigned.upload_url, file, onProgress)
+
+  onProgress?.(97)
+  const result = await confirmAttachmentUpload(presigned.attachment_id)
+  onProgress?.(100)
+  return result
+}
+
+/**
+ * Upload a file via the legacy multipart endpoint.
+ */
+function uploadAttachmentMultipart(
+  file: File,
+  onProgress?: (progress: number) => void,
+  overwriteAttachmentId?: number
+): Promise<AttachmentResponse> {
+  const token = getToken()
 
   const formData = new FormData()
   formData.append('file', file)
 
-  // Use XMLHttpRequest for progress tracking
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
 
@@ -398,7 +593,6 @@ export async function uploadAttachment(
       } else {
         try {
           const error = JSON.parse(xhr.responseText)
-          // Handle error.detail that could be a string or an object
           let errorMessage = 'Upload failed'
           if (error.detail) {
             if (typeof error.detail === 'string') {
@@ -422,12 +616,51 @@ export async function uploadAttachment(
       reject(new Error('Upload cancelled'))
     })
 
-    xhr.open('POST', `${API_BASE_URL}/api/attachments/upload`)
+    const url = overwriteAttachmentId
+      ? `${API_BASE_URL}/api/attachments/upload?overwrite_attachment_id=${overwriteAttachmentId}`
+      : `${API_BASE_URL}/api/attachments/upload`
+    xhr.open('POST', url)
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     }
     xhr.send(formData)
   })
+}
+
+/**
+ * Upload a file attachment.
+ *
+ * Uses the direct-to-S3 flow when the server advertises support and
+ * falls back to the multipart upload endpoint otherwise. Errors in the
+ * direct path also fall back so a misconfigured object store does not
+ * block users from uploading.
+ *
+ * @param file - File to upload
+ * @param onProgress - Optional progress callback (0-100)
+ * @param overwriteAttachmentId - Existing attachment to overwrite (optional)
+ */
+export async function uploadAttachment(
+  file: File,
+  onProgress?: (progress: number) => void,
+  overwriteAttachmentId?: number
+): Promise<AttachmentResponse> {
+  if (!isValidFileSize(file.size)) {
+    throw new Error(`文件大小超过 ${MAX_FILE_SIZE / (1024 * 1024)} MB 限制`)
+  }
+
+  const capabilities = await getUploadCapabilities()
+  if (capabilities.direct_upload) {
+    try {
+      return await uploadAttachmentDirect(file, onProgress, overwriteAttachmentId)
+    } catch (err) {
+      // Surface direct-upload failures by logging and falling back to the
+      // multipart path. This keeps the user-visible behaviour unchanged
+      // when MinIO is misconfigured.
+      console.warn('[attachments] direct upload failed, falling back to multipart', err)
+    }
+  }
+
+  return uploadAttachmentMultipart(file, onProgress, overwriteAttachmentId)
 }
 
 /**
@@ -679,6 +912,9 @@ export async function createAttachmentShareLink(
  */
 export const attachmentApis = {
   uploadAttachment,
+  getUploadCapabilities,
+  presignAttachmentUpload,
+  confirmAttachmentUpload,
   getAttachment,
   getAttachmentPreview,
   getAttachmentDownloadUrl,

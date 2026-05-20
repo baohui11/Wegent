@@ -11,6 +11,7 @@ context types that can be associated with subtasks.
 
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from sqlalchemy.orm import Session
@@ -31,8 +32,12 @@ from app.services.attachment.parser import (
     DocumentParser,
     ParseResult,
 )
+from app.services.attachment.s3_storage import S3StorageBackend
 from app.services.attachment.storage_backend import StorageError, generate_storage_key
-from app.services.attachment.storage_factory import get_storage_backend
+from app.services.attachment.storage_factory import (
+    get_storage_backend,
+    is_external_storage_configured,
+)
 from shared.telemetry.decorators import trace_sync
 from shared.utils.crypto import decrypt_attachment, encrypt_attachment
 
@@ -129,6 +134,36 @@ class ContextService:
 
     # ==================== Attachment Operations ====================
 
+    def _validate_attachment_metadata(
+        self,
+        filename: str,
+        file_size: int,
+    ) -> Tuple[str, str]:
+        """
+        Validate attachment metadata (filename + declared size).
+
+        Used by both the multipart upload path (where ``file_size`` comes
+        from the body length) and the direct-upload path (where it comes
+        from the client's declared size).
+
+        Returns:
+            Tuple of (extension, mime_type)
+        """
+        _, extension = os.path.splitext(filename)
+        extension = extension.lower()
+
+        if not self.parser.is_supported_extension(extension):
+            raise ValueError(
+                f"Unsupported file type: {extension}. "
+                f"Supported types: {', '.join(self.parser.SUPPORTED_EXTENSIONS.keys())}"
+            )
+
+        if not self.parser.validate_file_size(file_size):
+            max_size_mb = DocumentParser.get_max_file_size() / (1024 * 1024)
+            raise ValueError(f"File size exceeds maximum limit ({max_size_mb} MB)")
+
+        return extension, self.parser.get_mime_type(extension)
+
     def _validate_attachment_input(
         self,
         filename: str,
@@ -140,21 +175,8 @@ class ContextService:
         Returns:
             Tuple of (extension, file_size, mime_type)
         """
-        _, extension = os.path.splitext(filename)
-        extension = extension.lower()
-
-        if not self.parser.is_supported_extension(extension):
-            raise ValueError(
-                f"Unsupported file type: {extension}. "
-                f"Supported types: {', '.join(self.parser.SUPPORTED_EXTENSIONS.keys())}"
-            )
-
         file_size = len(binary_data)
-        if not self.parser.validate_file_size(file_size):
-            max_size_mb = DocumentParser.get_max_file_size() / (1024 * 1024)
-            raise ValueError(f"File size exceeds maximum limit ({max_size_mb} MB)")
-
-        mime_type = self.parser.get_mime_type(extension)
+        extension, mime_type = self._validate_attachment_metadata(filename, file_size)
         return extension, file_size, mime_type
 
     @staticmethod
@@ -537,6 +559,219 @@ class ContextService:
             f"truncated={truncation_info.is_truncated if truncation_info else False}"
         )
 
+        return context, truncation_info
+
+    # ==================== Direct (presigned URL) Upload ====================
+
+    # Lifetime of the presigned PUT URL handed to the browser. 10 minutes
+    # comfortably covers slow uploads while keeping leaked links short-lived.
+    PRESIGNED_UPLOAD_TTL_SECONDS = 600
+
+    def supports_direct_upload(self) -> bool:
+        """Return True iff direct browser uploads can be issued.
+
+        Direct upload requires an object-storage backend (S3/MinIO) AND
+        attachment encryption disabled, because the browser cannot encrypt
+        the bytes with the server-side AES key before uploading.
+        """
+        return is_external_storage_configured() and not _should_encrypt()
+
+    def prepare_direct_upload(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        filename: str,
+        file_size: int,
+        mime_type: Optional[str] = None,
+        subtask_id: int = 0,
+        overwrite_attachment_id: Optional[int] = None,
+    ) -> Tuple[SubtaskContext, str, datetime]:
+        """Allocate a SubtaskContext row and a presigned PUT URL.
+
+        After this call returns, the frontend uploads the file body
+        directly to ``upload_url`` using HTTP PUT and then calls
+        :meth:`finalize_direct_upload` to trigger parsing.
+
+        Args:
+            db: SQLAlchemy session.
+            user_id: Owner.
+            filename: Client-provided file name (used for parser dispatch).
+            file_size: Declared file size in bytes (used for quota checks).
+            mime_type: Client-provided MIME hint; the backend re-derives
+                the canonical type from the extension.
+            subtask_id: 0 for unlinked, ``>0`` to attach to a subtask row.
+            overwrite_attachment_id: When set, overwrites an existing
+                attachment instead of creating a new one.
+
+        Returns:
+            Tuple of (SubtaskContext row, presigned upload URL, expires_at).
+
+        Raises:
+            ValueError: Validation failed (unsupported type, too large).
+            NotFoundException: ``overwrite_attachment_id`` not found.
+            StorageError: Direct upload is not supported in this deployment
+                or the presigned URL could not be generated.
+        """
+        if not self.supports_direct_upload():
+            raise StorageError(
+                "Direct upload is only available when ATTACHMENT_STORAGE_BACKEND "
+                "is set to an S3-compatible backend and encryption is disabled."
+            )
+
+        extension, derived_mime = self._validate_attachment_metadata(
+            filename, file_size
+        )
+
+        backend = get_storage_backend(db)
+        if not isinstance(backend, S3StorageBackend):
+            raise StorageError(
+                "Direct upload requires an S3-compatible storage backend."
+            )
+
+        if overwrite_attachment_id is not None:
+            context = self.get_context_optional(db, overwrite_attachment_id, user_id)
+            if context is None or context.context_type != ContextType.ATTACHMENT.value:
+                raise NotFoundException(
+                    f"Context {overwrite_attachment_id} not found"
+                )
+            storage_key = context.storage_key or generate_storage_key(
+                context.id, user_id
+            )
+            self._reset_attachment_context(
+                context=context,
+                filename=filename,
+                extension=extension,
+                file_size=file_size,
+                mime_type=mime_type or derived_mime,
+                storage_backend=backend.backend_type,
+                storage_key=storage_key,
+            )
+            db.flush()
+        else:
+            context = self._create_attachment_context(
+                user_id=user_id,
+                filename=filename,
+                extension=extension,
+                file_size=file_size,
+                mime_type=mime_type or derived_mime,
+                subtask_id=subtask_id,
+                storage_backend=backend.backend_type,
+            )
+            db.add(context)
+            db.flush()
+            storage_key = generate_storage_key(context.id, user_id)
+            context.type_data = {
+                **(context.type_data or {}),
+                "storage_key": storage_key,
+                "file_size": file_size,
+            }
+
+        upload_url = backend.get_upload_url(
+            storage_key, expires=self.PRESIGNED_UPLOAD_TTL_SECONDS
+        )
+        if not upload_url:
+            db.rollback()
+            raise StorageError("Failed to generate presigned upload URL")
+
+        db.commit()
+        db.refresh(context)
+
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=self.PRESIGNED_UPLOAD_TTL_SECONDS
+        )
+
+        logger.info(
+            "Prepared direct upload: context_id=%d storage_key=%s expires_in=%ds",
+            context.id,
+            storage_key,
+            self.PRESIGNED_UPLOAD_TTL_SECONDS,
+        )
+        return context, upload_url, expires_at
+
+    def finalize_direct_upload(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        context_id: int,
+    ) -> Tuple[SubtaskContext, Optional[TruncationInfo]]:
+        """Mark a directly-uploaded attachment as ready and parse it.
+
+        Verifies the object actually landed in the bucket, fetches it
+        once to extract text / image base64, and transitions the row to
+        ``READY`` (or ``FAILED`` on parse error).
+        """
+        context = self.get_context_optional(db, context_id, user_id)
+        if context is None or context.context_type != ContextType.ATTACHMENT.value:
+            raise NotFoundException(f"Context {context_id} not found")
+
+        if context.status not in {
+            ContextStatus.UPLOADING.value,
+            ContextStatus.FAILED.value,
+        }:
+            # Already finalised; idempotent return so the frontend can
+            # safely retry the confirm call.
+            return context, None
+
+        storage_key = context.storage_key
+        if not storage_key:
+            raise StorageError(
+                f"Context {context_id} has no storage_key to confirm"
+            )
+
+        backend = get_storage_backend(db)
+        if not backend.exists(storage_key):
+            context.status = ContextStatus.FAILED.value
+            context.error_message = "Uploaded object not found in storage"
+            db.commit()
+            raise StorageError(
+                f"Uploaded object {storage_key} not found in storage", storage_key
+            )
+
+        binary_data = backend.get(storage_key)
+        if binary_data is None:
+            context.status = ContextStatus.FAILED.value
+            context.error_message = "Failed to read uploaded object from storage"
+            db.commit()
+            raise StorageError(
+                f"Failed to read uploaded object {storage_key} from storage",
+                storage_key,
+            )
+
+        # Record encryption metadata as "off" since direct uploads cannot
+        # be encrypted server-side. supports_direct_upload() already
+        # refuses the flow when encryption is required.
+        context.type_data = {
+            **(context.type_data or {}),
+            "is_encrypted": False,
+            "encryption_version": 0,
+            "file_size": len(binary_data),
+        }
+
+        context.status = ContextStatus.PARSING.value
+        db.flush()
+
+        extension = context.file_extension or os.path.splitext(context.name)[1].lower()
+        try:
+            truncation_info = self._parse_and_update_context(
+                context=context,
+                binary_data=binary_data,
+                extension=extension,
+            )
+        except DocumentParseError:
+            db.commit()
+            raise
+
+        db.commit()
+        db.refresh(context)
+
+        logger.info(
+            "Finalised direct upload: context_id=%d text_length=%d truncated=%s",
+            context.id,
+            context.text_length or 0,
+            bool(truncation_info and truncation_info.is_truncated),
+        )
         return context, truncation_info
 
     def get_attachment_binary_data(

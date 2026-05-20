@@ -35,9 +35,14 @@ from app.schemas.subtask_context import (
     AttachmentDetailResponse,
     AttachmentPreviewResponse,
     AttachmentResponse,
+    PresignUploadRequest,
+    PresignUploadResponse,
     TruncationInfo,
+    UploadCapabilitiesResponse,
 )
+from app.core.config import settings
 from app.services.attachment.parser import DocumentParseError, DocumentParser
+from app.services.attachment.storage_backend import StorageError
 from app.services.attachment.storage_factory import (
     get_storage_backend,
     is_external_storage_configured,
@@ -334,6 +339,105 @@ def _validate_share_token_access(
         return False
 
     return True
+
+
+@router.get("/upload-capabilities", response_model=UploadCapabilitiesResponse)
+def get_upload_capabilities(
+    current_user: User = Depends(security.get_current_user_jwt_apikey_tasktoken),
+):
+    """Describe which upload flows the server is willing to accept.
+
+    Frontend clients call this once at startup to decide whether they can
+    PUT files straight to the object store or must use the legacy
+    multipart endpoint.
+    """
+    return UploadCapabilitiesResponse(
+        direct_upload=context_service.supports_direct_upload(),
+        max_file_size_mb=settings.MAX_UPLOAD_FILE_SIZE_MB,
+        storage_backend=settings.ATTACHMENT_STORAGE_BACKEND.lower(),
+    )
+
+
+@router.post("/presign-upload", response_model=PresignUploadResponse)
+def presign_upload(
+    body: PresignUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(security.get_current_user_jwt_apikey_tasktoken),
+    authorization: str = Header(default=""),
+):
+    """Create a SubtaskContext row and return a presigned PUT URL.
+
+    The browser PUTs the file body to ``upload_url``, then calls
+    :func:`confirm_upload` to trigger parsing.
+
+    Errors:
+    - 400: invalid file type, size, or storage backend cannot direct-upload
+    - 404: ``overwrite_attachment_id`` points at a non-existent attachment
+    """
+    subtask_id = (
+        body.subtask_id
+        if body.subtask_id > 0
+        else _extract_subtask_id_from_task_token(authorization)
+    )
+    try:
+        context, upload_url, expires_at = context_service.prepare_direct_upload(
+            db=db,
+            user_id=current_user.id,
+            filename=body.filename,
+            file_size=body.file_size,
+            mime_type=body.mime_type,
+            subtask_id=subtask_id,
+            overwrite_attachment_id=body.overwrite_attachment_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except NotFoundException as e:
+        raise HTTPException(status_code=404, detail="Attachment not found") from e
+    except StorageError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    return PresignUploadResponse(
+        attachment_id=context.id,
+        upload_url=upload_url,
+        storage_key=context.storage_key,
+        expires_at=expires_at,
+    )
+
+
+@router.post("/{attachment_id}/confirm-upload", response_model=AttachmentResponse)
+def confirm_upload(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(security.get_current_user_jwt_apikey_tasktoken),
+):
+    """Confirm a direct upload, verify the object exists, and parse it.
+
+    Idempotent: calling it on a row that is already READY returns the
+    current state without re-parsing.
+
+    Errors:
+    - 404: attachment not found
+    - 400: parse failure (returns ``error_code`` for i18n mapping)
+    - 502: the uploaded object is missing from the bucket
+    """
+    try:
+        context, truncation_info = context_service.finalize_direct_upload(
+            db=db,
+            user_id=current_user.id,
+            context_id=attachment_id,
+        )
+    except NotFoundException as e:
+        raise HTTPException(status_code=404, detail="Attachment not found") from e
+    except StorageError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except DocumentParseError as e:
+        error_code = getattr(e, "error_code", None)
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(e), "error_code": error_code},
+        ) from e
+
+    return _build_attachment_response(context, truncation_info)
 
 
 @router.post("/upload", response_model=AttachmentResponse)

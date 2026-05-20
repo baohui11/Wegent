@@ -154,6 +154,61 @@ class SubtaskContextBrief(BaseModel):
 
 
 # ============================================================
+# Direct-upload (presigned URL) request / response
+# ============================================================
+
+
+class PresignUploadRequest(BaseModel):
+    """Request body for ``POST /api/attachments/presign-upload``.
+
+    The browser asks the backend to allocate a ``SubtaskContext`` row and
+    return a presigned URL. The frontend then PUTs the file straight to
+    the object store and finally calls ``/confirm-upload`` to trigger
+    parsing.
+    """
+
+    filename: str = Field(..., min_length=1, max_length=512)
+    file_size: int = Field(..., ge=0)
+    mime_type: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description=(
+            "Best-effort MIME type from the browser; the backend re-derives "
+            "the canonical MIME from the file extension."
+        ),
+    )
+    subtask_id: int = Field(default=0, ge=0)
+    overwrite_attachment_id: Optional[int] = Field(default=None, ge=1)
+
+
+class PresignUploadResponse(BaseModel):
+    """Response from ``POST /api/attachments/presign-upload``.
+
+    ``upload_url`` is rewritten through ``ATTACHMENT_S3_PUBLIC_ENDPOINT``
+    when set so the browser can reach the object store even when the
+    backend talks to an in-cluster service name.
+    """
+
+    attachment_id: int
+    upload_url: str
+    storage_key: str
+    method: str = "PUT"
+    expires_at: datetime
+
+
+class UploadCapabilitiesResponse(BaseModel):
+    """Reports which upload flows the server is willing to accept.
+
+    The frontend uses this to decide whether to PUT directly to the
+    object store or fall back to the multipart upload endpoint.
+    """
+
+    direct_upload: bool
+    max_file_size_mb: int
+    storage_backend: str
+
+
+# ============================================================
 # Attachment Response (backward compatible)
 # ============================================================
 
