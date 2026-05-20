@@ -382,9 +382,18 @@ class Settings(BaseSettings):
     ATTACHMENT_S3_ENDPOINT: str = (
         ""  # e.g., "https://s3.amazonaws.com" or "http://minio:9000"
     )
+    # Optional public endpoint used to rewrite presigned URLs so that
+    # browsers and off-cluster executors can reach the object store even
+    # when ATTACHMENT_S3_ENDPOINT points to an in-cluster service name
+    # (e.g. set this to "http://localhost:9000" for local development).
+    ATTACHMENT_S3_PUBLIC_ENDPOINT: str = ""
     ATTACHMENT_S3_ACCESS_KEY: str = ""
     ATTACHMENT_S3_SECRET_KEY: str = ""
     ATTACHMENT_S3_BUCKET: str = "attachments"
+    # Separate bucket for Skill ZIP packages so they can be managed (CORS,
+    # lifecycle, ACLs) independently from user attachments. Defaults to
+    # ``skills``; on the same MinIO/S3 endpoint as the attachments bucket.
+    ATTACHMENT_S3_SKILL_BUCKET: str = "skills"
     ATTACHMENT_S3_REGION: str = "us-east-1"
     ATTACHMENT_S3_USE_SSL: bool = True
 

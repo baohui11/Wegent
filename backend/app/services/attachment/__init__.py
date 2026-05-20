@@ -37,6 +37,7 @@ Storage Backend Registration:
 
 from app.services.attachment.mysql_storage import MySQLStorageBackend
 from app.services.attachment.parser import DocumentParser
+from app.services.attachment.s3_storage import S3StorageBackend
 from app.services.attachment.storage_backend import (
     StorageBackend,
     StorageError,
@@ -57,6 +58,7 @@ __all__ = [
     "StorageBackend",
     "StorageError",
     "MySQLStorageBackend",
+    "S3StorageBackend",
     "DocumentParser",
     # Factory functions
     "get_storage_backend",
