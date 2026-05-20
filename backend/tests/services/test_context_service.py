@@ -1656,3 +1656,176 @@ class TestContextServiceCreateKnowledgeBaseContextWithResult:
         # Assert
         added_context = mock_db.add.call_args[0][0]
         assert added_context.type_data["auto_created"] is True
+
+
+class TestContextServiceDirectUpload:
+    """Tests for the presigned/direct-upload flow used by Task 1.5."""
+
+    @staticmethod
+    def _cs_module():
+        """Return the live ``context_service`` module so we can patch it."""
+        import sys
+
+        return sys.modules["app.services.context.context_service"]
+
+    def test_supports_direct_upload_requires_s3_and_no_encryption(self):
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
+                patch.object(cs_module, "_should_encrypt", return_value=False):
+            assert cs.supports_direct_upload() is True
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=False), \
+                patch.object(cs_module, "_should_encrypt", return_value=False):
+            assert cs.supports_direct_upload() is False
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
+                patch.object(cs_module, "_should_encrypt", return_value=True):
+            assert cs.supports_direct_upload() is False
+
+    def test_prepare_direct_upload_rejects_when_unsupported(self):
+        from app.services.attachment.storage_backend import StorageError
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=False), \
+                patch.object(cs_module, "_should_encrypt", return_value=False):
+            with pytest.raises(StorageError):
+                cs.prepare_direct_upload(
+                    db=Mock(),
+                    user_id=1,
+                    filename="report.pdf",
+                    file_size=1024,
+                )
+
+    def test_prepare_direct_upload_rejects_oversize_file(self):
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
+                patch.object(cs_module, "_should_encrypt", return_value=False):
+            with pytest.raises(ValueError, match="File size exceeds maximum limit"):
+                cs.prepare_direct_upload(
+                    db=Mock(),
+                    user_id=1,
+                    filename="huge.pdf",
+                    file_size=200 * 1024 * 1024,
+                )
+
+    def test_prepare_direct_upload_creates_context_and_returns_url(self):
+        from app.services.attachment.s3_storage import S3StorageBackend
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        # SQLAlchemy session double that exposes flush() and commit() but
+        # also stamps the new SubtaskContext with an id when added.
+        added_contexts: list = []
+
+        def fake_add(obj):
+            added_contexts.append(obj)
+            obj.id = 42
+
+        mock_db = Mock()
+        mock_db.add.side_effect = fake_add
+
+        mock_backend = Mock(spec=S3StorageBackend)
+        mock_backend.backend_type = "s3"
+        mock_backend.get_upload_url.return_value = (
+            "https://minio.example.com/attachments/key?X-Amz-Sig=foo"
+        )
+
+        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
+                patch.object(cs_module, "_should_encrypt", return_value=False), \
+                patch.object(cs_module, "get_storage_backend", return_value=mock_backend):
+            context, upload_url, expires_at = cs.prepare_direct_upload(
+                db=mock_db,
+                user_id=7,
+                filename="design.pdf",
+                file_size=2048,
+                mime_type="application/pdf",
+            )
+
+        assert context.id == 42
+        assert upload_url.startswith("https://minio.example.com/")
+        assert expires_at is not None
+        # The storage_key must be persisted on the new row.
+        assert context.type_data["storage_key"]
+        mock_db.commit.assert_called_once()
+        mock_backend.get_upload_url.assert_called_once()
+
+    def test_finalize_direct_upload_returns_failed_when_object_missing(self):
+        from app.models.subtask_context import (
+            ContextStatus,
+            ContextType,
+            SubtaskContext,
+        )
+        from app.services.attachment.storage_backend import StorageError
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        context = SubtaskContext(
+            subtask_id=0,
+            user_id=1,
+            context_type=ContextType.ATTACHMENT.value,
+            name="missing.pdf",
+            status=ContextStatus.UPLOADING.value,
+            type_data={
+                "storage_backend": "s3",
+                "storage_key": "attachments/abc123",
+                "file_extension": ".pdf",
+            },
+        )
+        context.id = 99
+
+        mock_db = Mock()
+        mock_backend = Mock()
+        mock_backend.exists.return_value = False
+
+        with patch.object(cs, "get_context_optional", return_value=context), \
+                patch.object(cs_module, "get_storage_backend", return_value=mock_backend):
+            with pytest.raises(StorageError):
+                cs.finalize_direct_upload(
+                    db=mock_db,
+                    user_id=1,
+                    context_id=99,
+                )
+
+        assert context.status == ContextStatus.FAILED.value
+        assert "not found" in (context.error_message or "")
+        mock_db.commit.assert_called_once()
+
+    def test_finalize_direct_upload_is_idempotent_for_ready_rows(self):
+        from app.models.subtask_context import (
+            ContextStatus,
+            ContextType,
+            SubtaskContext,
+        )
+        from app.services.context.context_service import context_service as cs
+
+        context = SubtaskContext(
+            subtask_id=0,
+            user_id=1,
+            context_type=ContextType.ATTACHMENT.value,
+            name="ok.pdf",
+            status=ContextStatus.READY.value,
+            type_data={"storage_key": "attachments/k", "file_extension": ".pdf"},
+        )
+        context.id = 100
+
+        with patch.object(cs, "get_context_optional", return_value=context):
+            result, info = cs.finalize_direct_upload(
+                db=Mock(),
+                user_id=1,
+                context_id=100,
+            )
+
+        assert result is context
+        assert info is None
+        # Status untouched because it was already READY.
+        assert context.status == ContextStatus.READY.value
