@@ -280,8 +280,10 @@ class ContextService:
         if is_encrypted:
             logger.info(f"Encrypted attachment data for context {context.id}")
 
+        # Only mime_type is written to S3 object metadata (as Content-Type).
+        # Filename and other fields live in MySQL type_data; S3 metadata
+        # values must be US-ASCII so non-ASCII filenames must not be sent.
         metadata = {
-            "filename": filename,
             "mime_type": mime_type,
             "file_size": file_size,
             "user_id": context.user_id,
