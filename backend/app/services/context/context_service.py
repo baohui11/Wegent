@@ -33,7 +33,10 @@ from app.services.attachment.parser import (
     ParseResult,
 )
 from app.services.attachment.s3_storage import S3StorageBackend
-from app.services.attachment.storage_backend import StorageError, generate_storage_key
+from app.services.attachment.storage_backend import (
+    StorageError,
+    resolve_attachment_storage_key,
+)
 from app.services.attachment.storage_factory import (
     get_storage_backend,
     is_external_storage_configured,
@@ -378,7 +381,7 @@ class ContextService:
         db.flush()  # Get the ID
 
         # Generate storage key and save to storage backend
-        storage_key = generate_storage_key(context.id, user_id)
+        storage_key = resolve_attachment_storage_key(context.id, user_id, extension)
         context.type_data = {
             **context.type_data,
             "storage_key": storage_key,
@@ -507,8 +510,8 @@ class ContextService:
         )
 
         storage_backend = get_storage_backend(db)
-        storage_key = context.storage_key or generate_storage_key(
-            context.id, context.user_id
+        storage_key = resolve_attachment_storage_key(
+            context.id, context.user_id, extension, context.storage_key
         )
 
         self._reset_attachment_context(
@@ -634,11 +637,12 @@ class ContextService:
         if overwrite_attachment_id is not None:
             context = self.get_context_optional(db, overwrite_attachment_id, user_id)
             if context is None or context.context_type != ContextType.ATTACHMENT.value:
-                raise NotFoundException(
-                    f"Context {overwrite_attachment_id} not found"
-                )
-            storage_key = context.storage_key or generate_storage_key(
-                context.id, user_id
+                raise NotFoundException(f"Context {overwrite_attachment_id} not found")
+            storage_key = resolve_attachment_storage_key(
+                context.id,
+                user_id,
+                extension,
+                context.storage_key,
             )
             self._reset_attachment_context(
                 context=context,
@@ -662,7 +666,7 @@ class ContextService:
             )
             db.add(context)
             db.flush()
-            storage_key = generate_storage_key(context.id, user_id)
+            storage_key = resolve_attachment_storage_key(context.id, user_id, extension)
             context.type_data = {
                 **(context.type_data or {}),
                 "storage_key": storage_key,
@@ -718,9 +722,7 @@ class ContextService:
 
         storage_key = context.storage_key
         if not storage_key:
-            raise StorageError(
-                f"Context {context_id} has no storage_key to confirm"
-            )
+            raise StorageError(f"Context {context_id} has no storage_key to confirm")
 
         backend = get_storage_backend(db)
         if not backend.exists(storage_key):

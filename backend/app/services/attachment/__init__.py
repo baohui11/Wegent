@@ -42,6 +42,8 @@ from app.services.attachment.storage_backend import (
     StorageBackend,
     StorageError,
     generate_storage_key,
+    normalize_storage_extension,
+    resolve_attachment_storage_key,
 )
 from app.services.attachment.storage_factory import (
     StorageBackendRegistry,
@@ -64,6 +66,8 @@ __all__ = [
     "get_storage_backend",
     "is_external_storage_configured",
     "generate_storage_key",
+    "normalize_storage_extension",
+    "resolve_attachment_storage_key",
     # Registry functions (for external plugins)
     "StorageBackendRegistry",
     "register_storage_backend",

@@ -172,10 +172,31 @@ class TestS3StorageBackendUrls:
         )
         assert backend.get_url("attachments/k") is None
 
+    def test_get_upload_url_uses_public_presign_client(self, backend, monkeypatch):
+        from app.core import config
+
+        monkeypatch.setattr(
+            config.settings, "ATTACHMENT_S3_PUBLIC_ENDPOINT", "http://localhost:9000"
+        )
+        public_client = MagicMock()
+        public_client.presigned_put_object.return_value = (
+            "http://localhost:9000/attachments/k?X-Amz-Signature=put"
+        )
+        backend._public_presign_client = public_client
+
+        url = backend.get_upload_url("attachments/k", expires=120)
+
+        assert "X-Amz-Signature=put" in url
+        public_client.presigned_put_object.assert_called_once_with(
+            "attachments", "attachments/k", expires=timedelta(seconds=120)
+        )
+        backend._client.presigned_put_object.assert_not_called()
+
     def test_get_upload_url_returns_presigned_url(self, backend):
         backend._client.presigned_put_object.return_value = (
             "http://minio:9000/attachments/k?X-Amz-Signature=put"
         )
+        backend._public_presign_client = backend._client
 
         url = backend.get_upload_url("attachments/k", expires=120)
 
@@ -199,7 +220,7 @@ class TestS3StorageBackendUrls:
         assert url.startswith("http://minio:9000/")
         assert "X-Amz-Signature=abc" in url
 
-    def test_get_url_rewrites_public_endpoint_when_requested(
+    def test_get_url_uses_public_presign_client_when_requested(
         self, backend, monkeypatch
     ):
         from app.core import config
@@ -207,14 +228,20 @@ class TestS3StorageBackendUrls:
         monkeypatch.setattr(
             config.settings, "ATTACHMENT_S3_PUBLIC_ENDPOINT", "http://localhost:9000"
         )
-        backend._client.presigned_get_object.return_value = (
-            "http://minio:9000/attachments/k?X-Amz-Signature=abc"
+        public_client = MagicMock()
+        public_client.presigned_get_object.return_value = (
+            "http://localhost:9000/attachments/k?X-Amz-Signature=abc"
         )
+        backend._public_presign_client = public_client
 
         url = backend.get_url("attachments/k", public=True)
 
         assert url.startswith("http://localhost:9000/")
         assert "X-Amz-Signature=abc" in url
+        public_client.presigned_get_object.assert_called_once_with(
+            "attachments", "attachments/k", expires=timedelta(seconds=3600)
+        )
+        backend._client.presigned_get_object.assert_not_called()
 
 
 class TestS3StorageBackendBootstrap:

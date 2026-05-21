@@ -15,10 +15,9 @@ This backend only stores raw bytes as provided.
 Configuration (see app/core/config.py):
     ATTACHMENT_STORAGE_BACKEND  : "s3" or "minio"
     ATTACHMENT_S3_ENDPOINT      : Internal S3 endpoint (e.g. http://minio:9000)
-    ATTACHMENT_S3_PUBLIC_ENDPOINT: Optional public endpoint used to rewrite
-                                   presigned URLs so browsers/executors that
-                                   live outside the cluster can reach the
-                                   object store (e.g. http://localhost:9000).
+    ATTACHMENT_S3_PUBLIC_ENDPOINT: Optional public endpoint used when signing
+                                   browser-facing presigned URLs (must match the
+                                   host clients call, e.g. http://localhost:9000).
     ATTACHMENT_S3_ACCESS_KEY    : Access key
     ATTACHMENT_S3_SECRET_KEY    : Secret key
     ATTACHMENT_S3_BUCKET        : Bucket name for attachments
@@ -30,7 +29,7 @@ import io
 import logging
 from datetime import timedelta
 from typing import Dict, Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from minio import Minio
 from minio.error import S3Error
@@ -49,10 +48,9 @@ class S3StorageBackend(StorageBackend):
     Lazily initialises a MinIO client from ``ATTACHMENT_S3_*`` settings and
     talks to any S3-API compatible server (MinIO, AWS S3, Aliyun OSS, ...).
 
-    The optional ``ATTACHMENT_S3_PUBLIC_ENDPOINT`` rewrites the host of
-    presigned URLs so that browsers or off-cluster executors can reach the
-    object store even when the in-cluster endpoint points to an internal
-    service name (e.g. ``http://minio:9000``).
+    Browser-facing presigned URLs are signed with ``ATTACHMENT_S3_PUBLIC_ENDPOINT``
+    so the Host header matches what clients actually call. Rewriting the host
+    after signing breaks SigV4 and causes ``SignatureDoesNotMatch``.
     """
 
     BACKEND_TYPE = "s3"
@@ -76,6 +74,7 @@ class S3StorageBackend(StorageBackend):
         """
         self._db = db
         self._client: Optional[Minio] = None
+        self._public_presign_client: Optional[Minio] = None
         self._bucket: str = bucket or settings.ATTACHMENT_S3_BUCKET
 
     @property
@@ -91,9 +90,8 @@ class S3StorageBackend(StorageBackend):
         return self._client
 
     @staticmethod
-    def _build_client() -> Minio:
-        """Build a MinIO client from configuration, raising if incomplete."""
-        endpoint = settings.ATTACHMENT_S3_ENDPOINT
+    def _build_client_from_endpoint(endpoint: str) -> Minio:
+        """Build a MinIO client for one endpoint URL."""
         access_key = settings.ATTACHMENT_S3_ACCESS_KEY
         secret_key = settings.ATTACHMENT_S3_SECRET_KEY
 
@@ -104,14 +102,37 @@ class S3StorageBackend(StorageBackend):
                 "ATTACHMENT_S3_SECRET_KEY environment variables."
             )
 
-        host = endpoint.replace("https://", "").replace("http://", "")
+        normalized = endpoint if "://" in endpoint else f"http://{endpoint}"
+        parsed = urlsplit(normalized)
+        secure = (parsed.scheme or "http") == "https"
+        host = parsed.netloc or parsed.path.split("/")[0]
+        if not host:
+            host = endpoint.replace("https://", "").replace("http://", "").split("/")[0]
+
         return Minio(
             host,
             access_key=access_key,
             secret_key=secret_key,
-            secure=settings.ATTACHMENT_S3_USE_SSL,
+            secure=secure,
             region=settings.ATTACHMENT_S3_REGION,
         )
+
+    @classmethod
+    def _build_client(cls) -> Minio:
+        """Build a MinIO client for in-cluster object I/O."""
+        return cls._build_client_from_endpoint(settings.ATTACHMENT_S3_ENDPOINT)
+
+    @property
+    def public_presign_client(self) -> Minio:
+        """Return a MinIO client whose presigned URLs target browsers."""
+        public_endpoint = (settings.ATTACHMENT_S3_PUBLIC_ENDPOINT or "").strip()
+        if not public_endpoint:
+            return self.client
+        if self._public_presign_client is None:
+            self._public_presign_client = self._build_client_from_endpoint(
+                public_endpoint
+            )
+        return self._public_presign_client
 
     @staticmethod
     def _ensure_bucket(client: Minio, bucket: str) -> None:
@@ -213,22 +234,18 @@ class S3StorageBackend(StorageBackend):
         Args:
             key: Object key in the bucket.
             expires: URL lifetime in seconds.
-            public: When True and ``ATTACHMENT_S3_PUBLIC_ENDPOINT`` is set,
-                rewrite the host for browsers / off-cluster executors
-                (e.g. ``http://localhost:9000``). When False (default),
-                keep the in-cluster endpoint (e.g. ``http://minio:9000``) so
-                Docker-network callers (executor, chat_shell) can follow the
-                redirect without hitting ``localhost``.
+            public: When True, sign the URL with ``ATTACHMENT_S3_PUBLIC_ENDPOINT``
+                so browsers can reach MinIO with a valid signature. When False
+                (default), sign with the in-cluster endpoint for executors and
+                other Docker-network callers.
         """
         try:
-            url = self.client.presigned_get_object(
+            client = self.public_presign_client if public else self.client
+            return client.presigned_get_object(
                 self._bucket,
                 key,
                 expires=timedelta(seconds=expires),
             )
-            if public:
-                return self._rewrite_public_url(url)
-            return url
         except S3Error as exc:
             logger.error("Failed to presign GET url for key=%s: %s", key, exc)
             return None
@@ -236,12 +253,11 @@ class S3StorageBackend(StorageBackend):
     def get_upload_url(self, key: str, expires: int = 600) -> Optional[str]:
         """Generate a presigned PUT URL for direct browser uploads."""
         try:
-            url = self.client.presigned_put_object(
+            return self.public_presign_client.presigned_put_object(
                 self._bucket,
                 key,
                 expires=timedelta(seconds=expires),
             )
-            return self._rewrite_public_url(url)
         except S3Error as exc:
             logger.error("Failed to presign PUT url for key=%s: %s", key, exc)
             return None
@@ -255,36 +271,3 @@ class S3StorageBackend(StorageBackend):
         if not metadata:
             return {}
         return {str(k): str(v) for k, v in metadata.items() if v is not None}
-
-    @staticmethod
-    def _rewrite_public_url(url: str) -> str:
-        """Rewrite the host/scheme of a presigned URL to the public endpoint.
-
-        This is required when the backend talks to MinIO via an internal
-        hostname (``http://minio:9000``) but presigned URLs must be usable
-        by clients outside the cluster (``http://localhost:9000``).
-        Returns the URL unchanged when no public endpoint is configured.
-        """
-        public_endpoint = getattr(settings, "ATTACHMENT_S3_PUBLIC_ENDPOINT", "")
-        if not public_endpoint:
-            return url
-
-        try:
-            public = urlsplit(public_endpoint)
-            original = urlsplit(url)
-            return urlunsplit(
-                (
-                    public.scheme or original.scheme,
-                    public.netloc or original.netloc,
-                    original.path,
-                    original.query,
-                    original.fragment,
-                )
-            )
-        except Exception:
-            logger.warning(
-                "Failed to rewrite presigned URL with public endpoint, "
-                "returning original URL",
-                exc_info=True,
-            )
-            return url

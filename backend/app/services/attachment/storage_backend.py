@@ -17,6 +17,7 @@ storage and retrieval. This design ensures:
 """
 
 import logging
+import re
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -125,24 +126,60 @@ class StorageError(Exception):
         super().__init__(self.message)
 
 
-def generate_storage_key(attachment_id: int, user_id: int) -> str:
+def normalize_storage_extension(file_extension: str) -> str:
+    """Return a safe object-key suffix such as ``.pdf``, or empty when unknown."""
+    ext = (file_extension or "").strip().lower()
+    if not ext:
+        return ""
+    if not ext.startswith("."):
+        ext = f".{ext}"
+    if not re.fullmatch(r"\.[a-z0-9][a-z0-9.-]{0,15}", ext):
+        return ""
+    return ext
+
+
+def generate_storage_key(
+    attachment_id: int,
+    user_id: int,
+    file_extension: str = "",
+) -> str:
     """
     Generate a unique storage key for an attachment.
 
-    The key format is: attachments/{uuid}_{timestamp}_{user_id}_{attachment_id}
-    This provides:
-    - UUID: Ensures global uniqueness and prevents key collision
-    - Timestamp: Enables time-based organization and debugging
-    - User ID: Allows user-based partitioning and access control
-    - Attachment ID: Maintains reference to database record
+    The key format is:
+    ``attachments/{uuid}_{timestamp}_{user_id}_{attachment_id}{extension}``
+
+    The trailing file extension is included so downstream systems (for example
+    encrypt-gateway contentDisposition rules) can infer the original type from
+    the object key.
 
     Args:
         attachment_id: The attachment ID from database
         user_id: The user ID who owns the attachment
+        file_extension: Normalized extension such as ``.pdf``
 
     Returns:
-        Storage key in format: attachments/{uuid}_{timestamp}_{user_id}_{attachment_id}
+        Storage key with optional extension suffix
     """
     unique_id = uuid.uuid4().hex[:12]  # Use first 12 chars of UUID for brevity
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    return f"attachments/{unique_id}_{timestamp}_{user_id}_{attachment_id}"
+    suffix = normalize_storage_extension(file_extension)
+    return f"attachments/{unique_id}_{timestamp}_{user_id}_{attachment_id}{suffix}"
+
+
+def resolve_attachment_storage_key(
+    attachment_id: int,
+    user_id: int,
+    file_extension: str,
+    existing_key: Optional[str] = None,
+) -> str:
+    """Build or upgrade a storage key, appending extension to legacy keys when needed."""
+    suffix = normalize_storage_extension(file_extension)
+    if existing_key:
+        if suffix and not existing_key.endswith(suffix):
+            name = existing_key.rsplit("/", 1)[-1]
+            trailing = name.rsplit("_", 1)[-1]
+            if "." not in trailing:
+                return f"{existing_key}{suffix}"
+        return existing_key
+    return generate_storage_key(attachment_id, user_id, file_extension)
