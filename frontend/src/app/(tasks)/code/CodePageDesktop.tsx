@@ -16,7 +16,6 @@ import {
 } from '@/features/tasks/components/sidebar'
 import WorkbenchToggle from '@/features/layout/WorkbenchToggle'
 import { OpenMenu } from '@/features/tasks/components/input'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { Team, WorkbenchData } from '@/types/api'
 import type { MessageBlock } from '@/features/tasks/components/message/thinking/types'
 import { useTaskContext } from '@/features/tasks/contexts/taskContext'
@@ -243,7 +242,6 @@ export function CodePageDesktop() {
             />
           )}
           {shareButton}
-          <GithubStarButton />
           {hasTaskId && <OpenMenu openLinks={openLinks} />}
           {hasTaskId && (
             <WorkbenchToggle

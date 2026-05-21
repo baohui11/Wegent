@@ -384,13 +384,13 @@ export default function TaskSidebar({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Image
-                    src="/weibo-logo.png"
+                    src="/mp-logo.png"
                     alt="Weibo Logo"
                     width={36}
                     height={35}
                     className="object-contain"
                   />
-                  <span className="text-base font-semibold text-text-primary">Wegent</span>
+                  <span className="text-base font-semibold text-text-primary">中大 Agent</span>
                 </div>
                 {onToggleCollapsed && (
                   <TooltipProvider>

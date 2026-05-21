@@ -15,7 +15,6 @@ import {
   CollapsedSidebarButtons,
   SearchDialog,
 } from '@/features/tasks/components/sidebar'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { Team } from '@/types/api'
 import { saveLastTab } from '@/utils/userPreferences'
 import { useUser } from '@/features/common/UserContext'
@@ -341,7 +340,6 @@ export function ChatPageDesktop() {
             />
           )}
           {shareButton}
-          <GithubStarButton />
         </TopNavigation>
         {/* Chat area - taskType switches based on device selection */}
         <ChatArea

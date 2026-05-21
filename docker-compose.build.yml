@@ -14,6 +14,9 @@ services:
   frontend:
     build:
       dockerfile: docker/frontend/Dockerfile
+      args:
+        SKIP_UI_FONT_DOWNLOAD: "1"
+        SKIP_PDF_FONT_DOWNLOAD: "1"
     pull_policy: build
 
   chat_shell:

@@ -36,13 +36,13 @@ export default function PublicTaskSidebar({
         <div className="flex items-center justify-between pl-2 gap-2">
           <div className="flex items-center gap-2">
             <Image
-              src="/weibo-logo.png"
+              src="/mp-logo.png"
               alt="Weibo Logo"
               width={20}
               height={20}
               className="object-container"
             />
-            <span className="text-sm text-text-primary">Wegent</span>
+            <span className="text-sm text-text-primary">中大 Agent</span>
           </div>
         </div>
       </div>

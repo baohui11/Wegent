@@ -15,7 +15,6 @@ import { useTranslation } from '@/hooks/useTranslation'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { POST_LOGIN_REDIRECT_KEY, sanitizeRedirectPath } from '@/features/login/constants'
-import Image from 'next/image'
 import { getRuntimeConfigSync } from '@/lib/runtime-config'
 
 export default function LoginForm() {
@@ -23,8 +22,8 @@ export default function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [formData, setFormData] = useState({
-    user_name: 'admin',
-    password: 'Wegent2025!',
+    user_name: '',
+    password: '',
   })
   const [showPassword, setShowPassword] = useState(false)
   // Used antd message.error for unified error prompt, no need for local error state
@@ -34,10 +33,7 @@ export default function LoginForm() {
   const runtimeConfig = getRuntimeConfigSync()
   const loginMode = runtimeConfig.loginMode
   const showPasswordLogin = loginMode === 'password' || loginMode === 'all'
-  const showOidcLogin = loginMode === 'oidc' || loginMode === 'all'
 
-  // Get OIDC login button text from runtime config
-  const oidcLoginText = runtimeConfig.oidcLoginText || t('common:login.oidc_login')
   const loginPath = paths.auth.login.getHref()
   const defaultRedirect = paths.chat.getHref()
   const [redirectPath, setRedirectPath] = useState(defaultRedirect)
@@ -221,56 +217,7 @@ export default function LoginForm() {
               )}
             </Button>
           </div>
-
-          {/* Show test account info */}
-          <div className="mt-6 text-center text-xs text-text-muted">
-            {t('common:login.test_account')}
-          </div>
         </form>
-      )}
-
-      {/* Divider and third-party login - only shown when both login modes are displayed */}
-      {showPasswordLogin && showOidcLogin && (
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-surface text-text-muted">
-                {t('common:login.or_continue_with')}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OIDC login */}
-      {showOidcLogin && (
-        <div className={showPasswordLogin ? 'mt-6' : ''}>
-          <div className="grid grid-cols-1 gap-3">
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Include redirect parameter for OIDC login if exists
-                const redirectUrl = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY)
-                const oidcUrl = redirectUrl
-                  ? `/api/auth/oidc/login?redirect=${encodeURIComponent(redirectUrl)}`
-                  : '/api/auth/oidc/login'
-                window.location.href = oidcUrl
-              }}
-              style={{
-                width: '100%',
-                justifyContent: 'center',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <Image src="/ocid.png" alt="OIDC Login" width={20} height={20} className="mr-2" />
-              {oidcLoginText}
-            </Button>
-          </div>
-        </div>
       )}
     </div>
   )

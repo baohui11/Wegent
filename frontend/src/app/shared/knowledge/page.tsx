@@ -15,7 +15,6 @@ import { getToken, userApis } from '@/apis/user'
 import { LogIn, BookOpen, Clock, Send, AlertCircle } from 'lucide-react'
 import { useTheme } from '@/features/theme/ThemeProvider'
 import TopNavigation from '@/features/layout/TopNavigation'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { useTranslation } from '@/hooks/useTranslation'
 import { Spinner } from '@/components/ui/spinner'
 import type { User } from '@/types/api'
@@ -173,7 +172,6 @@ function SharedKnowledgeContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -210,7 +208,6 @@ function SharedKnowledgeContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
@@ -251,7 +248,6 @@ function SharedKnowledgeContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
@@ -287,7 +283,6 @@ function SharedKnowledgeContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center p-4">
           <Card padding="lg" className="max-w-md w-full">
@@ -345,7 +340,6 @@ function SharedKnowledgeContent() {
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         {/* Top navigation */}
         <TopNavigation variant="standalone" showLogo>
-          <GithubStarButton />
           {isLoggedIn && currentUser ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-text-primary">{currentUser.user_name}</span>

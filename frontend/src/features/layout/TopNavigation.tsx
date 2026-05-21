@@ -79,7 +79,7 @@ export default function TopNavigation({
         {shouldShowLogo && !showHamburgerMenu && (
           <div className="flex items-center gap-2 flex-shrink-0">
             <Image
-              src="/weibo-logo.png"
+              src="/mp-logo.png"
               alt="Weibo Logo"
               width={isMobile ? 20 : 24}
               height={isMobile ? 20 : 24}

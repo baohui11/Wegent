@@ -567,7 +567,7 @@
     }
   },
   "auth": {
-    "login_title": "Login to WeCode AI",
+    "login_title": "Login to 中大 Agent",
     "login_subtitle": "your AI assistant for developers",
     "oidc_login_failed": "OIDC login failed:",
     "login_success": "Login success",

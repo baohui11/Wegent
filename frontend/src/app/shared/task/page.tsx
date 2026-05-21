@@ -13,7 +13,6 @@ import { getToken, userApis } from '@/apis/user'
 import { LogIn } from 'lucide-react'
 import { useTheme } from '@/features/theme/ThemeProvider'
 import TopNavigation from '@/features/layout/TopNavigation'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { MessageBubble, type Message } from '@/features/tasks/components/message'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { User, SubtaskContextBrief } from '@/types/api'
@@ -206,7 +205,6 @@ function SharedTaskContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation activePage="chat" variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
@@ -239,7 +237,6 @@ function SharedTaskContent() {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         <TopNavigation activePage="chat" variant="standalone" showLogo>
-          <GithubStarButton />
         </TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
@@ -293,7 +290,6 @@ function SharedTaskContent() {
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
         {/* Top navigation */}
         <TopNavigation activePage="chat" variant="standalone" showLogo>
-          <GithubStarButton />
           {isLoggedIn && currentUser ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-text-primary">{currentUser.user_name}</span>

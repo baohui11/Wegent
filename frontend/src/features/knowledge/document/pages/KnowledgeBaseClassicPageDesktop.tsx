@@ -14,7 +14,6 @@ import {
   CollapsedSidebarButtons,
   SearchDialog,
 } from '@/features/tasks/components/sidebar'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -230,7 +229,6 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
           onMobileSidebarToggle={() => {}}
           isSidebarCollapsed={isCollapsed}
         >
-          <GithubStarButton />
         </TopNavigation>
 
         {/* Content area - Document List with optional Permission Management Tab */}

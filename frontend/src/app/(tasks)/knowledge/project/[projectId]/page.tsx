@@ -10,7 +10,6 @@ import TopNavigation from '@/features/layout/TopNavigation'
 import UserMenu from '@/features/layout/UserMenu'
 import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { useTranslation } from '@/hooks/useTranslation'
 import { saveLastTab } from '@/utils/userPreferences'
 import {
@@ -52,7 +51,6 @@ export default function WikiDetailPage() {
       <div className="flex smart-h-screen bg-base text-text-primary box-border">
         <div className="flex-1 flex flex-col min-w-0">
           <TopNavigation activePage="wiki" variant="standalone">
-            <GithubStarButton />
             <UserMenu />
           </TopNavigation>
 

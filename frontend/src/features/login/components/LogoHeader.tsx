@@ -10,7 +10,7 @@ export default function LogoHeader() {
   return (
     <div className="flex justify-center items-center space-x-3">
       <Image
-        src="/weibo-logo.png"
+        src="/mp-logo.png"
         alt="Weibo Logo"
         width={48}
         height={48}

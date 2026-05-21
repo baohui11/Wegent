@@ -32,7 +32,6 @@ import {
 import { TaskParamSync } from '@/features/tasks/components/params'
 import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { saveLastTab } from '@/utils/userPreferences'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
@@ -201,7 +200,7 @@ function KnowledgeVirtualPageContent() {
           onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           isSidebarCollapsed={isCollapsed}
         >
-          {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+          {isMobile && <ThemeToggle />}
         </TopNavigation>
 
         {/* Document knowledge - no padding, full height */}

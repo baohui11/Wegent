@@ -61,7 +61,7 @@ export function KnowledgeModuleNav({ activeModule }: KnowledgeModuleNavProps) {
       <div className="px-3 py-2 sm:py-3 min-h-[44px] flex items-center">
         <div className="flex items-center gap-2">
           <Image
-            src="/weibo-logo.png"
+            src="/mp-logo.png"
             alt="Weibo Logo"
             width={20}
             height={20}

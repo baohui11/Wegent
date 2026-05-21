@@ -50,9 +50,6 @@ jest.mock('@/features/tasks/components/input', () => ({
   OpenMenu: () => <div>open-menu</div>,
 }))
 
-jest.mock('@/features/layout/GithubStarButton', () => ({
-  GithubStarButton: () => <div>github-star</div>,
-}))
 jest.mock('@/features/common/UserContext', () => ({
   useUser: () => ({ user: null }),
 }))

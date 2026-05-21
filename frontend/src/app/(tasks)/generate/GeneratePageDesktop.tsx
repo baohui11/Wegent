@@ -14,7 +14,6 @@ import {
   CollapsedSidebarButtons,
   SearchDialog,
 } from '@/features/tasks/components/sidebar'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { Team } from '@/types/api'
 import { useTaskContext } from '@/features/tasks/contexts/taskContext'
 import { useChatStreamContext } from '@/features/tasks/contexts/chatStreamContext'
@@ -191,7 +190,6 @@ export function GeneratePageDesktop() {
           isSidebarCollapsed={isCollapsed}
           hideGroupChatOptions={true}
         >
-          <GithubStarButton />
         </TopNavigation>
         {/* Chat area with current generation mode */}
         <ChatArea

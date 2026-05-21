@@ -14,7 +14,6 @@ import {
   CollapsedSidebarButtons,
   SearchDialog,
 } from '@/features/tasks/components/sidebar'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { saveLastTab } from '@/utils/userPreferences'
@@ -294,7 +293,6 @@ export function KnowledgeBaseChatPageDesktop({ knowledgeBaseId, initialDocPath }
           isRightPanelCollapsed={isDocumentPanelCollapsed}
         >
           {shareButton}
-          <GithubStarButton />
         </TopNavigation>
 
         {/* Content area - Chat with KB summary */}

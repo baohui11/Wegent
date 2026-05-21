@@ -108,3 +108,10 @@ docs/superpowers/
 .worktrees/
 
 temp/
+
+# Offline frontend font bundle (keep README/scripts; ignore large binaries)
+vendor/frontend-fonts/public/fonts/*
+!vendor/frontend-fonts/public/fonts/.gitkeep
+vendor/frontend-fonts/src/app/*
+!vendor/frontend-fonts/src/app/.gitkeep
+vendor/frontend-fonts-bundle.zip

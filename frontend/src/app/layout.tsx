@@ -26,12 +26,12 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { CSSLoadFixer } from '@/components/CSSLoadFixer'
 
 export const metadata: Metadata = {
-  title: 'Wegent AI',
-  description: 'AI-powered assistant in browser.',
+  title: '中大 Agent',
+  description: '中大咨询Agent平台，您的智能助手。',
   icons: {
-    icon: '/weibo-logo.png',
-    shortcut: '/weibo-logo.png',
-    apple: '/weibo-logo.png',
+    icon: '/mp-logo.png',
+    shortcut: '/mp-logo.png',
+    apple: '/mp-logo.png',
   },
 }
 

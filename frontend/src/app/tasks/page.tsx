@@ -13,7 +13,6 @@ import { TeamShareHandler } from '@/features/tasks/components/share'
 import OidcTokenHandler from '@/features/login/components/OidcTokenHandler'
 import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import { Team } from '@/types/api'
@@ -64,7 +63,7 @@ function TasksPageContent() {
             showLogo={false}
             onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           >
-            {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+            {isMobile && <ThemeToggle />}
           </TopNavigation>
           {/* Chat area */}
           <ChatArea

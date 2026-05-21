@@ -14,7 +14,6 @@ import {
 } from '@/features/tasks/components/sidebar'
 import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { useTranslation } from '@/hooks/useTranslation'
 import { saveLastTab } from '@/utils/userPreferences'
@@ -239,7 +238,7 @@ function KnowledgePageContent() {
           onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           isSidebarCollapsed={isCollapsed}
         >
-          {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+          {isMobile && <ThemeToggle />}
         </TopNavigation>
 
         {/* Content area based on active tab */}

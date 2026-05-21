@@ -4,8 +4,6 @@
 
 import Image from 'next/image'
 import UserMenu from '@/features/layout/UserMenu'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
-
 /**
  * Standalone page header component - shows only Logo and user info
  */
@@ -16,7 +14,7 @@ export default function StandaloneHeader() {
         {/* Left side Logo */}
         <div className="flex items-center gap-2">
           <Image
-            src="/weibo-logo.png"
+            src="/mp-logo.png"
             alt="Weibo Logo"
             width={24}
             height={24}
@@ -28,7 +26,6 @@ export default function StandaloneHeader() {
 
         {/* Right side user info */}
         <div className="flex items-center gap-3">
-          <GithubStarButton />
           <UserMenu />
         </div>
       </div>

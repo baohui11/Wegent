@@ -33,7 +33,6 @@ import { SocketProvider } from '@/contexts/SocketContext'
 import { DeviceProvider } from '@/contexts/DeviceContext'
 import { ProjectProvider } from '@/features/projects/contexts/projectContext'
 import { useTranslation } from '@/hooks/useTranslation'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import { Button } from '@/components/ui/button'
@@ -195,7 +194,7 @@ function AdminContent() {
             title={t('admin:title')}
             onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           >
-            {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+            {isMobile && <ThemeToggle />}
           </TopNavigation>
           <AccessDenied />
         </div>
@@ -228,7 +227,7 @@ function AdminContent() {
           title={t('admin:title')}
           onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
         >
-          {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+          {isMobile && <ThemeToggle />}
         </TopNavigation>
 
         {/* Tab navigation */}

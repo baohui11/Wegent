@@ -60,10 +60,6 @@ jest.mock('@/features/tasks/components/sidebar', () => ({
   SearchDialog: () => <div>search-dialog</div>,
 }))
 
-jest.mock('@/features/layout/GithubStarButton', () => ({
-  GithubStarButton: () => <div>github-star</div>,
-}))
-
 jest.mock('@/features/common/UserContext', () => ({
   useUser: () => ({ user: null }),
 }))

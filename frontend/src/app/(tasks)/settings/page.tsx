@@ -24,7 +24,6 @@ import ApiKeyList from '@/features/settings/components/ApiKeyList'
 import { RetrieverListWithScope } from '@/features/settings/components/RetrieverListWithScope'
 import { PetSettings } from '@/features/pet/components/PetSettings'
 import { useTranslation } from '@/hooks/useTranslation'
-import { GithubStarButton } from '@/features/layout/GithubStarButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import { paths } from '@/config/paths'
@@ -250,7 +249,7 @@ function SettingsContent() {
           onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           isSidebarCollapsed={isCollapsed}
         >
-          {isMobile ? <ThemeToggle /> : <GithubStarButton />}
+          {isMobile && <ThemeToggle />}
         </TopNavigation>
 
         {/* Tab navigation */}
