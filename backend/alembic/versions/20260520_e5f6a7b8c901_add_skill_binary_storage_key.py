@@ -5,7 +5,7 @@
 """add storage_key column to skill_binaries and relax binary_data NOT NULL
 
 Revision ID: e5f6a7b8c901
-Revises: d4e5f6a7b810
+Revises: 9d4be4601172
 Create Date: 2026-05-20
 
 Phase 1 of the S3 storage migration: allow skill ZIP packages to live in
@@ -23,7 +23,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "e5f6a7b8c901"
-down_revision = "d4e5f6a7b810"
+down_revision = "9d4be4601172"
 branch_labels = None
 depends_on = None
 

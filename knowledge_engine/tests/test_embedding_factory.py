@@ -42,6 +42,41 @@ def test_create_embedding_model_uses_runtime_model_name_when_model_id_missing(
     )
 
 
+def test_create_embedding_model_uses_custom_embedding_for_openai_compatible_endpoint(
+    mocker,
+) -> None:
+    custom_embedding_cls = mocker.patch(
+        "knowledge_engine.embedding.factory.CustomEmbedding",
+        return_value=SimpleNamespace(),
+    )
+    openai_embedding_cls = mocker.patch(
+        "llama_index.embeddings.openai.OpenAIEmbedding",
+        return_value=SimpleNamespace(),
+    )
+
+    create_embedding_model_from_runtime_config(
+        RuntimeEmbeddingModelConfig(
+            model_name="text-embedding-v4",
+            resolved_config={
+                "protocol": "openai",
+                "api_key": "test-key",
+                "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "model_id": "text-embedding-v4",
+                "dimensions": 1024,
+            },
+        )
+    )
+
+    custom_embedding_cls.assert_called_once_with(
+        api_url="https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+        model="text-embedding-v4",
+        headers={},
+        api_key="test-key",
+        dimensions=1024,
+    )
+    openai_embedding_cls.assert_not_called()
+
+
 def test_create_embedding_model_exposes_additional_input_modalities(mocker) -> None:
     embedding_instance = SimpleNamespace()
     custom_embedding_cls = mocker.patch(

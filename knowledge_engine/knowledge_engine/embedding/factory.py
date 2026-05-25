@@ -14,6 +14,42 @@ from knowledge_engine.embedding.capabilities import (
 from knowledge_engine.embedding.custom import CustomEmbedding
 from shared.models import RuntimeEmbeddingModelConfig
 
+_OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+
+def _openai_embeddings_api_url(base_url: str | None) -> str:
+    if base_url:
+        return f"{base_url.rstrip('/')}/embeddings"
+    return f"{_OPENAI_DEFAULT_BASE_URL}/embeddings"
+
+
+def _should_use_custom_openai_embedding(
+    *,
+    base_url: str | None,
+    custom_headers: dict[str, Any],
+    model_id: str | None,
+    model_name: str,
+) -> bool:
+    """Use CustomEmbedding when OpenAI SDK cannot represent the configured model."""
+    if custom_headers:
+        return True
+
+    if base_url and base_url.rstrip("/") != _OPENAI_DEFAULT_BASE_URL:
+        return True
+
+    candidate_model = model_id or model_name
+    if not candidate_model:
+        return False
+
+    try:
+        from llama_index.embeddings.openai.utils import OpenAIEmbeddingModelType
+
+        OpenAIEmbeddingModelType(candidate_model)
+    except ValueError:
+        return True
+
+    return False
+
 
 def create_embedding_model_from_runtime_config(
     runtime_config: RuntimeEmbeddingModelConfig,
@@ -46,16 +82,17 @@ def _create_embedding_model_from_resolved_values(
         additional_input_modalities
     )
     if protocol == "openai":
-        if custom_headers:
-            api_url = (
-                f"{base_url.rstrip('/')}/embeddings"
-                if base_url
-                else "https://api.openai.com/v1/embeddings"
-            )
+        resolved_model = model_id or model_name or "text-embedding-3-small"
+        if _should_use_custom_openai_embedding(
+            base_url=base_url,
+            custom_headers=custom_headers,
+            model_id=model_id,
+            model_name=model_name,
+        ):
             return _attach_runtime_capabilities(
                 CustomEmbedding(
-                    api_url=api_url,
-                    model=model_id or model_name or "text-embedding-3-small",
+                    api_url=_openai_embeddings_api_url(base_url),
+                    model=resolved_model,
                     headers=custom_headers,
                     api_key=api_key,
                     dimensions=dimensions,
@@ -67,7 +104,7 @@ def _create_embedding_model_from_resolved_values(
 
         return _attach_runtime_capabilities(
             OpenAIEmbedding(
-                model=model_id or model_name or "text-embedding-3-small",
+                model=resolved_model,
                 api_key=api_key,
                 api_base=base_url,
                 dimensions=dimensions,
