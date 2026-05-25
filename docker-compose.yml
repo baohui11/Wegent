@@ -114,11 +114,18 @@ services:
     pull_policy: ${DOCKER_PULL_POLICY:-always}
     container_name: wegent-backend
     restart: always
+    # Override image default (--workers 1) for concurrent API load
+    command:
+      - sh
+      - -c
+      - exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers $$BACKEND_UVICORN_WORKERS --timeout-graceful-shutdown $$GRACEFUL_SHUTDOWN_TIMEOUT
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./logs/backend:/app/logs
     environment:
+      BACKEND_UVICORN_WORKERS: ${BACKEND_UVICORN_WORKERS:-8}
+      GRACEFUL_SHUTDOWN_TIMEOUT: ${GRACEFUL_SHUTDOWN_TIMEOUT:-600}
       # Logging configuration
       LOG_FILE_ENABLED: ${LOG_FILE_ENABLED:-true}
       LOG_DIR: /app/logs
@@ -177,11 +184,13 @@ services:
       # Task Dispatch Configuration
       # Mode: 'push' (default) or 'pull' (deprecated, executor_manager polls)
       TASK_DISPATCH_MODE: ${TASK_DISPATCH_MODE:-push}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
       # OpenTelemetry Configuration (uncomment to enable)
       # OTEL_ENABLED: "true"
       # OTEL_SERVICE_NAME: "wegent-backend"
       # OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4317"
       # OTEL_TRACES_SAMPLER_ARG: "1.0"
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       mysql:
         condition: service_healthy
@@ -232,9 +241,17 @@ services:
     pull_policy: ${DOCKER_PULL_POLICY:-always}
     container_name: wegent-chat-shell
     restart: always
+    # Override image default (--workers 1) for concurrent chat load
+    command:
+      - sh
+      - -c
+      - exec uvicorn chat_shell.main:app --host $$HOST --port $$PORT --workers $$CHAT_SHELL_UVICORN_WORKERS --timeout-graceful-shutdown $$GRACEFUL_SHUTDOWN_TIMEOUT
     ports:
       - "${CHAT_SHELL_PORT:-8100}:8100"
     environment:
+      - CHAT_SHELL_UVICORN_WORKERS=${CHAT_SHELL_UVICORN_WORKERS:-8}
+      - GRACEFUL_SHUTDOWN_TIMEOUT=${GRACEFUL_SHUTDOWN_TIMEOUT:-600}
+      - PORT=${CHAT_SHELL_PORT:-8100}
       # Disable litellm network request for model cost map to prevent startup blocking
       - LITELLM_LOCAL_MODEL_COST_MAP=True
       - HOST=${CHAT_SHELL_HOST:-0.0.0.0}
@@ -242,6 +259,9 @@ services:
       - CHAT_SHELL_STORAGE_TYPE=${CHAT_SHELL_STORAGE_TYPE:-remote}
       - CHAT_SHELL_REMOTE_STORAGE_URL=${CHAT_SHELL_REMOTE_STORAGE_URL:-http://backend:8000/api/internal}
       - EXECUTOR_MANAGER_URL=${EXECUTOR_MANAGER_URL:-http://executor_manager:8001}
+      - CHAT_SHELL_CHAT_TOOL_MAX_REQUESTS=${CHAT_SHELL_CHAT_TOOL_MAX_REQUESTS:-50}
+      - CHAT_SHELL_CHAT_TOOL_MAX_TIME_SECONDS=${CHAT_SHELL_CHAT_TOOL_MAX_TIME_SECONDS:-300}
+      - CHAT_SHELL_MAX_CONCURRENT_CHATS=${CHAT_SHELL_MAX_CONCURRENT_CHATS:-50}
       # - CHAT_SHELL_REMOTE_STORAGE_TOKEN=${INTERNAL_SERVICE_TOKEN:-chat-shell-token}
       # OpenTelemetry Configuration (uncomment to enable)
       # - OTEL_ENABLED=true
