@@ -90,13 +90,45 @@ Users can select their preferred search engine from the dropdown menu when web s
 
 ## Supported Search Engines
 
-The system supports any HTTP-based search API that returns JSON responses. Common examples:
+The system supports search APIs through two adapter types:
 
-- **Google Custom Search API**
-- **Bing Web Search API**
+### HTTP GET adapter (`type` omitted or `"http"`)
+
+Compatible with GET-based JSON APIs such as:
+
+- **Google Custom Search API** (via proxy)
+- **Bing Web Search API** (via proxy)
 - **DuckDuckGo API**
 - **SearXNG** (self-hosted)
 - **Custom search APIs**
+
+### Bocha POST adapter (`type: "bocha"`)
+
+For [Bocha Web Search API](https://open.bochaai.com/) (`POST` + JSON body):
+
+```bash
+WEB_SEARCH_ENABLED=true
+BOCHA_API_KEY=sk-your-api-key
+WEB_SEARCH_ENGINES='{
+  "default": "bocha",
+  "engines": {
+    "bocha": {
+      "type": "bocha",
+      "display_name": "博查",
+      "freshness": "noLimit",
+      "summary": true,
+      "max_results": 10
+    }
+  }
+}'
+```
+
+Optional engine fields for Bocha:
+
+- `base_url`: defaults to `https://api.bochaai.com/v1/web-search`
+- `freshness`: `noLimit`, `oneDay`, `oneWeek`, `oneMonth`, `oneYear`, or date range
+- `summary`: request AI-generated summaries (default: `true`)
+- `api_key`: override `BOCHA_API_KEY` for this engine only
 
 ## Adding New Search Engines
 

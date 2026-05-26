@@ -177,8 +177,16 @@ export function ChatInputCard({
   onRequiresWorkspaceChange,
   enableDeepThinking,
   setEnableDeepThinking,
+  enableReasoning,
+  setEnableReasoning,
   enableClarification,
   setEnableClarification,
+  enableWebSearch,
+  setEnableWebSearch,
+  selectedSearchEngine,
+  setSelectedSearchEngine,
+  searchEngines,
+  isWebSearchAvailable,
   enableCorrectionMode,
   correctionModelName,
   onCorrectionModeToggle,
@@ -585,8 +593,16 @@ export function ChatInputCard({
             onRequiresWorkspaceChange={onRequiresWorkspaceChange}
             enableDeepThinking={enableDeepThinking}
             setEnableDeepThinking={setEnableDeepThinking}
+            enableReasoning={enableReasoning}
+            setEnableReasoning={setEnableReasoning}
             enableClarification={enableClarification}
             setEnableClarification={setEnableClarification}
+            enableWebSearch={enableWebSearch}
+            setEnableWebSearch={setEnableWebSearch}
+            selectedSearchEngine={selectedSearchEngine}
+            setSelectedSearchEngine={setSelectedSearchEngine}
+            searchEngines={searchEngines}
+            isWebSearchAvailable={isWebSearchAvailable}
             enableCorrectionMode={enableCorrectionMode}
             correctionModelName={correctionModelName}
             onCorrectionModeToggle={onCorrectionModeToggle}

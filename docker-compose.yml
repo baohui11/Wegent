@@ -185,6 +185,11 @@ services:
       # Mode: 'push' (default) or 'pull' (deprecated, executor_manager polls)
       TASK_DISPATCH_MODE: ${TASK_DISPATCH_MODE:-push}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-false}
+      # Web search (Bocha / HTTP adapters) — required for /api/chat/search-engines and search tools
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-false}
+      WEB_SEARCH_ENGINES: ${WEB_SEARCH_ENGINES:-{}}
+      WEB_SEARCH_DEFAULT_MAX_RESULTS: ${WEB_SEARCH_DEFAULT_MAX_RESULTS:-50}
+      BOCHA_API_KEY: ${BOCHA_API_KEY:-}
       # OpenTelemetry Configuration (uncomment to enable)
       # OTEL_ENABLED: "true"
       # OTEL_SERVICE_NAME: "wegent-backend"
@@ -262,6 +267,10 @@ services:
       - CHAT_SHELL_CHAT_TOOL_MAX_REQUESTS=${CHAT_SHELL_CHAT_TOOL_MAX_REQUESTS:-50}
       - CHAT_SHELL_CHAT_TOOL_MAX_TIME_SECONDS=${CHAT_SHELL_CHAT_TOOL_MAX_TIME_SECONDS:-300}
       - CHAT_SHELL_MAX_CONCURRENT_CHATS=${CHAT_SHELL_MAX_CONCURRENT_CHATS:-50}
+      # Web search (HTTP mode: chat_shell calls search APIs directly)
+      - CHAT_SHELL_WEB_SEARCH_ENABLED=${WEB_SEARCH_ENABLED:-false}
+      - CHAT_SHELL_WEB_SEARCH_ENGINES=${WEB_SEARCH_ENGINES:-{}}
+      - CHAT_SHELL_WEB_SEARCH_DEFAULT_MAX_RESULTS=${WEB_SEARCH_DEFAULT_MAX_RESULTS:-50}
       # - CHAT_SHELL_REMOTE_STORAGE_TOKEN=${INTERNAL_SERVICE_TOKEN:-chat-shell-token}
       # OpenTelemetry Configuration (uncomment to enable)
       # - OTEL_ENABLED=true

@@ -515,6 +515,7 @@ class Settings(BaseSettings):
     WEB_SEARCH_DEFAULT_MAX_RESULTS: int = (
         50  # Default max results when not specified by LLM or engine config
     )
+    BOCHA_API_KEY: str = ""  # API key for Bocha Web Search (type=bocha engines)
 
     # Message compression configuration
     # Enable/disable automatic message compression when context limit is exceeded

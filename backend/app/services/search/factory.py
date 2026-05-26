@@ -13,6 +13,7 @@ from typing import Any
 from app.core.config import settings
 
 from .base import SearchServiceBase
+from .bocha_search import DEFAULT_BOCHA_WEB_SEARCH_URL, BochaSearchService
 from .http_search import HttpSearchService
 
 logger = logging.getLogger(__name__)
@@ -49,41 +50,36 @@ def _get_engines_config() -> dict[str, Any] | None:
         return None
 
 
-def get_search_service(engine_name: str | None = None) -> SearchServiceBase | None:
-    """
-    Get the configured search service instance for a specific engine.
-    If engine_name is None, returns the first configured engine.
-    """
+def _create_search_service(
+    engine_name: str, engine_config: dict[str, Any]
+) -> SearchServiceBase | None:
+    """Create a search service instance from engine configuration."""
+    engine_type = engine_config.get("type", "http").lower()
 
-    config = _get_engines_config()
-    if not config or "engines" not in config:
-        return None
+    if engine_type == "bocha":
+        api_key = engine_config.get("api_key") or getattr(settings, "BOCHA_API_KEY", "")
+        if not api_key:
+            logger.error(
+                "BOCHA_API_KEY is required for bocha search engine: %s",
+                engine_name,
+            )
+            return None
 
-    engines = config["engines"]
+        return BochaSearchService(
+            api_key=api_key,
+            base_url=engine_config.get("base_url", DEFAULT_BOCHA_WEB_SEARCH_URL),
+            max_results=engine_config.get("max_results", 10),
+            freshness=engine_config.get("freshness", "noLimit"),
+            summary=engine_config.get("summary", True),
+            timeout=engine_config.get("timeout", 15),
+        )
 
-    # Select engine: requested one, or first available one
-    selected_name = (
-        engine_name
-        if engine_name and engine_name in engines
-        else next(iter(engines), None)
-    )
-
-    if not selected_name:
-        return None
-
-    # Return cached instance if available
-    if selected_name in _search_services:
-        return _search_services[selected_name]
-
-    # Create new instance
-    engine_config = engines[selected_name]
     base_url = engine_config.get("base_url")
-
     if not base_url:
-        logger.error("base_url is required for search engine: %s", selected_name)
+        logger.error("base_url is required for search engine: %s", engine_name)
         return None
 
-    service = HttpSearchService(
+    return HttpSearchService(
         base_url=base_url,
         max_results=engine_config.get("max_results", 10),
         query_param=engine_config.get("query_param", "q"),
@@ -98,8 +94,49 @@ def get_search_service(engine_name: str | None = None) -> SearchServiceBase | No
         timeout=engine_config.get("timeout", 10),
     )
 
+
+def get_search_service(engine_name: str | None = None) -> SearchServiceBase | None:
+    """
+    Get the configured search service instance for a specific engine.
+    If engine_name is None, returns the first configured engine.
+    """
+
+    config = _get_engines_config()
+    if not config or "engines" not in config:
+        return None
+
+    engines = config["engines"]
+
+    # Select engine: default from config, requested one, or first available one
+    default_name = config.get("default")
+    selected_name = (
+        engine_name
+        if engine_name and engine_name in engines
+        else (
+            default_name
+            if default_name and default_name in engines
+            else next(iter(engines), None)
+        )
+    )
+
+    if not selected_name:
+        return None
+
+    # Return cached instance if available
+    if selected_name in _search_services:
+        return _search_services[selected_name]
+
+    engine_config = engines[selected_name]
+    service = _create_search_service(selected_name, engine_config)
+    if not service:
+        return None
+
     _search_services[selected_name] = service
-    logger.info("Initialized search service for engine: %s", selected_name)
+    logger.info(
+        "Initialized search service for engine: %s (type=%s)",
+        selected_name,
+        engine_config.get("type", "http"),
+    )
     return service
 
 

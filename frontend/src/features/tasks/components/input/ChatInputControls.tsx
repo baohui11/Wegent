@@ -9,8 +9,9 @@ import { CircleStop } from 'lucide-react'
 import ModelSelector, { Model } from '../selector/ModelSelector'
 import TeamSelectorButton from '../selector/TeamSelectorButton'
 import UnifiedRepositorySelector from '../selector/UnifiedRepositorySelector'
-import ClarificationToggle from '../clarification/ClarificationToggle'
-import CorrectionModeToggle from '../CorrectionModeToggle'
+import SearchEngineSelector from '../selector/SearchEngineSelector'
+import DeepThinkingToggle from './DeepThinkingToggle'
+import ChatInputMoreActions from './ChatInputMoreActions'
 import ChatContextInput from '../chat/ChatContextInput'
 import AttachmentButton from '../AttachmentButton'
 import SendButton from './SendButton'
@@ -27,6 +28,7 @@ import type {
 } from '@/types/api'
 import type { ContextItem } from '@/types/context'
 import type { UnifiedSkill } from '@/apis/skills'
+import type { SearchEngine } from '@/apis/chat'
 import { canUseChatContexts, isChatShell } from '../../service/messageService'
 import { supportsAttachments } from '../../service/attachmentService'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
@@ -80,8 +82,18 @@ export interface ChatInputControlsProps {
   // Deep Thinking and Clarification
   enableDeepThinking: boolean
   setEnableDeepThinking: (value: boolean) => void
+  enableReasoning: boolean
+  setEnableReasoning: (value: boolean) => void
   enableClarification: boolean
   setEnableClarification: (value: boolean) => void
+
+  // Web search
+  enableWebSearch: boolean
+  setEnableWebSearch: (value: boolean) => void
+  selectedSearchEngine: string | null
+  setSelectedSearchEngine: (engine: string) => void
+  searchEngines: SearchEngine[]
+  isWebSearchAvailable: boolean
 
   // Correction mode
   enableCorrectionMode?: boolean
@@ -204,8 +216,16 @@ export function ChatInputControls({
   selectedTaskDetail,
   effectiveRequiresWorkspace,
   onRequiresWorkspaceChange,
+  enableReasoning,
+  setEnableReasoning,
   enableClarification,
   setEnableClarification,
+  enableWebSearch,
+  setEnableWebSearch,
+  selectedSearchEngine,
+  setSelectedSearchEngine,
+  searchEngines,
+  isWebSearchAvailable,
   enableCorrectionMode = false,
   correctionModelName,
   onCorrectionModeToggle,
@@ -401,6 +421,14 @@ export function ChatInputControls({
         onRequiresWorkspaceChange={hasMessages ? undefined : onRequiresWorkspaceChange}
         enableClarification={enableClarification}
         setEnableClarification={setEnableClarification}
+        enableReasoning={enableReasoning}
+        setEnableReasoning={setEnableReasoning}
+        enableWebSearch={enableWebSearch}
+        setEnableWebSearch={setEnableWebSearch}
+        selectedSearchEngine={selectedSearchEngine}
+        setSelectedSearchEngine={setSelectedSearchEngine}
+        searchEngines={searchEngines}
+        isWebSearchAvailable={isWebSearchAvailable}
         enableCorrectionMode={enableCorrectionMode}
         correctionModelName={correctionModelName}
         onCorrectionModeToggle={onCorrectionModeToggle}
@@ -590,23 +618,62 @@ export function ChatInputControls({
               />
             )}
 
-            {/* Clarification Toggle Button - only show for chat shell */}
-            {isChatShell(selectedTeam) && (
-              <ClarificationToggle
-                enabled={enableClarification}
-                onToggle={setEnableClarification}
+            {/* Web Search Toggle - only show for chat shell when backend enabled */}
+            {isChatShell(selectedTeam) && isWebSearchAvailable && (
+              <SearchEngineSelector
+                enabled={enableWebSearch}
+                onToggle={setEnableWebSearch}
+                selectedEngine={selectedSearchEngine}
+                onSelectEngine={setSelectedSearchEngine}
+                engines={searchEngines}
                 disabled={isLoading || isStreaming}
               />
             )}
 
-            {/* Correction Mode Toggle Button - only show for chat shell */}
-            {isChatShell(selectedTeam) && onCorrectionModeToggle && (
-              <CorrectionModeToggle
-                enabled={enableCorrectionMode}
-                onToggle={onCorrectionModeToggle}
+            {/* Dynamic model reasoning toggle */}
+            {isChatShell(selectedTeam) && selectedModel?.dynamicThinking && (
+              <DeepThinkingToggle
+                enabled={enableReasoning}
+                onToggle={setEnableReasoning}
                 disabled={isLoading || isStreaming}
+              />
+            )}
+
+            {/* Model Selector */}
+            {selectedTeam && (
+              <div className={hideSelectors ? 'hidden' : ''}>
+                <ModelSelector
+                  selectedModel={selectedModel}
+                  setSelectedModel={setSelectedModel}
+                  forceOverride={forceOverride}
+                  setForceOverride={setForceOverride}
+                  selectedTeam={selectedTeam}
+                  disabled={isLoading || isStreaming || (hasMessages && !isChatShell(selectedTeam))}
+                  compact={shouldCollapseSelectors}
+                  teamId={teamId}
+                  taskId={taskId}
+                  taskModelId={taskModelId}
+                />
+              </div>
+            )}
+
+            {/* Divider between model selector and more actions */}
+            {isChatShell(selectedTeam) && selectedTeam && (
+              <div className="w-px h-4 bg-border mx-1 flex-shrink-0" />
+            )}
+
+            {/* More actions: clarification and correction mode */}
+            {isChatShell(selectedTeam) && (
+              <ChatInputMoreActions
+                showClarification
+                enableClarification={enableClarification}
+                setEnableClarification={setEnableClarification}
+                showCorrection={Boolean(onCorrectionModeToggle)}
+                enableCorrectionMode={enableCorrectionMode}
+                onCorrectionModeToggle={onCorrectionModeToggle}
                 correctionModelName={correctionModelName}
                 taskId={selectedTaskDetail?.id ?? null}
+                disabled={isLoading || isStreaming}
               />
             )}
 
@@ -624,24 +691,6 @@ export function ChatInputControls({
                 requiresWorkspace={effectiveRequiresWorkspace}
                 onRequiresWorkspaceChange={hasMessages ? undefined : onRequiresWorkspaceChange}
               />
-            )}
-
-            {/* Model Selector - placed at the end of left side buttons */}
-            {selectedTeam && (
-              <div className={hideSelectors ? 'hidden' : ''}>
-                <ModelSelector
-                  selectedModel={selectedModel}
-                  setSelectedModel={setSelectedModel}
-                  forceOverride={forceOverride}
-                  setForceOverride={setForceOverride}
-                  selectedTeam={selectedTeam}
-                  disabled={isLoading || isStreaming || (hasMessages && !isChatShell(selectedTeam))}
-                  compact={shouldCollapseSelectors}
-                  teamId={teamId}
-                  taskId={taskId}
-                  taskModelId={taskModelId}
-                />
-              </div>
             )}
           </div>
         )}

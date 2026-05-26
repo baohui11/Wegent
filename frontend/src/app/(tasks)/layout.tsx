@@ -7,6 +7,7 @@
 import { UserProvider } from '@/features/common/UserContext'
 import { TaskContextProvider } from '@/features/tasks/contexts/taskContext'
 import { ChatStreamProvider } from '@/features/tasks/contexts/chatStreamContext'
+import { WebSearchResultsProvider } from '@/features/tasks/contexts/WebSearchResultsContext'
 import { SocketProvider } from '@/contexts/SocketContext'
 import { DeviceProvider } from '@/contexts/DeviceContext'
 import { TeamProvider } from '@/contexts/TeamContext'
@@ -38,12 +39,14 @@ export default function TasksLayout({ children }: { children: React.ReactNode })
               <PetProvider>
                 <SetupWizardProvider>
                   <TaskContextProvider>
-                    <ChatStreamProvider>
-                      {children}
-                      <PetStreamingBridge />
-                      <PetWidget />
-                      <GlobalAdminSetupWizard />
-                    </ChatStreamProvider>
+                    <WebSearchResultsProvider>
+                      <ChatStreamProvider>
+                        {children}
+                        <PetStreamingBridge />
+                        <PetWidget />
+                        <GlobalAdminSetupWizard />
+                      </ChatStreamProvider>
+                    </WebSearchResultsProvider>
                   </TaskContextProvider>
                 </SetupWizardProvider>
               </PetProvider>

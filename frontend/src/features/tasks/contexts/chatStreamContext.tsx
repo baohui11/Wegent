@@ -86,6 +86,8 @@ export interface ChatMessageRequest {
   enable_clarification?: boolean
   /** Enable deep thinking mode for this message */
   enable_deep_thinking?: boolean
+  /** Enable model reasoning for this message (when model supports dynamic_thinking) */
+  enable_reasoning?: boolean
   /** Mark this as a group chat task */
   is_group_chat?: boolean
   /** Context items (knowledge bases, etc.) */
@@ -736,6 +738,7 @@ export function ChatStreamProvider({ children }: { children: ReactNode }) {
         search_engine: request.search_engine,
         enable_clarification: request.enable_clarification,
         enable_deep_thinking: request.enable_deep_thinking,
+        enable_reasoning: request.enable_reasoning,
         force_override_bot_model: request.model_id,
         force_override_bot_model_type: request.force_override_bot_model_type,
         is_group_chat: request.is_group_chat,

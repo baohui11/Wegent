@@ -36,6 +36,10 @@ import type { BaseRole } from '@/types/base-role'
 import { CreateGroupChatDialog } from '@/features/tasks/components/group-chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
 import { useIsDesktop } from '@/features/layout/hooks/useMediaQuery'
+import WebSearchPanelToggle from '@/features/layout/WebSearchPanelToggle'
+import { WebSearchResultsPanel } from '@/features/tasks/components/web-search/WebSearchResultsPanel'
+import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
+import { useWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
 
 /**
  * Desktop-specific implementation of Chat Page
@@ -50,6 +54,15 @@ import { useIsDesktop } from '@/features/layout/hooks/useMediaQuery'
 export function ChatPageDesktop() {
   const { t } = useTranslation()
   const router = useRouter()
+  const {
+    hasSessions: hasWebSearchSessions,
+    isPanelOpen: isWebSearchPanelOpen,
+    activeSession,
+    sessions: webSearchSessions,
+    openPanel: openWebSearchPanel,
+    closePanel: closeWebSearchPanel,
+    selectSession: selectWebSearchSession,
+  } = useWebSearchResults()
 
   // Team state from context (centralized to avoid duplicate API calls)
   const { teams, isTeamsLoading, refreshTeams } = useTeamContext()
@@ -340,19 +353,47 @@ export function ChatPageDesktop() {
             />
           )}
           {shareButton}
+          {hasWebSearchSessions && (
+            <WebSearchPanelToggle
+              isOpen={isWebSearchPanelOpen}
+              onOpen={openWebSearchPanel}
+              onClose={closeWebSearchPanel}
+            />
+          )}
         </TopNavigation>
-        {/* Chat area - taskType switches based on device selection */}
-        <ChatArea
-          teams={teams}
-          isTeamsLoading={isTeamsLoading}
-          selectedTeamForNewTask={_selectedTeamForNewTask}
-          showRepositorySelector={false}
-          taskType={taskType}
-          onShareButtonRender={handleShareButtonRender}
-          onRefreshTeams={handleRefreshTeams}
-          disabledReason={disabledReason}
-          extension={{ teamEdit: teamEditExtension }}
+        <WebSearchResultsSync
+          taskId={selectedTask?.id ?? selectedTaskDetail?.id ?? (taskId ? Number(taskId) : null)}
         />
+        <div className="flex flex-1 min-h-0">
+          <div
+            className="transition-all duration-300 ease-in-out flex flex-col min-h-0"
+            style={{
+              width: hasWebSearchSessions && isWebSearchPanelOpen ? '60%' : '100%',
+            }}
+          >
+            <ChatArea
+              teams={teams}
+              isTeamsLoading={isTeamsLoading}
+              selectedTeamForNewTask={_selectedTeamForNewTask}
+              showRepositorySelector={false}
+              taskType={taskType}
+              onShareButtonRender={handleShareButtonRender}
+              onRefreshTeams={handleRefreshTeams}
+              disabledReason={disabledReason}
+              extension={{ teamEdit: teamEditExtension }}
+            />
+          </div>
+
+          {hasWebSearchSessions && (
+            <WebSearchResultsPanel
+              isOpen={isWebSearchPanelOpen}
+              onClose={closeWebSearchPanel}
+              session={activeSession}
+              sessions={webSearchSessions}
+              onSelectSession={selectWebSearchSession}
+            />
+          )}
+        </div>
       </div>
       {/* Create Group Chat Dialog */}
       <CreateGroupChatDialog open={isCreateGroupChatOpen} onOpenChange={setIsCreateGroupChatOpen} />

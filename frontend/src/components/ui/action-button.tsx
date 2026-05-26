@@ -64,16 +64,20 @@ interface ActionButtonProps {
  *   }
  * />
  */
-export function ActionButton({
-  onClick,
-  disabled = false,
-  title,
-  icon,
-  label,
-  variant = 'default',
-  className = '',
-  'data-testid': dataTestId,
-}: ActionButtonProps) {
+export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProps>(
+  function ActionButton(
+    {
+      onClick,
+      disabled = false,
+      title,
+      icon,
+      label,
+      variant = 'default',
+      className = '',
+      'data-testid': dataTestId,
+    },
+    ref
+  ) {
   // Determine if this is an icon-only button or has a label
   const hasLabel = Boolean(label)
 
@@ -93,7 +97,7 @@ export function ActionButton({
         className={`relative ${baseStyles} flex items-center justify-center border border-border bg-base ${className}`}
       >
         {icon}
-        {label && <span className="text-sm text-text-primary">{label}</span>}
+        {label && <span className="text-sm text-inherit">{label}</span>}
       </div>
     )
   }
@@ -105,6 +109,7 @@ export function ActionButton({
 
   return (
     <Button
+      ref={ref}
       data-testid={dataTestId}
       variant={buttonVariant}
       size={hasLabel ? 'default' : 'icon'}
@@ -114,9 +119,10 @@ export function ActionButton({
       className={`${baseStyles} ${defaultClassName} ${className}`}
     >
       {icon}
-      {label && <span className="text-sm text-text-primary">{label}</span>}
+      {label && <span className="text-sm text-inherit">{label}</span>}
     </Button>
   )
-}
+  }
+)
 
 export default ActionButton

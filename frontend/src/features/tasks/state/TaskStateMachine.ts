@@ -859,9 +859,12 @@ export class TaskStateMachine {
     // Also: Finalize any streaming text block before adding tool block
     const blocksArray = [...existingBlocks]
 
-    // Finalize any streaming text block before adding new blocks
+    // Finalize any streaming text/thinking block before adding new blocks
     for (const block of blocksArray) {
       if (block.type === 'text' && block.status === 'streaming') {
+        block.status = 'done'
+      }
+      if (block.type === 'thinking' && block.status === 'streaming') {
         block.status = 'done'
       }
     }
@@ -1280,9 +1283,12 @@ export class TaskStateMachine {
     // Also: Finalize any streaming text block before adding tool block
     const blocksArray = [...existingBlocks]
 
-    // Finalize any streaming text block before adding new blocks
+    // Finalize any streaming text/thinking block before adding new blocks
     for (const block of blocksArray) {
       if (block.type === 'text' && block.status === 'streaming') {
+        block.status = 'done'
+      }
+      if (block.type === 'thinking' && block.status === 'streaming') {
         block.status = 'done'
       }
     }

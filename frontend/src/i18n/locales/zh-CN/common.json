@@ -1170,6 +1170,8 @@
     "max_output_tokens_hint": "模型每次响应可生成的最大 token 数。",
     "thinking_config": "思考配置",
     "thinking_config_hint": "供应商原生的思考/推理 JSON 配置，将原样传递给 LLM API。留空则不启用。",
+    "dynamic_thinking": "允许对话中动态切换思考",
+    "dynamic_thinking_hint": "开启后，用户可在对话输入栏按消息开关模型推理。需先配置上方的思考配置。",
     "fetch_models": "加载模型",
     "fetching_models": "加载中...",
     "fetch_success": "成功加载 {{count}} 个模型",

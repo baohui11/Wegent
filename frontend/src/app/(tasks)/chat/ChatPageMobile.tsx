@@ -30,6 +30,10 @@ import TeamEditDialog from '@/features/settings/components/TeamEditDialog'
 import type { BaseRole } from '@/types/base-role'
 import { CreateGroupChatDialog } from '@/features/tasks/components/group-chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
+import { Drawer, DrawerContent } from '@/components/ui/drawer'
+import { WebSearchResultsPanel } from '@/features/tasks/components/web-search/WebSearchResultsPanel'
+import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
+import { useWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
 
 /**
  * Mobile-specific implementation of Chat Page
@@ -44,6 +48,14 @@ import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspa
  */
 export function ChatPageMobile() {
   const { t } = useTranslation()
+  const {
+    hasSessions: hasWebSearchSessions,
+    isPanelOpen: isWebSearchPanelOpen,
+    activeSession,
+    sessions: webSearchSessions,
+    closePanel: closeWebSearchPanel,
+    selectSession: selectWebSearchSession,
+  } = useWebSearchResults()
 
   // Team state from context (centralized to avoid duplicate API calls)
   const { teams, isTeamsLoading, refreshTeams } = useTeamContext()
@@ -286,7 +298,9 @@ export function ChatPageMobile() {
           {shareButton}
           <ThemeToggle />
         </TopNavigation>
-        {/* Chat area - taskType switches based on device selection */}
+        <WebSearchResultsSync
+          taskId={selectedTask?.id ?? selectedTaskDetail?.id ?? (taskId ? Number(taskId) : null)}
+        />
         <ChatArea
           teams={teams}
           isTeamsLoading={isTeamsLoading}
@@ -299,6 +313,23 @@ export function ChatPageMobile() {
           extension={{ teamEdit: teamEditExtension }}
         />
       </div>
+      <Drawer
+        open={hasWebSearchSessions && isWebSearchPanelOpen}
+        onOpenChange={open => {
+          if (!open) closeWebSearchPanel()
+        }}
+      >
+        <DrawerContent className="max-h-[88vh] flex flex-col p-0">
+          <WebSearchResultsPanel
+            variant="embedded"
+            isOpen
+            onClose={closeWebSearchPanel}
+            session={activeSession}
+            sessions={webSearchSessions}
+            onSelectSession={selectWebSearchSession}
+          />
+        </DrawerContent>
+      </Drawer>
       {/* Create Group Chat Dialog */}
       <CreateGroupChatDialog open={isCreateGroupChatOpen} onOpenChange={setIsCreateGroupChatOpen} />
       {/* Search Dialog - rendered at page level for global shortcut support */}

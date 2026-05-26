@@ -40,6 +40,11 @@ jest.mock('@/features/tasks/components/clarification/ClarificationToggle', () =>
   default: () => <div data-testid="clarification-toggle" />,
 }))
 
+jest.mock('@/features/tasks/components/input/ChatInputMoreActions', () => ({
+  __esModule: true,
+  default: () => <div data-testid="chat-input-more-actions" />,
+}))
+
 jest.mock('@/features/tasks/components/CorrectionModeToggle', () => ({
   __esModule: true,
   default: () => <div data-testid="correction-toggle" />,

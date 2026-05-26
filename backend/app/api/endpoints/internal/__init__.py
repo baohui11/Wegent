@@ -17,6 +17,7 @@ from .services import router as services_router
 from .skills import router as skills_router
 from .subscriptions import router as subscriptions_router
 from .tables import router as tables_router
+from .web_search import router as web_search_router
 from .workspace_archives import router as workspace_archives_router
 
 # RAG router is conditionally imported based on STANDALONE_MODE
@@ -36,6 +37,7 @@ __all__ = [
     "skills_router",
     "subscriptions_router",
     "tables_router",
+    "web_search_router",
     "workspace_archives_router",
 ]
 

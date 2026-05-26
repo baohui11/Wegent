@@ -12,6 +12,8 @@ import MobileTeamSelector from '../selector/MobileTeamSelector'
 import MobileRepositorySelector from '../selector/MobileRepositorySelector'
 import MobileBranchSelector from '../selector/MobileBranchSelector'
 import MobileClarificationToggle from '../clarification/MobileClarificationToggle'
+import SearchEngineSelector from '../selector/SearchEngineSelector'
+import DeepThinkingToggle from './DeepThinkingToggle'
 import MobileCorrectionModeToggle from '../MobileCorrectionModeToggle'
 import ChatContextInput from '../chat/ChatContextInput'
 import AttachmentButton from '../AttachmentButton'
@@ -28,6 +30,7 @@ import type {
 } from '@/types/api'
 import type { ContextItem } from '@/types/context'
 import type { UnifiedSkill } from '@/apis/skills'
+import type { SearchEngine } from '@/apis/chat'
 import {
   canUseChatContexts,
   isChatShell,
@@ -69,6 +72,18 @@ export interface MobileChatInputControlsProps {
   // Clarification
   enableClarification: boolean
   setEnableClarification: (value: boolean) => void
+
+  // Model reasoning (dynamic_thinking models)
+  enableReasoning: boolean
+  setEnableReasoning: (value: boolean) => void
+
+  // Web search
+  enableWebSearch: boolean
+  setEnableWebSearch: (value: boolean) => void
+  selectedSearchEngine: string | null
+  setSelectedSearchEngine: (engine: string) => void
+  searchEngines: SearchEngine[]
+  isWebSearchAvailable: boolean
 
   // Correction mode
   enableCorrectionMode?: boolean
@@ -144,6 +159,14 @@ export function MobileChatInputControls({
   onRequiresWorkspaceChange: _onRequiresWorkspaceChange,
   enableClarification,
   setEnableClarification,
+  enableReasoning,
+  setEnableReasoning,
+  enableWebSearch,
+  setEnableWebSearch,
+  selectedSearchEngine,
+  setSelectedSearchEngine,
+  searchEngines,
+  isWebSearchAvailable,
   enableCorrectionMode = false,
   correctionModelName,
   onCorrectionModeToggle,
@@ -198,6 +221,8 @@ export function MobileChatInputControls({
     taskType !== 'image' &&
     taskType !== 'video'
   const showClarificationAction = isChatShell(selectedTeam)
+  const showWebSearchAction = isChatShell(selectedTeam) && isWebSearchAvailable
+  const showDynamicThinkingAction = isChatShell(selectedTeam) && Boolean(selectedModel?.dynamicThinking)
   const showCorrectionAction = isChatShell(selectedTeam) && Boolean(onCorrectionModeToggle)
   const showGuidanceAction = isChatShell(selectedTeam) && Boolean(onSendGuidance)
   const showRepositoryAction =
@@ -345,14 +370,6 @@ export function MobileChatInputControls({
                     triggerVariant="menu-item"
                   />
                 )}
-                {showChatContexts && (
-                  <ChatContextInput
-                    selectedContexts={selectedContexts}
-                    onContextsChange={setSelectedContexts}
-                    excludeKnowledgeBaseId={knowledgeBaseId}
-                    triggerVariant="menu-item"
-                  />
-                )}
                 {showSkillAction && onToggleSkill && (
                   <SkillSelectorPopover
                     skills={availableSkills}
@@ -366,6 +383,38 @@ export function MobileChatInputControls({
                     triggerVariant="menu-item"
                   />
                 )}
+                {showChatContexts && (
+                  <ChatContextInput
+                    selectedContexts={selectedContexts}
+                    onContextsChange={setSelectedContexts}
+                    excludeKnowledgeBaseId={knowledgeBaseId}
+                    triggerVariant="menu-item"
+                  />
+                )}
+              </div>
+            )}
+
+            {showWebSearchAction && (
+              <div className="px-1 py-0.5">
+                <SearchEngineSelector
+                  enabled={enableWebSearch}
+                  onToggle={setEnableWebSearch}
+                  selectedEngine={selectedSearchEngine}
+                  onSelectEngine={setSelectedSearchEngine}
+                  engines={searchEngines}
+                  disabled={isLoading || isStreaming}
+                  compact
+                />
+              </div>
+            )}
+
+            {showDynamicThinkingAction && (
+              <div className="px-1 py-0.5">
+                <DeepThinkingToggle
+                  enabled={enableReasoning}
+                  onToggle={setEnableReasoning}
+                  disabled={isLoading || isStreaming}
+                />
               </div>
             )}
 

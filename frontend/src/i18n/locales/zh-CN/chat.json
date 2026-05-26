@@ -351,13 +351,30 @@
     "retry": "重试"
   },
   "web_search": {
+    "label": "联网搜索",
     "enable": "启用联网搜索",
     "disable": "禁用联网搜索",
-    "select_engine": "选择搜索引擎"
+    "select_engine": "选择搜索引擎",
+    "panel": {
+      "title": "搜索网页 {{count}}",
+      "searching": "正在搜索网页...",
+      "empty": "暂无搜索结果",
+      "no_results": "未找到相关网页",
+      "error": "搜索失败，请稍后重试",
+      "close": "关闭",
+      "open_panel": "打开搜索结果",
+      "close_panel": "关闭搜索结果",
+      "search_n": "搜索 {{n}}"
+    }
   },
   "deep_thinking": {
+    "label": "深度思考",
     "enable": "启用深度思考",
     "disable": "禁用深度思考"
+  },
+  "input_more_actions": {
+    "label": "更多",
+    "tooltip": "更多选项"
   },
   "reasoning": {
     "thinking": "思考中...",

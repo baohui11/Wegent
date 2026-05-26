@@ -107,6 +107,7 @@ export interface ModelCRD {
     rerankConfig?: RerankConfig
     videoConfig?: VideoGenerationConfig
     imageConfig?: ImageGenerationConfig
+    dynamic_thinking?: boolean
   }
   status?: {
     state: string
@@ -165,6 +166,7 @@ export interface UnifiedModel {
   isActive?: boolean
   modelCategoryType?: ModelCategoryType // New: model category type (llm, tts, stt, embedding, rerank)
   isAdvanced?: boolean
+  dynamicThinking?: boolean
 }
 
 export interface UnifiedModelListResponse {

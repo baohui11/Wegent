@@ -261,6 +261,10 @@ class ModelSpec(BaseModel):
         None,
         description="Whether this is an advanced model. Advanced models are hidden by default in chat model selector.",
     )
+    dynamic_thinking: Optional[bool] = Field(
+        None,
+        description="When true, chat UI shows a per-message toggle to enable/disable model reasoning.",
+    )
 
 
 class ModelStatus(Status):

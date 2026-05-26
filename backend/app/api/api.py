@@ -64,6 +64,7 @@ from app.api.endpoints.adapter import (
 )
 from app.api.endpoints.internal import attachments_router as internal_attachments_router
 from app.api.endpoints.internal import bots_router as internal_bots_router
+from app.api.endpoints.internal import web_search_router as internal_web_search_router
 from app.api.endpoints.internal import (
     callback_router,
     chat_storage_router,
@@ -276,4 +277,9 @@ api_router.include_router(
     conversion_callback_router,
     prefix="/internal",
     tags=["internal-conversion-callback"],
+)
+api_router.include_router(
+    internal_web_search_router,
+    prefix="/internal",
+    tags=["internal-web-search"],
 )

@@ -22,6 +22,13 @@ jest.mock('@/features/tasks/components/message/thinking/components/GuidanceBlock
   ),
 }))
 
+jest.mock('@/features/tasks/components/message/thinking/components/ThinkingTimelineBlock', () => ({
+  __esModule: true,
+  default: ({ content }: { content: string }) => (
+    <div data-testid="thinking-timeline-block">{content}</div>
+  ),
+}))
+
 jest.mock('@/components/common/EnhancedMarkdown', () => ({
   __esModule: true,
   default: ({ source }: { source: string }) => <div>{source}</div>,
@@ -214,5 +221,27 @@ describe('MixedContentView', () => {
     )
 
     expect(screen.getByTestId('guidance-block')).toHaveTextContent('Keep it concise')
+  })
+
+  it('renders thinking blocks in the timeline', () => {
+    render(
+      <MixedContentView
+        thinking={null}
+        content=""
+        theme="light"
+        blocks={[
+          {
+            id: 'thinking-1',
+            type: 'thinking',
+            content: 'Let me analyze this step by step.',
+            status: 'done',
+          },
+        ]}
+      />
+    )
+
+    expect(screen.getByTestId('thinking-timeline-block')).toHaveTextContent(
+      'Let me analyze this step by step.'
+    )
   })
 })

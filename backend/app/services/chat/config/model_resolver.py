@@ -778,6 +778,8 @@ def _extract_model_config(model_spec: Dict[str, Any]) -> Dict[str, Any]:
             f"[model_resolver] _extract_model_config: temperature={temperature}"
         )
 
+    dynamic_thinking = bool(model_spec.get("dynamic_thinking", False))
+
     return {
         "api_key": api_key,
         "base_url": base_url,
@@ -796,6 +798,8 @@ def _extract_model_config(model_spec: Dict[str, Any]) -> Dict[str, Any]:
         "videoConfig": video_config,
         # Thinking/reasoning config (provider-native passthrough)
         "think_config": thinking_config,
+        # Per-message reasoning toggle in chat UI
+        "dynamic_thinking": dynamic_thinking,
         # User-configured temperature override
         "temperature": temperature,
     }

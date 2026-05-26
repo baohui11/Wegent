@@ -5,7 +5,7 @@
 'use client'
 
 import React from 'react'
-import { Sparkles } from 'lucide-react'
+import { Brain } from 'lucide-react'
 import { ActionButton } from '@/components/ui/action-button'
 import { useTranslation } from '@/hooks/useTranslation'
 import { cn } from '@/lib/utils'
@@ -32,20 +32,19 @@ export default function DeepThinkingToggle({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div>
-            <ActionButton
-              variant="outline"
-              onClick={handleToggle}
-              disabled={disabled}
-              icon={<Sparkles className="h-4 w-4" />}
-              className={cn(
-                'transition-colors',
-                enabled
-                  ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20'
-                  : 'border-border bg-base text-text-primary hover:bg-hover'
-              )}
-            />
-          </div>
+          <ActionButton
+            onClick={handleToggle}
+            disabled={disabled}
+            data-testid="dynamic-thinking-toggle"
+            icon={<Brain className="h-4 w-4" />}
+            label={t('chat:deep_thinking.label')}
+            className={cn(
+              'transition-colors',
+              enabled
+                ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                : 'text-text-primary hover:bg-surface'
+            )}
+          />
         </TooltipTrigger>
         <TooltipContent side="top">
           <p>{enabled ? t('chat:deep_thinking.disable') : t('chat:deep_thinking.enable')}</p>

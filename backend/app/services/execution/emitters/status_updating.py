@@ -98,6 +98,7 @@ class StatusUpdatingEmitter(ResultEmitter):
             )
         elif event.type in (
             EventType.CHUNK.value,
+            EventType.THINKING.value,
             EventType.TOOL_START.value,
             EventType.TOOL_ARGUMENT_DELTA.value,
             EventType.TOOL_ARGUMENT_DONE.value,
@@ -168,6 +169,17 @@ class StatusUpdatingEmitter(ResultEmitter):
                     subtask_id=self._subtask_id,
                     content=content,
                 )
+        elif event.type == EventType.THINKING.value:
+            content = event.content or ""
+            if content:
+                block, is_new = await session_manager.add_thinking_content(
+                    subtask_id=self._subtask_id,
+                    content=content,
+                )
+                if block:
+                    event.data = event.data or {}
+                    event.data["thinking_block"] = block
+                    event.data["thinking_block_is_new"] = is_new
 
         # Handle terminal events - update status before forwarding
         if event.type == EventType.DONE.value:

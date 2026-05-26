@@ -373,13 +373,30 @@
     "retry": "Retry"
   },
   "web_search": {
+    "label": "Web Search",
     "enable": "Enable web search",
     "disable": "Disable web search",
-    "select_engine": "Select search engine"
+    "select_engine": "Select search engine",
+    "panel": {
+      "title": "Web Results {{count}}",
+      "searching": "Searching the web...",
+      "empty": "No search results yet",
+      "no_results": "No relevant pages found",
+      "error": "Search failed. Please try again.",
+      "close": "Close",
+      "open_panel": "Open search results",
+      "close_panel": "Close search results",
+      "search_n": "Search {{n}}"
+    }
   },
   "deep_thinking": {
+    "label": "Deep Thinking",
     "enable": "Enable deep thinking",
     "disable": "Disable deep thinking"
+  },
+  "input_more_actions": {
+    "label": "More",
+    "tooltip": "More options"
   },
   "reasoning": {
     "thinking": "Thinking...",

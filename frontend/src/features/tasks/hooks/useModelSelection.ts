@@ -50,6 +50,7 @@ export interface Model {
   type?: ModelTypeEnum
   region?: ModelRegion
   isAdvanced?: boolean
+  dynamicThinking?: boolean
   namespace?: string
   config?: Record<string, unknown>
 }
@@ -131,6 +132,7 @@ export function unifiedToModel(unified: UnifiedModel): Model {
     displayName: unified.displayName,
     type: unified.type,
     isAdvanced: unified.isAdvanced ?? false,
+    dynamicThinking: unified.dynamicThinking ?? false,
     config: unified.config,
   }
 }

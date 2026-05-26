@@ -6,6 +6,7 @@
 
 import React, { useEffect, useMemo } from 'react'
 import { Globe, Check, ChevronDown } from 'lucide-react'
+import { ActionButton } from '@/components/ui/action-button'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from '@/hooks/useTranslation'
 import {
@@ -25,7 +26,7 @@ interface SearchEngineSelectorProps {
   onSelectEngine: (engine: string) => void
   disabled?: boolean
   engines: SearchEngine[]
-  /** When true, hide engine name and show only icon (for responsive collapse) */
+  /** When true, hide engine picker chevron (for compact/mobile menu layouts) */
   compact?: boolean
 }
 
@@ -36,10 +37,10 @@ export default function SearchEngineSelector({
   onSelectEngine,
   disabled = false,
   engines,
+  compact = false,
 }: SearchEngineSelectorProps) {
   const { t } = useTranslation()
 
-  // Initialize selected engine if not set and engines are available
   useEffect(() => {
     if (!selectedEngine && engines.length > 0) {
       onSelectEngine(engines[0].name)
@@ -50,12 +51,7 @@ export default function SearchEngineSelector({
     return engines.find(e => e.name === selectedEngine) || engines[0]
   }, [engines, selectedEngine])
 
-  // If no engines defined or only one engine defined (and no need for selection),
-  // revert to simple toggle behavior appearance (but still wrapped in this component for consistency if needed)
-  // However, requirements say "let user select search engine", so we provide the UI.
-
-  const handleToggle = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleToggle = () => {
     onToggle(!enabled)
   }
 
@@ -66,29 +62,38 @@ export default function SearchEngineSelector({
     }
   }
 
+  const enabledStyles = enabled
+    ? 'bg-primary/10 text-primary hover:bg-primary/20'
+    : 'text-text-primary hover:bg-surface'
+
+  const tooltipText = enabled
+    ? t('chat:web_search.disable')
+    : t('chat:web_search.enable')
+
+  const showEnginePicker = !compact && engines.length > 1
+
+  const toggleButton = (
+    <ActionButton
+      data-testid="web-search-toggle"
+      onClick={handleToggle}
+      disabled={disabled}
+      icon={<Globe className="h-4 w-4" />}
+      label={t('chat:web_search.label')}
+      className={cn(
+        'transition-colors',
+        enabledStyles,
+        showEnginePicker && 'rounded-r-none pr-2'
+      )}
+    />
+  )
+
   if (engines.length === 0) {
-    // Fallback if no engines configured but feature is enabled (shouldn't happen based on env logic)
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onToggle(!enabled)}
-              disabled={disabled}
-              className={cn(
-                'h-8 w-8 rounded-lg flex-shrink-0 transition-colors',
-                enabled
-                  ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                  : 'text-text-muted hover:bg-surface hover:text-text-primary'
-              )}
-            >
-              <Globe className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{toggleButton}</TooltipTrigger>
           <TooltipContent side="top">
-            <p>{enabled ? t('chat:web_search.disable') : t('chat:web_search.enable')}</p>
+            <p>{tooltipText}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -99,60 +104,57 @@ export default function SearchEngineSelector({
     <TooltipProvider>
       <div
         className={cn(
-          'flex items-center h-8 rounded-lg transition-colors border border-transparent',
-          enabled
-            ? 'bg-primary/10 text-primary hover:bg-primary/20'
-            : 'text-text-muted hover:bg-surface hover:text-text-primary hover:border-border',
-          disabled && 'opacity-50 cursor-not-allowed pointer-events-none'
+          'inline-flex items-center',
+          disabled && 'opacity-50 pointer-events-none'
         )}
       >
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleToggle}
-              disabled={disabled}
-              className="h-8 w-8 rounded-l-lg rounded-r-none hover:bg-transparent p-0"
-            >
-              <Globe className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{toggleButton}</TooltipTrigger>
           <TooltipContent side="top">
-            <p>{enabled ? t('chat:web_search.disable') : t('chat:web_search.enable')}</p>
+            <p>
+              {tooltipText}
+              {currentEngine?.display_name ? ` · ${currentEngine.display_name}` : ''}
+            </p>
           </TooltipContent>
         </Tooltip>
 
-        <div className="h-4 w-[1px] bg-current opacity-20 mx-0" />
-
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
+        {showEnginePicker && (
+          <>
+            <div
+              className={cn(
+                'h-9 w-px flex-shrink-0',
+                enabled ? 'bg-primary/20' : 'bg-border'
+              )}
+            />
+            <DropdownMenu>
               <DropdownMenuTrigger asChild disabled={disabled}>
-                <div className="h-8 px-1.5 flex items-center justify-center rounded-r-lg hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
-                  <ChevronDown className="h-3 w-3 opacity-70" />
-                </div>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    'h-9 rounded-l-none rounded-r-[24px] px-2 hover:bg-surface',
+                    enabledStyles
+                  )}
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
               </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              <p>{currentEngine?.display_name || t('chat:web_search.select_engine')}</p>
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="start" className="w-[180px]">
-            {engines.map(engine => (
-              <DropdownMenuItem
-                key={engine.name}
-                onClick={() => handleSelect(engine.name)}
-                className="flex items-center justify-between cursor-pointer"
-              >
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{engine.display_name}</span>
-                </div>
-                {selectedEngine === engine.name && <Check className="h-4 w-4 text-primary" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuContent align="start" className="w-[180px]">
+                {engines.map(engine => (
+                  <DropdownMenuItem
+                    key={engine.name}
+                    onClick={() => handleSelect(engine.name)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <span className="text-sm font-medium">{engine.display_name}</span>
+                    {selectedEngine === engine.name && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
     </TooltipProvider>
   )

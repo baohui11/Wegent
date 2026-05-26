@@ -106,6 +106,7 @@ export interface ChatSendPayload {
   attachment_id?: number // Single attachment (deprecated, use attachment_ids)
   attachment_ids?: number[] // Multiple attachments support
   enable_deep_thinking?: boolean
+  enable_reasoning?: boolean
   enable_web_search?: boolean
   search_engine?: string
   enable_clarification?: boolean

@@ -13,9 +13,10 @@ This module defines the data structures for blocks used in:
 Block Types:
 - ToolBlock: Represents a tool call (e.g., Bash, Read, Write)
 - TextBlock: Represents text content between tool calls
+- ThinkingBlock: Represents model reasoning/thinking content
 - GuidanceBlock: Represents user guidance applied to a Chat Shell turn
 
-The blocks maintain the order of tool-text-tool-text for proper
+The blocks maintain chronological order (thinking-tool-text) for proper
 mixed content rendering.
 """
 
@@ -29,6 +30,7 @@ class BlockType(str, Enum):
 
     TOOL = "tool"
     TEXT = "text"
+    THINKING = "thinking"
     GUIDANCE = "guidance"
 
 
@@ -149,6 +151,45 @@ class TextBlock:
 
 
 @dataclass
+class ThinkingBlock:
+    """Thinking block representing model reasoning content.
+
+    Attributes:
+        id: Unique block identifier
+        type: Always "thinking"
+        content: Reasoning/thinking content
+        status: Current status (streaming, done)
+        timestamp: Unix timestamp in milliseconds
+    """
+
+    id: str
+    content: str = ""
+    status: str = BlockStatus.STREAMING.value
+    timestamp: int = 0
+    type: Literal["thinking"] = "thinking"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "id": self.id,
+            "type": self.type,
+            "content": self.content,
+            "status": self.status,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ThinkingBlock":
+        """Create from dictionary."""
+        return cls(
+            id=data.get("id", ""),
+            content=data.get("content", ""),
+            status=data.get("status", BlockStatus.STREAMING.value),
+            timestamp=data.get("timestamp", 0),
+        )
+
+
+@dataclass
 class GuidanceBlock:
     """Guidance block representing user guidance applied to a Chat Shell turn."""
 
@@ -192,7 +233,7 @@ class GuidanceBlock:
 
 
 # Type alias for any block type
-MessageBlock = Union[ToolBlock, TextBlock, GuidanceBlock]
+MessageBlock = Union[ToolBlock, TextBlock, ThinkingBlock, GuidanceBlock]
 
 
 def block_from_dict(data: Dict[str, Any]) -> MessageBlock:
@@ -209,6 +250,8 @@ def block_from_dict(data: Dict[str, Any]) -> MessageBlock:
         return ToolBlock.from_dict(data)
     elif block_type == BlockType.TEXT.value:
         return TextBlock.from_dict(data)
+    elif block_type == BlockType.THINKING.value:
+        return ThinkingBlock.from_dict(data)
     elif block_type == BlockType.GUIDANCE.value:
         return GuidanceBlock.from_dict(data)
     else:
@@ -287,6 +330,26 @@ def create_tool_block(
     if server_label:
         result["server_label"] = server_label
     return result
+
+
+def create_thinking_block(
+    content: str = "",
+    block_id: Optional[str] = None,
+    timestamp: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Create a thinking block dictionary."""
+    import time
+
+    ts = timestamp if timestamp is not None else int(time.time() * 1000)
+    bid = block_id or f"thinking-{ts}"
+
+    return {
+        "id": bid,
+        "type": BlockType.THINKING.value,
+        "content": content,
+        "status": BlockStatus.STREAMING.value,
+        "timestamp": ts,
+    }
 
 
 def create_text_block(

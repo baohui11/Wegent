@@ -64,7 +64,10 @@ export interface UseChatStreamHandlersOptions {
 
   // Toggles
   enableDeepThinking: boolean
+  enableReasoning: boolean
   enableClarification: boolean
+  enableWebSearch: boolean
+  selectedSearchEngine: string | null
 
   // External API
   externalApiParams: Record<string, string>
@@ -218,7 +221,10 @@ export function useChatStreamHandlers({
   setTaskInputMessage,
   setIsLoading,
   enableDeepThinking,
+  enableReasoning,
   enableClarification,
+  enableWebSearch,
+  selectedSearchEngine,
   externalApiParams,
   attachments,
   resetAttachment,
@@ -689,6 +695,9 @@ export function useChatStreamHandlers({
         attachment_ids: [...snapshotAttachments.map(a => a.id), ...queueAttachmentIds],
         enable_deep_thinking: enableDeepThinking,
         enable_clarification: enableClarification,
+        ...(selectedModel?.dynamicThinking && { enable_reasoning: enableReasoning }),
+        enable_web_search: enableWebSearch,
+        search_engine: enableWebSearch ? selectedSearchEngine || undefined : undefined,
         is_group_chat: selectedTaskDetail?.is_group_chat || false,
         git_url: showRepositorySelector ? effectiveRepo?.git_url : undefined,
         git_repo: showRepositorySelector ? effectiveRepo?.git_repo : undefined,
@@ -781,7 +790,11 @@ export function useChatStreamHandlers({
       selectedTaskDetail,
       forceOverride,
       enableDeepThinking,
+      enableReasoning,
       enableClarification,
+      selectedModel?.dynamicThinking,
+      enableWebSearch,
+      selectedSearchEngine,
       showRepositorySelector,
       selectedBranch?.name,
       effectiveDeviceId,
@@ -1390,6 +1403,7 @@ export function useChatStreamHandlers({
             attachment_ids: attachmentIds,
             enable_deep_thinking: enableDeepThinking,
             enable_clarification: enableClarification,
+            ...(modelOverride.dynamicThinking && { enable_reasoning: enableReasoning }),
             is_group_chat: selectedTaskDetail?.is_group_chat || false,
             git_url: showRepositorySelector ? effectiveRepo?.git_url : undefined,
             git_repo: showRepositorySelector ? effectiveRepo?.git_repo : undefined,
@@ -1469,7 +1483,9 @@ export function useChatStreamHandlers({
       selectedTaskDetail,
       contextSendMessage,
       enableDeepThinking,
+      enableReasoning,
       enableClarification,
+      selectedModel?.dynamicThinking,
       refreshTasks,
       refreshSelectedTaskDetail,
       searchParams,

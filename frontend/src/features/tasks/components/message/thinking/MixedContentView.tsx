@@ -9,6 +9,7 @@ import type { ThinkingStep, MessageBlock, ToolPair } from './types'
 import { useToolExtraction } from './hooks/useToolExtraction'
 import { ToolBlock } from './components/ToolBlock'
 import { GuidanceBlock } from './components/GuidanceBlock'
+import ThinkingTimelineBlock from './components/ThinkingTimelineBlock'
 import EnhancedMarkdown from '@/components/common/EnhancedMarkdown'
 import { normalizeToolName, normalizeStepDetails } from './utils/toolExtractor'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -134,6 +135,13 @@ const MixedContentView = memo(function MixedContentView({
               type: 'content' as const,
               content: textContent,
               blockId: block.id,
+            }
+          } else if (block.type === 'thinking') {
+            return {
+              type: 'thinking' as const,
+              content: block.content || '',
+              blockId: block.id,
+              status: block.status,
             }
           } else if (block.type === 'video') {
             // Video block - render VideoPlayer component
@@ -598,6 +606,14 @@ const MixedContentView = memo(function MixedContentView({
           )
         } else if (item.type === 'guidance') {
           return <GuidanceBlock key={item.blockId} block={item.data} />
+        } else if (item.type === 'thinking') {
+          return (
+            <ThinkingTimelineBlock
+              key={item.blockId}
+              content={item.content}
+              status={item.status}
+            />
+          )
         } else if (item.type === 'tool') {
           const key = 'blockId' in item ? item.blockId : `tool-${item.tool.toolUseId}`
           const count = 'count' in item ? item.count : 1

@@ -21,7 +21,12 @@ from typing import Any, Dict, List, Optional
 
 from app.core.cache import cache_manager
 from app.core.config import settings
-from shared.models.blocks import BlockStatus, create_text_block, create_tool_block
+from shared.models.blocks import (
+    BlockStatus,
+    create_text_block,
+    create_thinking_block,
+    create_tool_block,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -735,6 +740,17 @@ class SessionManager:
         """Generate Redis key for current text block ID."""
         return f"{STREAMING_KEY_PREFIX}text_block:{subtask_id}"
 
+    def _get_current_thinking_block_key(self, subtask_id: int) -> str:
+        """Generate Redis key for current thinking block ID."""
+        return f"{STREAMING_KEY_PREFIX}thinking_block:{subtask_id}"
+
+    @staticmethod
+    def _decode_redis_value(value: Any) -> str:
+        """Decode Redis value to string."""
+        if isinstance(value, bytes):
+            return value.decode()
+        return str(value)
+
     async def add_tool_block(
         self,
         subtask_id: int,
@@ -760,8 +776,9 @@ class SessionManager:
             server_label: Optional MCP server label
         """
         try:
-            # Finalize current text block before adding tool block
+            # Finalize current text/thinking blocks before adding tool block
             await self._finalize_current_text_block(subtask_id)
+            await self._finalize_current_thinking_block(subtask_id)
 
             # Create tool block using unified function
             block = create_tool_block(
@@ -866,8 +883,9 @@ class SessionManager:
             block: Block data dict with at least 'type', optionally 'id'
         """
         try:
-            # Finalize current text block before adding new block (to maintain order)
+            # Finalize current text/thinking blocks before adding new block
             await self._finalize_current_text_block(subtask_id)
+            await self._finalize_current_thinking_block(subtask_id)
 
             # Ensure block has id
             block_id = block.get("id")
@@ -972,7 +990,8 @@ class SessionManager:
                                 blocks_key, -1, json.dumps(last_block)
                             )
                 else:
-                    # Create new text block
+                    # Create new text block (finalize any active thinking block first)
+                    await self._finalize_current_thinking_block(subtask_id)
                     block = create_text_block(content=content)
                     await redis_client.rpush(blocks_key, json.dumps(block))
                     await redis_client.set(
@@ -989,6 +1008,78 @@ class SessionManager:
             logger.error(
                 f"[SessionManager] Failed to add text content for subtask {subtask_id}: {e}"
             )
+
+    async def add_thinking_content(
+        self, subtask_id: int, content: str
+    ) -> tuple[Dict[str, Any], bool]:
+        """Add thinking/reasoning content to the current thinking block.
+
+        Creates a new thinking block if there isn't one currently active.
+
+        Args:
+            subtask_id: Subtask ID
+            content: Thinking content to append
+
+        Returns:
+            Tuple of (block dict, is_new) where is_new indicates block creation
+        """
+        if not content:
+            blocks = await self.get_blocks(subtask_id)
+            thinking_key = self._get_current_thinking_block_key(subtask_id)
+            redis_client = await self._cache._get_client()
+            try:
+                current_block_id = await redis_client.get(thinking_key)
+            finally:
+                await redis_client.aclose()
+            if current_block_id:
+                block_id = self._decode_redis_value(current_block_id)
+                for block in blocks:
+                    if block.get("id") == block_id:
+                        return block, False
+            return {}, False
+
+        try:
+            thinking_block_key = self._get_current_thinking_block_key(subtask_id)
+            blocks_key = self._get_blocks_key(subtask_id)
+
+            redis_client = await self._cache._get_client()
+            try:
+                current_block_id = await redis_client.get(thinking_block_key)
+                is_new = False
+
+                if current_block_id:
+                    block_id = self._decode_redis_value(current_block_id)
+                    blocks_raw = await redis_client.lrange(blocks_key, -1, -1)
+                    if blocks_raw:
+                        last_block = json.loads(blocks_raw[0])
+                        if last_block.get("id") == block_id:
+                            last_block["content"] = (
+                                last_block.get("content", "") + content
+                            )
+                            await redis_client.lset(
+                                blocks_key, -1, json.dumps(last_block)
+                            )
+                            await redis_client.expire(blocks_key, STREAMING_TTL)
+                            return last_block, is_new
+
+                block = create_thinking_block(content=content)
+                await redis_client.rpush(blocks_key, json.dumps(block))
+                await redis_client.set(
+                    thinking_block_key, block["id"], ex=STREAMING_TTL
+                )
+                await redis_client.expire(blocks_key, STREAMING_TTL)
+                logger.info(
+                    f"[SessionManager] Created thinking block for subtask {subtask_id}: "
+                    f"id={block['id']}"
+                )
+                return block, True
+            finally:
+                await redis_client.aclose()
+        except Exception as e:
+            logger.error(
+                f"[SessionManager] Failed to add thinking content for subtask {subtask_id}: {e}"
+            )
+            return {}, False
 
     async def _finalize_current_text_block(self, subtask_id: int) -> None:
         """Finalize the current text block by setting status to done."""
@@ -1024,6 +1115,36 @@ class SessionManager:
         except Exception as e:
             logger.warning(
                 f"[SessionManager] Failed to finalize text block for subtask {subtask_id}: {e}"
+            )
+
+    async def _finalize_current_thinking_block(self, subtask_id: int) -> None:
+        """Finalize the current thinking block by setting status to done."""
+        try:
+            thinking_block_key = self._get_current_thinking_block_key(subtask_id)
+            blocks_key = self._get_blocks_key(subtask_id)
+
+            redis_client = await self._cache._get_client()
+            try:
+                current_block_id = await redis_client.get(thinking_block_key)
+                if not current_block_id:
+                    return
+
+                block_id = self._decode_redis_value(current_block_id)
+
+                blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
+                for i, block_json in enumerate(blocks_raw):
+                    block = json.loads(block_json)
+                    if block.get("id") == block_id:
+                        block["status"] = BlockStatus.DONE.value
+                        await redis_client.lset(blocks_key, i, json.dumps(block))
+                        break
+
+                await redis_client.delete(thinking_block_key)
+            finally:
+                await redis_client.aclose()
+        except Exception as e:
+            logger.warning(
+                f"[SessionManager] Failed to finalize thinking block for subtask {subtask_id}: {e}"
             )
 
     async def get_blocks(self, subtask_id: int) -> List[Dict[str, Any]]:
@@ -1069,8 +1190,9 @@ class SessionManager:
             List of all blocks for the subtask
         """
         try:
-            # Finalize current text block
+            # Finalize current text and thinking blocks
             await self._finalize_current_text_block(subtask_id)
+            await self._finalize_current_thinking_block(subtask_id)
 
             # Get all blocks
             blocks_key = self._get_blocks_key(subtask_id)

@@ -67,6 +67,7 @@ class UnifiedModel:
             str
         ] = None,  # New: llm, tts, stt, embedding, rerank
         is_advanced: bool = False,
+        dynamic_thinking: bool = False,
     ):
         self.name = name
         self.type = (
@@ -82,6 +83,7 @@ class UnifiedModel:
             model_category_type or "llm"
         )  # Default to 'llm' for backward compatibility
         self.is_advanced = is_advanced
+        self.dynamic_thinking = dynamic_thinking
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -101,6 +103,7 @@ class UnifiedModel:
             "namespace": self.namespace,
             "modelCategoryType": self.model_category_type,
             "isAdvanced": self.is_advanced,
+            "dynamicThinking": self.dynamic_thinking,
             "config": safe_config,
         }
 
@@ -191,6 +194,9 @@ class ModelAggregationService:
                     if model_crd.spec.isAdvanced
                     else False
                 ),
+                "dynamic_thinking": bool(
+                    getattr(model_crd.spec, "dynamic_thinking", False) or False
+                ),
             }
         except (ValueError, KeyError, AttributeError) as e:
             logger.warning("Failed to extract model info: %s", e)
@@ -201,6 +207,7 @@ class ModelAggregationService:
                 "config": {},
                 "model_category_type": "llm",
                 "is_advanced": False,
+                "dynamic_thinking": False,
             }
 
     def _is_model_compatible_with_shell(
@@ -429,6 +436,7 @@ class ModelAggregationService:
                     namespace=resource.namespace,
                     model_category_type=info.get("model_category_type", "llm"),
                     is_advanced=info.get("is_advanced", False),
+                    dynamic_thinking=info.get("dynamic_thinking", False),
                 )
                 result.append(unified)
                 seen_names[resource.name] = resource_type
@@ -474,6 +482,7 @@ class ModelAggregationService:
                 namespace="default",
                 model_category_type=public_model_category_type,
                 is_advanced=model_dict.get("is_advanced", False),
+                dynamic_thinking=model_dict.get("dynamic_thinking", False),
             )
 
             # If name already exists as user model, we still add public model
@@ -531,6 +540,7 @@ class ModelAggregationService:
                     model_id=info["model_id"],
                     config=info["config"],
                     is_active=resource.is_active,
+                    dynamic_thinking=info.get("dynamic_thinking", False),
                 ).to_full_dict()
 
         elif model_type == ModelType.PUBLIC:
@@ -553,6 +563,7 @@ class ModelAggregationService:
                             "model_category_type", "llm"
                         ),
                         is_advanced=model_dict.get("is_advanced", False),
+                        dynamic_thinking=model_dict.get("dynamic_thinking", False),
                     ).to_full_dict()
 
         return None

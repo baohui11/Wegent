@@ -15,6 +15,7 @@ import type {
 } from '@/types/api'
 import type { ContextItem } from '@/types/context'
 import type { Model } from '../selector/ModelSelector'
+import type { SearchEngine } from '@/apis/chat'
 import { useMultiAttachment } from '@/hooks/useMultiAttachment'
 import { userApis } from '@/apis/user'
 import { correctionApis } from '@/apis/correction'
@@ -22,6 +23,7 @@ import { saveLastRepo } from '@/utils/userPreferences'
 import { useTaskContext } from '../../contexts/taskContext'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { teamRequiresWorkspace } from '../../service/messageService'
+import { useWebSearchConfig } from '../../hooks/useWebSearchConfig'
 
 const SHOULD_HIDE_QUOTA_NAME_LIMIT = 18
 
@@ -115,9 +117,21 @@ export interface ChatAreaState {
   enableDeepThinking: boolean
   setEnableDeepThinking: (value: boolean) => void
 
+  // Model reasoning toggle (when model spec dynamic_thinking is true)
+  enableReasoning: boolean
+  setEnableReasoning: (value: boolean) => void
+
   // Clarification state
   enableClarification: boolean
   setEnableClarification: (value: boolean) => void
+
+  // Web search state
+  enableWebSearch: boolean
+  setEnableWebSearch: (value: boolean) => void
+  selectedSearchEngine: string | null
+  setSelectedSearchEngine: (engine: string) => void
+  searchEngines: SearchEngine[]
+  isWebSearchAvailable: boolean
 
   // Correction mode state
   enableCorrectionMode: boolean
@@ -232,7 +246,17 @@ export function useChatAreaState({
 
   // Toggle states
   const [enableDeepThinking, setEnableDeepThinking] = useState(true)
+  const [enableReasoning, setEnableReasoning] = useState(true)
   const [enableClarification, setEnableClarification] = useState(false)
+
+  const {
+    enableWebSearch,
+    setEnableWebSearch,
+    selectedSearchEngine,
+    setSelectedSearchEngine,
+    searchEngines,
+    isWebSearchAvailable,
+  } = useWebSearchConfig()
 
   // Correction mode state (persisted in localStorage)
   const [enableCorrectionMode, setEnableCorrectionMode] = useState(false)
@@ -598,10 +622,20 @@ export function useChatAreaState({
     // Deep thinking state
     enableDeepThinking,
     setEnableDeepThinking,
+    enableReasoning,
+    setEnableReasoning,
 
     // Clarification state
     enableClarification,
     setEnableClarification,
+
+    // Web search state
+    enableWebSearch,
+    setEnableWebSearch,
+    selectedSearchEngine,
+    setSelectedSearchEngine,
+    searchEngines,
+    isWebSearchAvailable,
 
     // Correction mode state
     enableCorrectionMode,

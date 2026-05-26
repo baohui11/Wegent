@@ -276,24 +276,40 @@ async def build_execution_request(
 
         # Merge reasoning_config from API request into model_config
         # Priority: API request reasoning_config > model's think_config
-        if reasoning_config:
+        think_config = request.model_config.get("think_config")
+        dynamic_thinking = bool(request.model_config.get("dynamic_thinking", False))
+
+        if dynamic_thinking and payload is not None and think_config:
+            enable_reasoning = getattr(payload, "enable_reasoning", True)
+            from shared.utils.thinking_config import apply_thinking_toggle
+
+            updated_think_config = apply_thinking_toggle(
+                think_config, bool(enable_reasoning)
+            )
+            request.model_config["think_config"] = updated_think_config
+            request.model_config["reasoning"] = updated_think_config
+            request.reasoning_config = updated_think_config
+            logger.info(
+                "[build_execution_request] Applied dynamic thinking toggle: enabled=%s",
+                enable_reasoning,
+            )
+        elif reasoning_config:
             request.model_config["reasoning"] = reasoning_config
             logger.info(
                 "[build_execution_request] Applied reasoning config from API request: %s",
                 reasoning_config,
             )
-        elif request.model_config.get("think_config"):
+        elif think_config:
             # If no API reasoning_config but model has think_config, use it
-            request.model_config["reasoning"] = request.model_config["think_config"]
+            request.model_config["reasoning"] = think_config
             logger.info(
                 "[build_execution_request] Applied reasoning config from model think_config: %s",
-                request.model_config["think_config"],
+                think_config,
             )
 
         # Store reasoning_config in ExecutionRequest for downstream access
-        request.reasoning_config = reasoning_config or request.model_config.get(
-            "reasoning"
-        )
+        if request.reasoning_config is None:
+            request.reasoning_config = request.model_config.get("reasoning")
 
         # Merge user-selected generate_params into videoConfig for video models
         # Validates params against model capabilities to reject invalid values

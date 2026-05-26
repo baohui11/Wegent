@@ -5,9 +5,12 @@
 'use client'
 
 import { memo, useState, useMemo } from 'react'
-import { ChevronDown, ChevronRight, Loader2, Pencil, FileText, AlertCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, Pencil, FileText, AlertCircle, Globe } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { ToolBlockProps, ToolRendererProps } from '../types'
+import { useOptionalWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
+import { parseWebSearchOutput } from '@/features/tasks/components/web-search/parseWebSearchOutput'
+import { isWebSearchToolName } from '@/features/tasks/components/web-search/webSearchUtils'
 import { GenericToolRenderer } from './tools/GenericToolRenderer'
 import { BashToolRenderer } from './tools/BashToolRenderer'
 import { ReadToolRenderer } from './tools/ReadToolRenderer'
@@ -143,6 +146,10 @@ function getToolIcon(toolName: string) {
     case 'Grep':
     case 'Glob':
     case 'TodoWrite':
+      return FileText
+    case 'web_search':
+    case 'WebSearch':
+      return Globe
     default:
       return FileText
   }
@@ -174,6 +181,10 @@ export const ToolBlock = memo(function ToolBlock({
 }: ToolBlockWithCountProps) {
   const { t } = useTranslation('chat')
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const webSearchResults = useOptionalWebSearchResults()
+  const groupHasWebSearch =
+    isWebSearchToolName(tool.toolName) ||
+    (mergedTools.length > 0 && mergedTools.some(item => isWebSearchToolName(item.toolName)))
 
   // Get tool icon component
   const ToolIcon = getToolIcon(tool.toolName)
@@ -213,44 +224,85 @@ export const ToolBlock = memo(function ToolBlock({
   const toolDisplayName = getToolDisplayName(tool, t)
   const inputPreview = useMemo(() => getToolInputPreview(tool), [tool])
 
+  const webSearchCount = useMemo(() => {
+    if (!groupHasWebSearch) return undefined
+    const outputRaw = tool.toolResult?.details?.output || tool.toolResult?.details?.content
+    if (!outputRaw) return undefined
+    return parseWebSearchOutput(outputRaw).count
+  }, [groupHasWebSearch, tool.toolResult])
+
   // Check if expandable (has content to show)
   const hasInput = hasMeaningfulToolInput(
     tool.toolUse?.details?.input as Record<string, unknown> | string | undefined
   )
   const hasOutput = tool.toolResult?.details?.output || tool.toolResult?.details?.content
   const hasContent = hasInput || hasOutput
-  const isExpandable = hasContent
+  const isExpandable = hasContent && !groupHasWebSearch
 
   // Build display text: tool name + input preview (or count if merged)
   // When count > 1, show "Tool Name x count" format without input preview
   const displayText =
     count > 1
       ? toolDisplayName
-      : inputPreview
-        ? `${toolDisplayName} ${inputPreview}`
-        : toolDisplayName
+      : groupHasWebSearch && webSearchCount != null
+        ? `${toolDisplayName} · ${webSearchCount}`
+        : inputPreview
+          ? `${toolDisplayName} ${inputPreview}`
+          : toolDisplayName
 
   // Get all tools to display (merged tools or just the single tool)
   const toolsToDisplay = count > 1 && mergedTools.length > 0 ? mergedTools : [tool]
 
-  // Check if any tool has content to show
-  const hasMergedContent = count > 1 && mergedTools.length > 0
+  const visibleWebSearchSessionIds = useMemo(
+    () => new Set(webSearchResults?.sessions.map(session => session.id) ?? []),
+    [webSearchResults?.sessions]
+  )
+
+  const canOpenWebSearchPanel = useMemo(() => {
+    if (!groupHasWebSearch || !webSearchResults) return false
+    if (isRunning) return true
+    return toolsToDisplay.some(item => visibleWebSearchSessionIds.has(item.toolUseId))
+  }, [groupHasWebSearch, webSearchResults, isRunning, toolsToDisplay, visibleWebSearchSessionIds])
+
+  const hasMergedContent = count > 1 && mergedTools.length > 0 && !groupHasWebSearch
   const canExpand = isExpandable || hasMergedContent
+  const isActiveWebSearch =
+    canOpenWebSearchPanel &&
+    webSearchResults?.activeSessionId != null &&
+    (webSearchResults.activeSessionId === tool.toolUseId ||
+      mergedTools.some(item => item.toolUseId === webSearchResults.activeSessionId))
+
+  const handleClick = () => {
+    if (canOpenWebSearchPanel && webSearchResults) {
+      const targetTool =
+        count > 1 && mergedTools.length > 0 ? mergedTools[mergedTools.length - 1] : tool
+      webSearchResults.selectSession(targetTool.toolUseId)
+      webSearchResults.openPanel()
+      setIsExpanded(false)
+      return
+    }
+    if (canExpand) {
+      setIsExpanded(!isExpanded)
+    }
+  }
 
   return (
     <div className="mb-1">
       {/* Compact inline block - pill style with border and rounded corners */}
       <div
+        data-testid={groupHasWebSearch ? 'web-search-tool-block' : undefined}
         className={`inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 border rounded-xl ${
           hasError
             ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800'
-            : 'bg-[#f7f7f8] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#3a3a3a]'
+            : isActiveWebSearch
+              ? 'bg-primary/10 border-primary/30 dark:bg-primary/10'
+              : 'bg-[#f7f7f8] dark:bg-[#2a2a2a] border-[#e5e5e5] dark:border-[#3a3a3a]'
         } ${
-          canExpand
+          canExpand || canOpenWebSearchPanel
             ? 'cursor-pointer hover:bg-[#f0f0f0] dark:hover:bg-[#333] hover:border-[#ddd] dark:hover:border-[#444]'
             : 'cursor-default'
         } transition-all`}
-        onClick={() => canExpand && setIsExpanded(!isExpanded)}
+        onClick={handleClick}
       >
         {/* Icon container with background and border */}
         <div className="flex items-center justify-center w-4 h-4 bg-white dark:bg-[#3a3a3a] border border-[#e8e8e8] dark:border-[#444] rounded-md flex-shrink-0">
@@ -289,12 +341,20 @@ export const ToolBlock = memo(function ToolBlock({
             )}
           </div>
         )}
+        {canOpenWebSearchPanel && (
+          <div className="flex-shrink-0 ml-0.5">
+            <ChevronRight className="w-3 h-3 text-[#aaa] dark:text-[#666]" />
+          </div>
+        )}
       </div>
 
-      {/* Expanded content - shows all merged tools or single tool */}
-      {isExpanded && canExpand && (
+      {/* Expanded content - never show JSON for web search tools */}
+      {isExpanded && canExpand && !groupHasWebSearch && (
         <div className="mt-1.5 ml-6 space-y-2">
           {toolsToDisplay.map((toolItem, idx) => {
+            if (isWebSearchToolName(toolItem.toolName)) {
+              return null
+            }
             const CurrentToolRenderer = getToolRenderer(toolItem.toolName)
             const preview = getToolInputPreview(toolItem, 80)
             // Check if tool has content to render
@@ -360,6 +420,7 @@ function getToolDisplayName(tool: ToolRendererProps['tool'], t: (key: string) =>
     TodoWrite: t('thinking.tools.todo') || 'Update Tasks',
     knowledge_base_search: t('thinking.tools.kb_search') || 'Search Knowledge Base',
     web_search: t('thinking.tools.web_search') || 'Web Search',
+    WebSearch: t('thinking.tools.web_search') || 'Web Search',
   }
 
   // Priority 1: If we have a known tool name, use it

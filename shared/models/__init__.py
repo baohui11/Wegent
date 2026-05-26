@@ -20,12 +20,14 @@ OpenAI Request Converter - bidirectional conversion:
 - OpenAIEventConverter: Map between OpenAI and internal event types
 
 Block types for mixed content rendering:
-- BlockType: Block type enumeration (tool, text)
+- BlockType: Block type enumeration (tool, text, thinking)
 - BlockStatus: Block status enumeration (pending, streaming, done, error)
 - ToolBlock: Tool block dataclass
 - TextBlock: Text block dataclass
+- ThinkingBlock: Thinking/reasoning block dataclass
 - create_tool_block: Convenience function to create tool block dict
 - create_text_block: Convenience function to create text block dict
+- create_thinking_block: Convenience function to create thinking block dict
 """
 
 from . import db
@@ -36,11 +38,13 @@ from .blocks import (
     BlockType,
     MessageBlock,
     TextBlock,
+    ThinkingBlock,
     ToolBlock,
     block_from_dict,
     blocks_from_list,
     blocks_to_list,
     create_text_block,
+    create_thinking_block,
     create_tool_block,
 )
 
@@ -170,12 +174,14 @@ __all__ = [
     "BlockStatus",
     "ToolBlock",
     "TextBlock",
+    "ThinkingBlock",
     "MessageBlock",
     "block_from_dict",
     "blocks_from_list",
     "blocks_to_list",
     "create_tool_block",
     "create_text_block",
+    "create_thinking_block",
     # Splitter config
     "SplitterConfigModel",
     "SemanticSplitterConfig",

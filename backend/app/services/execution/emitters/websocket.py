@@ -129,15 +129,7 @@ class WebSocketResultEmitter(BaseResultEmitter):
             await self._emit_direct_block_created(event, webpage_ws_emitter)
 
         elif event.type == EventType.THINKING.value:
-            # Emit reasoning content as a chat:chunk with reasoning_chunk in result
-            # This allows the frontend to display incremental reasoning content
-            await webpage_ws_emitter.emit_chat_chunk(
-                task_id=event.task_id,
-                subtask_id=event.subtask_id,
-                content="",
-                offset=event.offset,
-                result={"reasoning_chunk": event.content},
-            )
+            await self._emit_thinking_block(event, webpage_ws_emitter)
 
         elif event.type == EventType.DONE.value:
             await self._emit_result_guidance_blocks(event, webpage_ws_emitter)
@@ -233,6 +225,37 @@ class WebSocketResultEmitter(BaseResultEmitter):
             f"[WebSocketResultEmitter] task:status emitted: "
             f"user_id={self.user_id}, task_id={self.task_id}, status={status}"
         )
+
+    async def _emit_thinking_block(self, event: ExecutionEvent, ws_emitter) -> None:
+        """Emit chat:block_created/updated for thinking/reasoning content."""
+        data = event.data or {}
+        block = data.get("thinking_block")
+        if not isinstance(block, dict):
+            return
+
+        is_new = data.get("thinking_block_is_new", False)
+        if is_new:
+            await ws_emitter.emit_block_created(
+                task_id=event.task_id,
+                subtask_id=event.subtask_id,
+                block=block,
+            )
+            logger.debug(
+                f"[WebSocketResultEmitter] chat:block_created (thinking) emitted: "
+                f"task_id={event.task_id}, block_id={block.get('id')}"
+            )
+        else:
+            await ws_emitter.emit_block_updated(
+                task_id=event.task_id,
+                subtask_id=event.subtask_id,
+                block_id=block.get("id", ""),
+                content=block.get("content"),
+                status=block.get("status", BlockStatus.STREAMING.value),
+            )
+            logger.debug(
+                f"[WebSocketResultEmitter] chat:block_updated (thinking) emitted: "
+                f"task_id={event.task_id}, block_id={block.get('id')}"
+            )
 
     async def _emit_block_created(self, event: ExecutionEvent, ws_emitter) -> None:
         """Emit chat:block_created event for tool start.

@@ -108,6 +108,7 @@ export interface ModelInitialData {
   videoConfig?: VideoGenerationConfig
   imageConfig?: import('@/apis/models').ImageGenerationConfig
   thinkingConfig?: Record<string, unknown>
+  dynamicThinking?: boolean
 }
 
 /**
@@ -298,6 +299,7 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
             embeddingConfig: model.spec.embeddingConfig,
             rerankConfig: model.spec.rerankConfig,
             thinkingConfig: extractThinkingConfig(model),
+            dynamicThinking: Boolean(model.spec.dynamic_thinking),
           }
         : null)
     )
@@ -326,6 +328,7 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
   // Thinking/Reasoning config (JSON passthrough)
   const [thinkingConfigStr, setThinkingConfigStr] = useState('')
   const [thinkingConfigError, setThinkingConfigError] = useState('')
+  const [dynamicThinking, setDynamicThinking] = useState(false)
 
   // Type-specific config state
   // TTS
@@ -484,6 +487,7 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
           setThinkingConfigStr('')
         }
         setThinkingConfigError('')
+        setDynamicThinking(Boolean(effectiveInitialData.dynamicThinking))
       } else {
         // Reset for new model
         setModelIdName('')
@@ -524,6 +528,7 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
         setMaxOutputTokens(undefined)
         setThinkingConfigStr('')
         setThinkingConfigError('')
+        setDynamicThinking(false)
       }
       setCustomHeadersError('')
       setModelIdNameError('')
@@ -1104,6 +1109,7 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
           // LLM-specific fields
           ...(modelCategoryType === 'llm' && contextWindow && { contextWindow }),
           ...(modelCategoryType === 'llm' && maxOutputTokens && { maxOutputTokens }),
+          ...(modelCategoryType === 'llm' && dynamicThinking && { dynamic_thinking: true }),
           ...(ttsConfig && { ttsConfig }),
           ...(sttConfig && { sttConfig }),
           ...(embeddingConfig && { embeddingConfig }),
@@ -1522,6 +1528,22 @@ const ModelEditDialog: React.FC<ModelEditDialogProps> = ({
               />
               {thinkingConfigError && <p className="text-xs text-error">{thinkingConfigError}</p>}
               <p className="text-xs text-text-muted">{t('common:models.thinking_config_hint')}</p>
+              <div className="flex items-start space-x-3 pt-2">
+                <Checkbox
+                  id="dynamic_thinking"
+                  data-testid="dynamic-thinking-checkbox"
+                  checked={dynamicThinking}
+                  onCheckedChange={checked => setDynamicThinking(Boolean(checked))}
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="dynamic_thinking" className="text-sm font-medium cursor-pointer">
+                    {t('common:models.dynamic_thinking')}
+                  </Label>
+                  <p className="text-xs text-text-muted">
+                    {t('common:models.dynamic_thinking_hint')}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
