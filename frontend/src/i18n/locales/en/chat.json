@@ -189,7 +189,7 @@
     "pre_execution_failed": "Pre-execution Failed",
     "sync_execution": "Sync Execution",
     "async_execution_started": "Async Execution Started",
-    "reuse_existing_team": "Reuse Existing Team",
+    "reuse_existing_team": "Reuse Existing Agent",
     "agent_streaming_execution": "Agent Streaming Execution",
     "failed_no_content": "failed - no content received",
     "unknown_block_type": "Unknown Block Type",
@@ -332,7 +332,7 @@
     "final_prompt_title": "Final Requirement Prompt",
     "prompt_copied": "Prompt copied to clipboard",
     "copy_failed": "Failed to copy prompt",
-    "select_context": "Please select Team, Repository and Branch first",
+    "select_context": "Please select Agent, Repository and Branch first",
     "task_created": "New task created successfully",
     "task_creation_failed": "Failed to create new task",
     "copied": "Copied",
@@ -454,7 +454,7 @@
     },
     "mentionAutocomplete": {
       "title": "Mention",
-      "noTeam": "No team available",
+      "noTeam": "No agents available",
       "bot": "Bot"
     },
     "inviteLink": {

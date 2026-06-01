@@ -137,7 +137,7 @@ export async function sendMessage(params: {
 
   // If there is no task_id, a complete context is required for the first send
   if ((!task_id || !Number.isFinite(task_id)) && !team) {
-    return { error: 'Please select Team', newTask: null }
+    return { error: 'Please select an agent', newTask: null }
   }
 
   // For code type tasks, repository is required

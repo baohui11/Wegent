@@ -102,7 +102,7 @@ export interface TeamIconConfig {
 
 export const TEAM_ICONS: TeamIconConfig[] = [
   // Team/User related
-  { id: 'users', icon: FaUsers, label: 'Team' },
+  { id: 'users', icon: FaUsers, label: 'Agent' },
   { id: 'team', icon: AiOutlineTeam, label: 'Group' },
 
   // Robot/AI related

@@ -35,7 +35,7 @@
   "share_failed": "Failed to share task",
   "share_failed_desc": "Please try again",
   "handler_load_failed": "Failed to load shared task information",
-  "handler_select_team": "Please select a team",
+  "handler_select_team": "Please select an agent",
   "handler_copy_success": "Task copied successfully!",
   "handler_copy_success_desc": "has been added to your task list",
   "handler_self_task_title": "This is your own task",
