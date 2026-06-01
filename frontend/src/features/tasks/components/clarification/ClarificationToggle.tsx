@@ -7,7 +7,6 @@
 import React from 'react'
 import { MessageCircleQuestion } from 'lucide-react'
 import { ActionButton } from '@/components/ui/action-button'
-import { Switch } from '@/components/ui/switch'
 import { useTranslation } from '@/hooks/useTranslation'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -45,21 +44,17 @@ export default function ClarificationToggle({
         disabled={disabled}
         data-testid="clarification-toggle"
         className={cn(
-          'w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors',
-          'hover:bg-hover active:bg-hover',
-          'disabled:opacity-50 disabled:cursor-not-allowed'
+          'w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-hover active:bg-hover disabled:opacity-50 disabled:cursor-not-allowed',
+          enabled ? 'text-primary' : 'text-text-primary'
         )}
       >
         <span className="flex items-center gap-3">
-          <MessageCircleQuestion className="h-4 w-4 text-text-muted" />
+          <MessageCircleQuestion
+            className={cn('h-4 w-4', enabled ? 'text-primary' : 'text-text-muted')}
+          />
           <span className="text-sm">{t('chat:clarification_toggle.label')}</span>
         </span>
-        <Switch
-          checked={enabled}
-          onCheckedChange={onToggle}
-          disabled={disabled}
-          onClick={event => event.stopPropagation()}
-        />
+        {enabled && <span className="h-2 w-2 rounded-full bg-primary" />}
       </button>
     )
   }

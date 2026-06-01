@@ -65,6 +65,7 @@ export function KnowledgeBaseChatPageDesktop({ knowledgeBaseId, initialDocPath }
     knowledgeBase,
     loading: kbLoading,
     error: kbError,
+    refresh: refreshKnowledgeBase,
   } = useKnowledgeBaseDetail({
     knowledgeBaseId,
     autoLoad: true,
@@ -316,7 +317,13 @@ export function KnowledgeBaseChatPageDesktop({ knowledgeBaseId, initialDocPath }
               selectedDocumentIds={selectedDocumentIds}
               guidedQuestions={knowledgeBase.guided_questions}
               inputAlwaysAtBottom={true}
-              emptyStateContent={<KnowledgeBaseSummaryCard knowledgeBase={knowledgeBase} />}
+              emptyStateContent={
+                <KnowledgeBaseSummaryCard
+                  knowledgeBase={knowledgeBase}
+                  onRefresh={refreshKnowledgeBase}
+                  canEditSummary={canManageKb}
+                />
+              }
               onTaskCreated={async (taskId: number) => {
                 // Bind the knowledge base to the newly created task
                 try {
@@ -338,6 +345,7 @@ export function KnowledgeBaseChatPageDesktop({ knowledgeBaseId, initialDocPath }
             canUpload={canUploadDocuments}
             canManageAllDocuments={canManageKb}
             canManagePermissions={canManagePermissions}
+            onRefreshKnowledgeBase={refreshKnowledgeBase}
             onDocumentSelectionChange={setSelectedDocumentIds}
             onNewChat={hasOpenTask ? handleNewTask : undefined}
             onCollapsedChange={setIsDocumentPanelCollapsed}
