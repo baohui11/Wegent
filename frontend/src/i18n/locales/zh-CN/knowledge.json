@@ -387,6 +387,10 @@
       "confirmUpload": "确认（{{count}} 个文件）",
       "confirming": "正在创建文档...",
       "summary": "上传完成：{{success}} 个成功，{{failed}} 个失败",
+      "enhancedPdfParsing": {
+        "title": "PDF 增强解析",
+        "description": "适用于扫描版或图片型 PDF，开启后将通过 OCR 识别文字后再建立索引（耗时更长）。普通文本 PDF 可保持关闭。"
+      },
       "status": {
         "pending": "等待中",
         "uploading": "上传中",

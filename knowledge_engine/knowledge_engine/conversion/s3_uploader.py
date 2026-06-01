@@ -28,6 +28,8 @@ class S3Config:
     secret_key: str = ""
     bucket_name: str = ""
     region_name: str = "us-east-1"
+    # Optional browser-facing base URL (falls back to endpoint when empty)
+    public_endpoint: str = ""
 
 
 class S3Uploader:
@@ -95,7 +97,9 @@ class S3Uploader:
             )
 
             # URL-encode path segments for Chinese character support
-            endpoint = self._config.endpoint.rstrip("/")
+            endpoint = (
+                self._config.public_endpoint or self._config.endpoint
+            ).rstrip("/")
             if not endpoint:
                 logger.warning(
                     f"[S3] Skipping URL generation for {object_name}: "

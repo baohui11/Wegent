@@ -9,6 +9,8 @@ from urllib.parse import urlparse, urlunparse
 
 from pydantic_settings import BaseSettings
 
+from knowledge_engine.conversion.s3_uploader import S3Config
+
 
 def _inject_redis_password(url: str, password: str) -> str:
     """Inject password into a Redis URL if not already present.
@@ -58,6 +60,10 @@ class ConverterSettings(BaseSettings):
     KNOWLEDGE_CONVERSION_LOCK_MAX_RETRIES: int = 2
     KNOWLEDGE_CONVERSION_LOCK_RETRY_DELAY_SECONDS: int = 30
 
+    # ---- Conversion Provider ----
+    # Supported values: mineru, paddleocr
+    CONVERSION_PROVIDER: str = "mineru"
+
     # ---- MinerU ----
     MINERU_API_BASE_URL: str = ""
     MINERU_BACKEND: str = "pipeline"
@@ -68,13 +74,32 @@ class ConverterSettings(BaseSettings):
     MINERU_POLL_INTERVAL_SECONDS: int = 3
     MINERU_MAX_WAIT_SECONDS: int = 600
 
+    # ---- PaddleOCR (Baidu AI Studio cloud API) ----
+    PADDLEOCR_JOB_URL: str = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
+    PADDLEOCR_TOKEN: str = ""
+    PADDLEOCR_MODEL: str = "PaddleOCR-VL-1.6"
+    PADDLEOCR_USE_DOC_ORIENTATION_CLASSIFY: bool = False
+    PADDLEOCR_USE_DOC_UNWARPING: bool = False
+    PADDLEOCR_USE_CHART_RECOGNITION: bool = False
+    PADDLEOCR_POLL_INTERVAL_SECONDS: int = 5
+    PADDLEOCR_MAX_WAIT_SECONDS: int = 1800
+
     # ---- S3 (image upload) ----
+    # WORKER_CONVERSION_S3_* takes precedence; falls back to backend ATTACHMENT_S3_*.
     WORKER_CONVERSION_S3_ENABLED: bool = False
     WORKER_CONVERSION_S3_ENDPOINT: str = ""
     WORKER_CONVERSION_S3_ACCESS_KEY: str = ""
     WORKER_CONVERSION_S3_SECRET_KEY: str = ""
     WORKER_CONVERSION_S3_BUCKET_NAME: str = ""
     WORKER_CONVERSION_S3_REGION_NAME: str = "us-east-1"
+
+    # Backend attachment S3 (shared MinIO settings — no duplicate .env needed)
+    ATTACHMENT_S3_ENDPOINT: str = ""
+    ATTACHMENT_S3_PUBLIC_ENDPOINT: str = ""
+    ATTACHMENT_S3_ACCESS_KEY: str = ""
+    ATTACHMENT_S3_SECRET_KEY: str = ""
+    ATTACHMENT_S3_BUCKET: str = ""
+    ATTACHMENT_S3_REGION: str = "us-east-1"
 
     # ---- Task Timeout ----
     # Constraint chain (cross-service):
@@ -105,6 +130,36 @@ class ConverterSettings(BaseSettings):
                 self.CELERY_RESULT_BACKEND, pwd
             )
             self.REDIS_URL = _inject_redis_password(self.REDIS_URL, pwd)
+
+    def build_internal_auth_headers(self) -> dict[str, str]:
+        """Build Authorization header only when an internal token is configured."""
+        token = self.BACKEND_INTERNAL_TOKEN.strip()
+        if not token:
+            return {}
+        return {"Authorization": f"Bearer {token}"}
+
+    def build_s3_config(self) -> S3Config:
+        """Resolve S3 settings, reusing backend attachment MinIO config when unset."""
+        endpoint = self.WORKER_CONVERSION_S3_ENDPOINT or self.ATTACHMENT_S3_ENDPOINT
+        access_key = self.WORKER_CONVERSION_S3_ACCESS_KEY or self.ATTACHMENT_S3_ACCESS_KEY
+        secret_key = self.WORKER_CONVERSION_S3_SECRET_KEY or self.ATTACHMENT_S3_SECRET_KEY
+        bucket_name = self.WORKER_CONVERSION_S3_BUCKET_NAME or self.ATTACHMENT_S3_BUCKET
+        region_name = self.WORKER_CONVERSION_S3_REGION_NAME or self.ATTACHMENT_S3_REGION
+        public_endpoint = self.ATTACHMENT_S3_PUBLIC_ENDPOINT or endpoint
+
+        enabled = self.WORKER_CONVERSION_S3_ENABLED
+        if not enabled and self.CONVERSION_PROVIDER.strip().lower() == "paddleocr":
+            enabled = bool(endpoint and bucket_name and access_key and secret_key)
+
+        return S3Config(
+            enabled=enabled,
+            endpoint=endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            bucket_name=bucket_name,
+            region_name=region_name,
+            public_endpoint=public_endpoint,
+        )
 
 
 settings = ConverterSettings()

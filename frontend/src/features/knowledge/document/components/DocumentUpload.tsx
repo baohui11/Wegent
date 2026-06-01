@@ -27,6 +27,7 @@ import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -65,6 +66,10 @@ function isKBUnsupportedExtension(filename: string): boolean {
   return KB_UNSUPPORTED_EXTENSIONS.includes(ext)
 }
 
+function isPdfFilename(filename: string): boolean {
+  return filename.toLowerCase().endsWith('.pdf')
+}
+
 function buildDefaultSplitterConfig(): Partial<SplitterConfig> {
   return {
     ...DEFAULT_SPLITTER_CONFIG,
@@ -89,12 +94,17 @@ export interface TableDocument {
 // Maximum documents allowed in notebook mode
 export const NOTEBOOK_MAX_DOCUMENTS = 50
 
+export interface DocumentUploadCompleteOptions {
+  splitterConfig?: Partial<SplitterConfig>
+  enhancedPdfParsing?: boolean
+}
+
 interface DocumentUploadProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onUploadComplete: (
     attachments: { attachment: Attachment; file: File }[],
-    splitterConfig?: Partial<SplitterConfig>
+    options?: DocumentUploadCompleteOptions
   ) => Promise<void>
   onTableAdd?: (data: TableDocument) => Promise<void>
   /** Callback to add a web page document. Backend handles scraping and document creation. */
@@ -130,6 +140,7 @@ export function DocumentUpload({
   const [splitterConfig, setSplitterConfig] = useState<Partial<SplitterConfig>>(
     buildDefaultSplitterConfig
   )
+  const [enhancedPdfParsing, setEnhancedPdfParsing] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [isConfirming, setIsConfirming] = useState(false)
@@ -273,9 +284,13 @@ export function DocumentUpload({
 
     setIsConfirming(true)
     try {
-      await onUploadComplete(successfulAttachments, splitterConfig)
+      await onUploadComplete(successfulAttachments, {
+        splitterConfig,
+        enhancedPdfParsing: hasPdfInQueue ? enhancedPdfParsing : undefined,
+      })
       reset()
       setSplitterConfig(buildDefaultSplitterConfig())
+      setEnhancedPdfParsing(false)
     } catch {
       // Error handled by parent
     } finally {
@@ -286,6 +301,7 @@ export function DocumentUpload({
   const handleClose = () => {
     reset()
     setSplitterConfig(buildDefaultSplitterConfig())
+    setEnhancedPdfParsing(false)
     setValidationError(null)
     setUploadMode('file')
     setTextContent('')
@@ -597,6 +613,11 @@ export function DocumentUpload({
   const successCount = state.files.filter(f => f.status === 'success').length
   const errorCount = state.files.filter(f => f.status === 'error').length
   const hasFiles = state.files.length > 0
+  const hasPdfInQueue = state.files.some(
+    f =>
+      f.status === 'success' &&
+      isPdfFilename(f.attachment?.filename || f.file.name)
+  )
   // Can confirm when all uploads are done (no pending/uploading) and at least one success
   const allUploadsComplete =
     !state.isUploading && state.files.every(f => f.status === 'success' || f.status === 'error')
@@ -607,6 +628,7 @@ export function DocumentUpload({
     if (open) {
       reset()
       setSplitterConfig(buildDefaultSplitterConfig())
+      setEnhancedPdfParsing(false)
       setValidationError(null)
     }
   }, [open, reset])
@@ -1019,6 +1041,27 @@ export function DocumentUpload({
                     failed: errorCount,
                   })}
                 </span>
+              </div>
+            )}
+
+            {/* PDF enhanced parsing - show when queue contains PDF files */}
+            {successCount > 0 && allUploadsComplete && hasPdfInQueue && (
+              <div className="flex items-start justify-between gap-4 p-3 bg-surface rounded-lg border border-border">
+                <div className="space-y-1 min-w-0">
+                  <Label htmlFor="enhanced-pdf-parsing" className="text-sm font-medium">
+                    {t('document.upload.enhancedPdfParsing.title')}
+                  </Label>
+                  <p className="text-xs text-text-muted">
+                    {t('document.upload.enhancedPdfParsing.description')}
+                  </p>
+                </div>
+                <Switch
+                  id="enhanced-pdf-parsing"
+                  data-testid="enhanced-pdf-parsing-switch"
+                  checked={enhancedPdfParsing}
+                  onCheckedChange={setEnhancedPdfParsing}
+                  className="mt-0.5 shrink-0"
+                />
               </div>
             )}
 

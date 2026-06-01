@@ -368,7 +368,7 @@ export function DocumentList({
 
   const handleUploadComplete = async (
     attachments: { attachment: { id: number; filename: string }; file: File }[],
-    splitterConfig?: Partial<SplitterConfig>
+    options?: { splitterConfig?: Partial<SplitterConfig>; enhancedPdfParsing?: boolean }
   ) => {
     // Track newly created document IDs for auto-selection
     const newDocumentIds: number[] = []
@@ -378,15 +378,17 @@ export function DocumentList({
       // Use attachment.filename (which may have been renamed) instead of file.name
       const documentName = attachment.filename || file.name
       const extension = documentName.split('.').pop() || ''
+      const isPdf = extension.toLowerCase() === 'pdf'
       try {
         const created = await create({
           attachment_id: attachment.id,
           name: documentName,
           file_extension: extension,
           file_size: file.size,
-          splitter_config: splitterConfig,
+          splitter_config: options?.splitterConfig,
           source_type: 'file',
           folder_id: selectedUploadFolderId || 0,
+          enhanced_pdf_parsing: Boolean(isPdf && options?.enhancedPdfParsing),
         })
         // Collect newly created document ID
         if (created?.id) {

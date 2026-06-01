@@ -73,6 +73,14 @@ def _build_attachment_filename(name: str, file_extension: str) -> str:
     return f"{name}{suffix}"
 
 
+def _build_document_source_config(data: KnowledgeDocumentCreate) -> dict:
+    """Merge upload-time flags into document source_config."""
+    source_config = dict(data.source_config or {})
+    if data.enhanced_pdf_parsing:
+        source_config["enhanced_pdf_parsing"] = True
+    return source_config
+
+
 def _get_delete_gateway():
     """Load the delete gateway lazily to avoid import-time coupling."""
     from app.services.rag.gateway_factory import get_delete_gateway
@@ -1097,7 +1105,7 @@ class KnowledgeService:
                 else {}
             ),  # Save splitter_config with default {}
             source_type=data.source_type.value if data.source_type else "file",
-            source_config=data.source_config if data.source_config else {},
+            source_config=_build_document_source_config(data),
         )
         db.add(document)
         db.flush()  # Flush to persist document before counting

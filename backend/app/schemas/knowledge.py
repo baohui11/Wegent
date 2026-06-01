@@ -365,6 +365,12 @@ class KnowledgeDocumentCreate(BaseModel):
         default_factory=dict,
         description="Source configuration (e.g., {'url': '...'} for table)",
     )
+    enhanced_pdf_parsing: bool = Field(
+        default=False,
+        description=(
+            "When true, run OCR conversion for PDF documents before RAG indexing"
+        ),
+    )
 
 
 class KnowledgeDocumentUpdate(BaseModel):

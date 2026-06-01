@@ -14,7 +14,7 @@
     "code": "Code Knowledge",
     "code_desc": "Repository documentation",
     "wiki": "Wiki",
-    "wiki_desc": "Team knowledge base"
+    "wiki_desc": "Group knowledge base"
   },
   "tabs": {
     "code": "Code Knowledge",
@@ -387,6 +387,10 @@
       "confirmUpload": "Confirm ({{count}} files)",
       "confirming": "Creating documents...",
       "summary": "Completed: {{success}} succeeded, {{failed}} failed",
+      "enhancedPdfParsing": {
+        "title": "Enhanced PDF parsing",
+        "description": "For scanned or image-based PDFs. When enabled, text is extracted via OCR before indexing (slower). Keep off for normal text PDFs."
+      },
       "status": {
         "pending": "Pending",
         "uploading": "Uploading",

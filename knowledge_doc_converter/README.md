@@ -1,6 +1,6 @@
 # Knowledge Doc Converter
 
-Standalone Celery worker that converts PDF/PPTX documents to Markdown via MinerU OCR, then uploads results to S3 and notifies the Backend via internal HTTP callbacks.
+Standalone Celery worker that converts PDF/PPTX documents to Markdown via MinerU OCR or Baidu PaddleOCR, then uploads images to S3 and notifies the Backend via internal HTTP callbacks.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ Knowledge Doc Converter (Celery worker)
   │
   ├─ Acquires distributed lock (Redis)
   ├─ Downloads attachment via Backend API
-  ├─ Sends document to MinerU for OCR conversion
+  ├─ Sends document to MinerU or PaddleOCR for OCR conversion
   ├─ Collects Markdown + images output
   ├─ Uploads result to S3 (if enabled)
   ├─ Notifies Backend via callback
@@ -33,11 +33,16 @@ See `.env.example` for all available options. Key settings:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `CONVERSION_PROVIDER` | OCR backend: `mineru` or `paddleocr` | `mineru` |
 | `BACKEND_BASE_URL` | Backend API base URL | `http://backend:8000` |
 | `BACKEND_INTERNAL_TOKEN` | Token for Backend internal API auth | (required) |
 | `CELERY_BROKER_URL` | Redis broker URL | `redis://redis:6379/0` |
 | `MINERU_API_BASE_URL` | MinerU service URL | `http://mineru:8888` |
-| `WORKER_CONVERSION_S3_ENABLED` | Enable S3 upload for results | `false` |
+| `PADDLEOCR_TOKEN` | PaddleOCR API token (required when provider=paddleocr) | (empty) |
+| `PADDLEOCR_JOB_URL` | PaddleOCR jobs API URL | `https://paddleocr.aistudio-app.com/api/v2/ocr/jobs` |
+| `PADDLEOCR_MODEL` | PaddleOCR model name | `PaddleOCR-VL-1.6` |
+| PaddleOCR formats | `pdf`, `jpeg`, `jpg`, `png`, `tiff`, `tif`, `bmp` only | — |
+| `WORKER_CONVERSION_S3_ENABLED` | Enable S3 upload for results (auto-enabled with ATTACHMENT_S3_* when using paddleocr) | `false` |
 | `PROMETHEUS_ENABLED` | Enable Prometheus metrics server | `false` |
 | `PROMETHEUS_PORT` | Metrics server port | `9090` |
 

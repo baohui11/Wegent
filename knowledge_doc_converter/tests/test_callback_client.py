@@ -16,7 +16,9 @@ def client():
         "knowledge_doc_converter.services.callback_client.settings"
     ) as mock_settings:
         mock_settings.BACKEND_BASE_URL = "http://backend:8000"
-        mock_settings.BACKEND_INTERNAL_TOKEN = "test-token"
+        mock_settings.build_internal_auth_headers.return_value = {
+            "Authorization": "Bearer test-token"
+        }
         return CallbackClient()
 
 

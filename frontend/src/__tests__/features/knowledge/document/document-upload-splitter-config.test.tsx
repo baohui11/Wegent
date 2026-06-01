@@ -124,16 +124,19 @@ describe('DocumentUpload splitter config defaults', () => {
         },
       ],
       {
-        chunk_strategy: 'flat',
-        format_enhancement: 'file_aware',
-        flat_config: {
-          chunk_size: 1024,
-          chunk_overlap: 50,
-          separator: '\n\n',
+        splitterConfig: {
+          chunk_strategy: 'flat',
+          format_enhancement: 'file_aware',
+          flat_config: {
+            chunk_size: 1024,
+            chunk_overlap: 50,
+            separator: '\n\n',
+          },
+          markdown_enhancement: {
+            enabled: true,
+          },
         },
-        markdown_enhancement: {
-          enabled: true,
-        },
+        enhancedPdfParsing: undefined,
       }
     )
   })

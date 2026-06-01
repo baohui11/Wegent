@@ -1641,7 +1641,15 @@ class KnowledgeOrchestrator:
 
         try:
             normalized_extension = _normalize_file_extension(document.file_extension)
-            if settings.needs_conversion(normalized_extension):
+            from app.services.knowledge.conversion_policy import (
+                should_run_document_conversion,
+            )
+
+            if should_run_document_conversion(
+                file_extension=normalized_extension,
+                source_config=document.source_config,
+                settings=settings,
+            ):
                 # File type requires conversion before indexing
                 # Task is dispatched to knowledge_doc_converter microservice
                 # via the shared Celery broker (knowledge_conversion queue)

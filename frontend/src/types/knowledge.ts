@@ -399,6 +399,8 @@ export interface KnowledgeDocumentCreate {
   splitter_config?: Partial<SplitterConfig>
   source_type?: DocumentSourceType
   source_config?: Record<string, unknown>
+  /** When true, PDF documents use OCR conversion before RAG indexing */
+  enhanced_pdf_parsing?: boolean
 }
 
 export interface KnowledgeDocumentUpdate {

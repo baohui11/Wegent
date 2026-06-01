@@ -33,7 +33,7 @@ from knowledge_doc_converter.services.lock_service import lock_service
 logger = logging.getLogger(__name__)
 
 
-from knowledge_engine.conversion import MinerUConfig, S3Config
+from knowledge_engine.conversion import MinerUConfig, PaddleOCRConfig
 
 
 def _build_mineru_config() -> MinerUConfig:
@@ -50,16 +50,34 @@ def _build_mineru_config() -> MinerUConfig:
     )
 
 
-def _build_s3_config() -> S3Config:
-    """Build S3Config from service settings."""
-    return S3Config(
-        enabled=settings.WORKER_CONVERSION_S3_ENABLED,
-        endpoint=settings.WORKER_CONVERSION_S3_ENDPOINT,
-        access_key=settings.WORKER_CONVERSION_S3_ACCESS_KEY,
-        secret_key=settings.WORKER_CONVERSION_S3_SECRET_KEY,
-        bucket_name=settings.WORKER_CONVERSION_S3_BUCKET_NAME,
-        region_name=settings.WORKER_CONVERSION_S3_REGION_NAME,
+def _build_s3_config():
+    """Build S3Config from service settings (reuses ATTACHMENT_S3_* when unset)."""
+    return settings.build_s3_config()
+
+
+def _build_paddleocr_config() -> PaddleOCRConfig:
+    """Build PaddleOCRConfig from service settings."""
+    return PaddleOCRConfig(
+        token=settings.PADDLEOCR_TOKEN,
+        job_url=settings.PADDLEOCR_JOB_URL,
+        model=settings.PADDLEOCR_MODEL,
+        use_doc_orientation_classify=settings.PADDLEOCR_USE_DOC_ORIENTATION_CLASSIFY,
+        use_doc_unwarping=settings.PADDLEOCR_USE_DOC_UNWARPING,
+        use_chart_recognition=settings.PADDLEOCR_USE_CHART_RECOGNITION,
+        poll_interval_seconds=settings.PADDLEOCR_POLL_INTERVAL_SECONDS,
+        max_wait_seconds=settings.PADDLEOCR_MAX_WAIT_SECONDS,
     )
+
+
+def _resolve_conversion_provider() -> str:
+    """Normalize configured conversion provider."""
+    provider = (settings.CONVERSION_PROVIDER or "mineru").strip().lower()
+    if provider not in {"mineru", "paddleocr"}:
+        raise RuntimeError(
+            f"Unsupported CONVERSION_PROVIDER: {settings.CONVERSION_PROVIDER}. "
+            "Supported values: mineru, paddleocr"
+        )
+    return provider
 
 
 @celery_app.task(
@@ -190,7 +208,9 @@ def convert_document_task(
             # Step 3: Convert using knowledge_engine
             from knowledge_engine.conversion import convert_document
 
+            provider = _resolve_conversion_provider()
             mineru_config = _build_mineru_config()
+            paddleocr_config = _build_paddleocr_config()
             s3_config = _build_s3_config()
             filename_without_ext = os.path.splitext(original_filename)[0]
             # Sanitize path components to prevent S3 path traversal
@@ -202,10 +222,18 @@ def convert_document_task(
             )
             s3_base_path = f"doc-converter/{safe_kb_name}/{document_id}/{safe_filename}"
 
+            if provider == "paddleocr" and not s3_config.enabled:
+                raise RuntimeError(
+                    "PaddleOCR conversion requires WORKER_CONVERSION_S3_ENABLED=true "
+                    "to localize images"
+                )
+
             result = convert_document(
                 binary_data=binary_data,
                 file_extension=file_extension,
+                provider=provider,
                 mineru_config=mineru_config,
+                paddleocr_config=paddleocr_config,
                 s3_config=s3_config,
                 s3_base_path=s3_base_path,
             )

@@ -15,7 +15,9 @@ def fetcher():
         "knowledge_doc_converter.services.content_fetcher.settings"
     ) as mock_settings:
         mock_settings.BACKEND_BASE_URL = "http://backend:8000"
-        mock_settings.BACKEND_INTERNAL_TOKEN = "test-token"
+        mock_settings.build_internal_auth_headers.return_value = {
+            "Authorization": "Bearer test-token"
+        }
         return ContentFetcher()
 
 
@@ -25,6 +27,15 @@ class TestContentFetcher:
     def test_init_sets_base_url_and_headers(self, fetcher):
         assert fetcher.base_url == "http://backend:8000"
         assert fetcher.headers["Authorization"] == "Bearer test-token"
+
+    def test_init_omits_auth_header_when_token_unconfigured(self):
+        with patch(
+            "knowledge_doc_converter.services.content_fetcher.settings"
+        ) as mock_settings:
+            mock_settings.BACKEND_BASE_URL = "http://backend:8000"
+            mock_settings.build_internal_auth_headers.return_value = {}
+            fetcher = ContentFetcher()
+            assert "Authorization" not in fetcher.headers
 
     def test_download_success(self, fetcher):
         """Test successful binary download."""

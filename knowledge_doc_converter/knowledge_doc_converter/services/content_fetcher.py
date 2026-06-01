@@ -22,9 +22,7 @@ class ContentFetcher:
 
     def __init__(self):
         self.base_url = settings.BACKEND_BASE_URL.rstrip("/")
-        self.headers = {
-            "Authorization": f"Bearer {settings.BACKEND_INTERNAL_TOKEN}",
-        }
+        self.headers = settings.build_internal_auth_headers()
 
     def download(self, path: str) -> bytes:
         """Download binary content from backend.
