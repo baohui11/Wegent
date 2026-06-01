@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 from app.api.dependencies import get_db
 from app.core import security
+from app.core.config import settings
 from app.models.kind import Kind
 from app.models.user import User
 from app.schemas.kind import (
@@ -276,6 +277,18 @@ async def upload_skill(
     )
 
     return skill
+
+
+class SkillUploadLimitsResponse(BaseModel):
+    """Skill ZIP upload limits advertised to clients."""
+
+    max_file_size_mb: int
+
+
+@router.get("/upload-limits", response_model=SkillUploadLimitsResponse)
+def get_skill_upload_limits() -> SkillUploadLimitsResponse:
+    """Return server-side Skill ZIP size limit (``MAX_SKILL_SIZE`` env, unit MB)."""
+    return SkillUploadLimitsResponse(max_file_size_mb=settings.MAX_SKILL_SIZE)
 
 
 @router.get("", response_model=SkillList)

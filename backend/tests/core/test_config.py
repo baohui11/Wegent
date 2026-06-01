@@ -116,6 +116,17 @@ class TestSettings:
         assert s.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS == 2
         assert s.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS == 24
 
+    def test_max_skill_size_defaults(self):
+        """Test Skill ZIP upload size default (megabytes)."""
+        s = build_settings()
+        assert s.MAX_SKILL_SIZE == 10
+
+    def test_max_skill_size_from_env(self, monkeypatch):
+        """Test MAX_SKILL_SIZE is loaded from environment (unit: MB)."""
+        monkeypatch.setenv("MAX_SKILL_SIZE", "25")
+        s = build_settings_from_env()
+        assert s.MAX_SKILL_SIZE == 25
+
     def test_workspace_archive_settings_defaults(self):
         """Test workspace archive configuration defaults."""
         s = build_settings()

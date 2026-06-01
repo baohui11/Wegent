@@ -58,10 +58,11 @@ import {
   GitImportResponse,
 } from '@/apis/skills'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+import { useSkillUploadLimits } from '@/hooks/useSkillUploadLimits'
 
 const SetupSkillStep: React.FC = () => {
   const { t } = useTranslation('admin')
+  const { maxFileSizeMb, maxFileSizeBytes } = useSkillUploadLimits()
   const { toast } = useToast()
 
   const [skills, setSkills] = useState<UnifiedSkill[]>([])
@@ -115,15 +116,21 @@ const SetupSkillStep: React.FC = () => {
   // Upload Tab Logic
   // ============================================================================
 
-  const validateFile = (file: File): string | null => {
-    if (!file.name.endsWith('.zip')) {
-      return 'File must be a ZIP archive'
-    }
-    if (file.size > MAX_FILE_SIZE) {
-      return `File size exceeds 10MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB)`
-    }
-    return null
-  }
+  const validateFile = useCallback(
+    (file: File): string | null => {
+      if (!file.name.endsWith('.zip')) {
+        return 'File must be a ZIP archive'
+      }
+      if (file.size > maxFileSizeBytes) {
+        return t('common:skills.error_file_size', {
+          maxSize: maxFileSizeMb,
+          fileSize: (file.size / (1024 * 1024)).toFixed(1),
+        })
+      }
+      return null
+    },
+    [t, maxFileSizeBytes, maxFileSizeMb]
+  )
 
   const handleFileSelect = useCallback(
     (file: File) => {
@@ -143,7 +150,7 @@ const SetupSkillStep: React.FC = () => {
         setSkillName(nameFromFile)
       }
     },
-    [skillName]
+    [skillName, validateFile]
   )
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -586,7 +593,9 @@ const SetupSkillStep: React.FC = () => {
                           {t('setup_wizard.skill_step.drag_drop_hint')}
                         </p>
                         <p className="text-xs text-text-muted">
-                          {t('setup_wizard.skill_step.max_file_size')}
+                          {t('setup_wizard.skill_step.max_file_size', {
+                            maxSize: maxFileSizeMb,
+                          })}
                         </p>
                       </div>
                     )}
@@ -622,7 +631,11 @@ const SetupSkillStep: React.FC = () => {
                       <li>{t('setup_wizard.skill_step.requirement_zip')}</li>
                       <li>{t('setup_wizard.skill_step.requirement_folder')}</li>
                       <li>{t('setup_wizard.skill_step.requirement_skill_md')}</li>
-                      <li>{t('setup_wizard.skill_step.requirement_size')}</li>
+                      <li>
+                        {t('setup_wizard.skill_step.requirement_size', {
+                          maxSize: maxFileSizeMb,
+                        })}
+                      </li>
                     </ul>
                   </AlertDescription>
                 </Alert>

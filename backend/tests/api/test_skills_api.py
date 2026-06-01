@@ -81,6 +81,20 @@ class TestSkillsAPI:
             zf.writestr(f"{folder_name}/script.py", "print('test')")
         return zip_buffer.getvalue()
 
+    def test_get_skill_upload_limits(self, test_client: TestClient, monkeypatch):
+        """Test upload limits endpoint reflects MAX_SKILL_SIZE env (MB)."""
+        monkeypatch.setenv("MAX_SKILL_SIZE", "20")
+        from app.core.config import Settings
+
+        monkeypatch.setattr(
+            "app.api.endpoints.kind.skills.settings",
+            Settings(),
+        )
+
+        response = test_client.get("/api/v1/kinds/skills/upload-limits")
+        assert response.status_code == 200
+        assert response.json() == {"max_file_size_mb": 20}
+
     def test_upload_skill_success(self, test_client: TestClient, test_token: str):
         """Test successful skill upload"""
         skill_md = """---

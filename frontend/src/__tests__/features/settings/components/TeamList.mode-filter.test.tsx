@@ -28,7 +28,7 @@ jest.mock('@/hooks/useTranslation', () => ({
         'teams.description': 'Agents can run tasks.',
         'teams.filter_all': 'All',
         'teams.filter_chat': 'Chat',
-        'teams.filter_code': 'Code',
+        'teams.filter_code': 'Agent',
         'settings:team.list.filterDevice': 'Device',
         'teams.active': 'Active',
         'teams.inactive': 'Inactive',

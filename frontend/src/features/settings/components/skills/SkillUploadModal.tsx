@@ -57,6 +57,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
+import { useSkillUploadLimits } from '@/hooks/useSkillUploadLimits'
 
 interface SkillUploadModalProps {
   open: boolean
@@ -84,8 +85,6 @@ function getSkillId(skill: Skill | UnifiedSkill | null | undefined): number {
   return skill.id || 0
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
-
 export default function SkillUploadModal({
   open,
   onClose,
@@ -94,6 +93,7 @@ export default function SkillUploadModal({
   isPublic = false,
 }: SkillUploadModalProps) {
   const { t } = useTranslation('common')
+  const { maxFileSizeMb, maxFileSizeBytes } = useSkillUploadLimits()
   const [activeTab, setActiveTab] = useState<'upload' | 'git'>('upload')
 
   // Upload tab state
@@ -131,14 +131,15 @@ export default function SkillUploadModal({
       if (!/\.zip$/i.test(file.name)) {
         return t('skills.error_file_format')
       }
-      if (file.size > MAX_FILE_SIZE) {
+      if (file.size > maxFileSizeBytes) {
         return t('skills.error_file_size', {
+          maxSize: maxFileSizeMb,
           fileSize: (file.size / (1024 * 1024)).toFixed(1),
         })
       }
       return null
     },
-    [t]
+    [t, maxFileSizeBytes, maxFileSizeMb]
   )
 
   const handleFileSelect = useCallback(
@@ -454,6 +455,7 @@ export default function SkillUploadModal({
               error={error}
               dragActive={dragActive}
               isEditMode={isEditMode}
+              maxFileSizeMb={maxFileSizeMb}
               handleFileChange={handleFileChange}
               handleDrag={handleDrag}
               handleDrop={handleDrop}
@@ -489,6 +491,7 @@ export default function SkillUploadModal({
                   error={error}
                   dragActive={dragActive}
                   isEditMode={isEditMode}
+                  maxFileSizeMb={maxFileSizeMb}
                   handleFileChange={handleFileChange}
                   handleDrag={handleDrag}
                   handleDrop={handleDrop}
@@ -600,6 +603,7 @@ interface UploadFormProps {
   error: string | null
   dragActive: boolean
   isEditMode: boolean
+  maxFileSizeMb: number
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   handleDrag: (e: React.DragEvent) => void
   handleDrop: (e: React.DragEvent) => void
@@ -617,6 +621,7 @@ function UploadForm({
   error,
   dragActive,
   isEditMode,
+  maxFileSizeMb,
   handleFileChange,
   handleDrag,
   handleDrop,
@@ -677,7 +682,9 @@ function UploadForm({
             <div>
               <UploadIcon className="w-8 h-8 mx-auto text-text-muted mb-2" />
               <p className="text-sm text-text-primary mb-1">{t('skills.drop_file_here')}</p>
-              <p className="text-xs text-text-muted">{t('skills.max_file_size')}</p>
+              <p className="text-xs text-text-muted">
+                {t('skills.max_file_size', { maxSize: maxFileSizeMb })}
+              </p>
             </div>
           )}
         </div>
@@ -712,7 +719,7 @@ function UploadForm({
             <li>{t('skills.requirement_folder_name')}</li>
             <li>{t('skills.requirement_description')}</li>
             <li>{t('skills.requirement_optional')}</li>
-            <li>{t('skills.requirement_size')}</li>
+            <li>{t('skills.requirement_size', { maxSize: maxFileSizeMb })}</li>
           </ul>
         </AlertDescription>
       </Alert>

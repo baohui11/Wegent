@@ -28,7 +28,7 @@ jest.mock('@/hooks/useTranslation', () => ({
         'common:team.bind_mode': 'Bind mode',
         'common:teams.edit_title': 'Edit agent',
         'team.bind_mode_chat': 'Chat',
-        'team.bind_mode_code': 'Code',
+        'team.bind_mode_code': 'Agent',
         'team.bind_mode_task': 'Task',
         'team.bind_mode_video': 'Video',
         'team.bind_mode_image': 'Image',

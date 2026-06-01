@@ -15,11 +15,16 @@ from typing import Any, Dict, Optional
 import yaml
 from fastapi import HTTPException
 
+from app.core.config import settings
+
+
+def get_max_skill_size_bytes() -> int:
+    """Return maximum Skill ZIP size in bytes (``MAX_SKILL_SIZE`` env, unit MB)."""
+    return settings.MAX_SKILL_SIZE * 1024 * 1024
+
 
 class SkillValidator:
     """Validator for Skill ZIP packages"""
-
-    MAX_SIZE = 10 * 1024 * 1024  # 10MB
 
     @staticmethod
     def validate_zip(file_content: bytes, file_name: str) -> Dict[str, Any]:
@@ -51,10 +56,14 @@ class SkillValidator:
         """
         # Check file size
         file_size = len(file_content)
-        if file_size > SkillValidator.MAX_SIZE:
+        max_size_bytes = get_max_skill_size_bytes()
+        if file_size > max_size_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f"File size {file_size} bytes exceeds maximum allowed size of {SkillValidator.MAX_SIZE} bytes",
+                detail=(
+                    f"File size {file_size} bytes exceeds maximum allowed size of "
+                    f"{max_size_bytes} bytes ({settings.MAX_SKILL_SIZE}MB)"
+                ),
             )
 
         # Check if it's a valid ZIP file

@@ -28,6 +28,8 @@ from app.services.git_skill.models import (
     ParsedRepoUrl,
     RepoAuthInfo,
 )
+from app.core.config import settings
+from app.services.skill_service import get_max_skill_size_bytes
 from app.services.git_skill.providers import (
     GitRepoProvider,
     get_provider_by_host,
@@ -417,10 +419,6 @@ def scan_skills_in_directory(temp_dir: str) -> List[GitSkillInfo]:
     return skills
 
 
-# Maximum skill package size (10MB) - same as SkillValidator.MAX_SIZE
-MAX_SKILL_SIZE = 10 * 1024 * 1024
-
-
 def package_skill_directory(skill_dir: str, skill_name: str) -> bytes:
     """
     Package a skill directory into a ZIP file with the correct structure.
@@ -439,7 +437,7 @@ def package_skill_directory(skill_dir: str, skill_name: str) -> bytes:
         ZIP file content as bytes
 
     Raises:
-        HTTPException: If the packaged ZIP exceeds the maximum size limit (10MB)
+        HTTPException: If the packaged ZIP exceeds ``MAX_SKILL_SIZE`` (MB, from env)
     """
     zip_buffer = io.BytesIO()
 
@@ -455,11 +453,15 @@ def package_skill_directory(skill_dir: str, skill_name: str) -> bytes:
     zip_content = zip_buffer.getvalue()
 
     # Validate file size
-    if len(zip_content) > MAX_SKILL_SIZE:
+    max_size_bytes = get_max_skill_size_bytes()
+    if len(zip_content) > max_size_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"Skill '{skill_name}' package size ({len(zip_content)} bytes) "
-            f"exceeds maximum allowed size ({MAX_SKILL_SIZE} bytes / 10MB)",
+            detail=(
+                f"Skill '{skill_name}' package size ({len(zip_content)} bytes) "
+                f"exceeds maximum allowed size ({max_size_bytes} bytes / "
+                f"{settings.MAX_SKILL_SIZE}MB)"
+            ),
         )
 
     return zip_content

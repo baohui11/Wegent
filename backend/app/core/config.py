@@ -302,6 +302,14 @@ class Settings(BaseSettings):
         """Parse local device command map from JSON settings."""
         return _parse_json_object_setting(v, "LOCAL_DEVICE_COMMANDS")
 
+    @field_validator("MAX_SKILL_SIZE")
+    @classmethod
+    def validate_max_skill_size_mb(cls, value: int) -> int:
+        """Ensure Skill ZIP upload limit is at least 1 MB."""
+        if value < 1:
+            raise ValueError("MAX_SKILL_SIZE must be at least 1 (megabytes)")
+        return value
+
     @field_validator("RAG_RUNTIME_MODE", mode="before")
     @classmethod
     def parse_rag_runtime_mode(cls, v: Any) -> str | dict[str, str]:
@@ -444,6 +452,8 @@ class Settings(BaseSettings):
     # File upload configuration
     MAX_UPLOAD_FILE_SIZE_MB: int = 100  # Maximum file size in MB
     MAX_EXTRACTED_TEXT_LENGTH: int = 500000  # Maximum extracted text length
+    # Skill ZIP upload max size (megabytes). Env: MAX_SKILL_SIZE=20
+    MAX_SKILL_SIZE: int = 10
 
     # Attachment storage backend configuration
     # Supported backends: "mysql" (default), "s3", "minio"

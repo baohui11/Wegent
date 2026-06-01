@@ -24,6 +24,7 @@ Usage:
     result = git_skill_service.batch_update_skills_from_git(skill_ids, user_id, db)
 """
 
+from app.core.config import settings
 from app.services.git_skill.models import (
     GitBatchUpdateResult,
     GitImportResult,
@@ -42,7 +43,6 @@ from app.services.git_skill.providers import (
 )
 from app.services.git_skill.service import GitSkillService, git_skill_service
 from app.services.git_skill.utils import (
-    MAX_SKILL_SIZE,
     check_private_repo_error,
     download_repo_zip,
     extract_zip_safely,
@@ -55,6 +55,10 @@ from app.services.git_skill.utils import (
     scan_skills_in_directory,
     validate_skill_directory,
 )
+from app.services.skill_service import get_max_skill_size_bytes
+
+# Skill ZIP max upload size in megabytes (env: MAX_SKILL_SIZE)
+MAX_SKILL_SIZE = settings.MAX_SKILL_SIZE
 
 __all__ = [
     # Main service
@@ -86,6 +90,7 @@ __all__ = [
     "extract_zip_safely",
     "find_repo_root",
     "validate_skill_directory",
-    # Constants
+    # Constants / helpers
     "MAX_SKILL_SIZE",
+    "get_max_skill_size_bytes",
 ]

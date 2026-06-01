@@ -3,11 +3,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Skill, SkillList } from '@/types/api'
+import { fetchRuntimeConfig, getApiBaseUrl } from '@/lib/runtime-config'
 import { getToken } from './user'
-import { getApiBaseUrl } from '@/lib/runtime-config'
 
 // Use dynamic API base URL from runtime config
 const getApiUrl = () => getApiBaseUrl()
+
+/** Fallback when upload-limits API is unavailable (matches backend default). */
+export const DEFAULT_MAX_SKILL_SIZE_MB = 10
+
+export interface SkillUploadLimits {
+  max_file_size_mb: number
+}
+
+let skillUploadLimitsCache: SkillUploadLimits | null = null
+
+/**
+ * Fetch Skill ZIP upload size limit from backend (``MAX_SKILL_SIZE`` env, unit MB).
+ */
+export async function fetchSkillUploadLimits(): Promise<SkillUploadLimits> {
+  if (skillUploadLimitsCache) {
+    return skillUploadLimitsCache
+  }
+
+  // Ensure runtime API base URL is loaded before the first limits request.
+  await fetchRuntimeConfig()
+
+  const url = `${getApiUrl()}/v1/kinds/skills/upload-limits`
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    return { max_file_size_mb: DEFAULT_MAX_SKILL_SIZE_MB }
+  }
+
+  const limits: SkillUploadLimits = await response.json()
+  skillUploadLimitsCache = limits
+  return limits
+}
 
 /**
  * Fetch all skills for the current user
