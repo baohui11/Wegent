@@ -28,6 +28,8 @@ interface SearchEngineSelectorProps {
   engines: SearchEngine[]
   /** When true, hide engine picker chevron (for compact/mobile menu layouts) */
   compact?: boolean
+  /** Render icon-only trigger matching knowledge context button style */
+  iconOnly?: boolean
 }
 
 export default function SearchEngineSelector({
@@ -38,6 +40,7 @@ export default function SearchEngineSelector({
   disabled = false,
   engines,
   compact = false,
+  iconOnly = false,
 }: SearchEngineSelectorProps) {
   const { t } = useTranslation()
 
@@ -70,7 +73,7 @@ export default function SearchEngineSelector({
     ? t('chat:web_search.disable')
     : t('chat:web_search.enable')
 
-  const showEnginePicker = !compact && engines.length > 1
+  const showEnginePicker = !compact && !iconOnly && engines.length > 1
 
   const toggleButton = (
     <ActionButton
@@ -78,7 +81,8 @@ export default function SearchEngineSelector({
       onClick={handleToggle}
       disabled={disabled}
       icon={<Globe className="h-4 w-4" />}
-      label={t('chat:web_search.label')}
+      title={tooltipText}
+      label={iconOnly ? undefined : t('chat:web_search.label')}
       className={cn(
         'transition-colors',
         enabledStyles,

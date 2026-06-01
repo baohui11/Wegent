@@ -48,14 +48,6 @@ jest.mock('@/features/layout/DocsButton', () => ({
   ),
 }))
 
-jest.mock('@/features/layout/FeedbackButton', () => ({
-  FeedbackButton: ({ className = '', onClick }: { className?: string; onClick?: () => void }) => (
-    <button type="button" className={className} onClick={onClick}>
-      feedback
-    </button>
-  ),
-}))
-
 jest.mock('@/features/theme/ThemeToggle', () => ({
   ThemeToggle: ({ className = '', onToggle }: { className?: string; onToggle?: () => void }) => (
     <button type="button" className={className} onClick={onToggle}>

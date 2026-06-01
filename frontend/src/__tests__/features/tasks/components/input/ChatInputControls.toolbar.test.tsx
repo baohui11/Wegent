@@ -39,7 +39,7 @@ jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string | Record<string, unknown>) => {
       const translations: Record<string, string> = {
-        'common:navigation.code': '编码',
+        'common:navigation.code': 'Agent',
         'common:teamSelector.agent_label': '智能体',
         'common:teams.more_actions': '更多操作',
       }
@@ -104,6 +104,18 @@ jest.mock('@/features/tasks/components/CorrectionModeToggle', () => ({
   default: () => <button type="button" data-testid="correction-toggle" />,
 }))
 
+jest.mock('@/features/tasks/components/selector/SearchEngineSelector', () => ({
+  __esModule: true,
+  default: ({ iconOnly }: { iconOnly?: boolean }) => (
+    <button type="button" data-testid="web-search-toggle" data-icon-only={iconOnly ? 'true' : 'false'} />
+  ),
+}))
+
+jest.mock('@/features/tasks/components/input/DeepThinkingToggle', () => ({
+  __esModule: true,
+  default: () => <button type="button" data-testid="dynamic-thinking-toggle" />,
+}))
+
 jest.mock('@/features/tasks/components/input/SendButton', () => ({
   __esModule: true,
   default: () => <button type="button">Send</button>,
@@ -148,7 +160,7 @@ function createProps(): ChatInputControlsProps {
     selectedTeam,
     teams: [selectedTeam],
     onTeamChange: jest.fn(),
-    selectedModel: null,
+    selectedModel: { id: '1', name: 'model', dynamicThinking: true } as ChatInputControlsProps['selectedModel'],
     setSelectedModel: jest.fn(),
     forceOverride: false,
     setForceOverride: jest.fn(),
@@ -160,6 +172,14 @@ function createProps(): ChatInputControlsProps {
     selectedTaskDetail: null,
     enableDeepThinking: false,
     setEnableDeepThinking: jest.fn(),
+    enableReasoning: false,
+    setEnableReasoning: jest.fn(),
+    enableWebSearch: false,
+    setEnableWebSearch: jest.fn(),
+    selectedSearchEngine: null,
+    setSelectedSearchEngine: jest.fn(),
+    searchEngines: [{ name: 'bocha', display_name: 'Bocha' }],
+    isWebSearchAvailable: true,
     enableClarification: false,
     setEnableClarification: jest.fn(),
     enableCorrectionMode: false,
@@ -212,7 +232,7 @@ describe('ChatInputControls toolbar actions', () => {
     mockTeamSelectorButton.mockClear()
   })
 
-  it('removes code mode and keeps agent, knowledge, and more actions after the attachment divider', () => {
+  it('keeps icon-only agent, knowledge, web search, deep thinking, and more actions on the left toolbar', () => {
     render(<ChatInputControls {...createProps()} />)
 
     const leftActions = screen.getByTestId('input-left-actions')
@@ -220,17 +240,19 @@ describe('ChatInputControls toolbar actions', () => {
     const divider = screen.getByTestId('attachment-actions-divider')
     const agentButton = screen.getByTestId('agent-skill-selector-button')
     const knowledgeButton = screen.getByTestId('chat-context-input')
+    const webSearchButton = screen.getByTestId('web-search-toggle')
+    const deepThinkingButton = screen.getByTestId('dynamic-thinking-toggle')
     const moreButton = screen.getByTestId('desktop-input-more-actions-button')
 
-    expect(screen.queryByTestId('code-mode-button')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('code-mode-close-button')).not.toBeInTheDocument()
     expect(leftActions).toContainElement(agentButton)
     expect(leftActions).toContainElement(knowledgeButton)
+    expect(leftActions).toContainElement(webSearchButton)
+    expect(leftActions).toContainElement(deepThinkingButton)
     expect(leftActions).toContainElement(moreButton)
     expect(
       Array.from(
         leftActions.querySelectorAll(
-          '[data-testid="attachment-button"], [data-testid="attachment-actions-divider"], [data-testid="agent-skill-selector-button"], [data-testid="chat-context-input"], [data-testid="desktop-input-more-actions-button"]'
+          '[data-testid="attachment-button"], [data-testid="attachment-actions-divider"], [data-testid="agent-skill-selector-button"], [data-testid="chat-context-input"], [data-testid="web-search-toggle"], [data-testid="dynamic-thinking-toggle"], [data-testid="desktop-input-more-actions-button"]'
         )
       ).map(element => element.getAttribute('data-testid'))
     ).toEqual([
@@ -238,6 +260,8 @@ describe('ChatInputControls toolbar actions', () => {
       'attachment-actions-divider',
       'agent-skill-selector-button',
       'chat-context-input',
+      'web-search-toggle',
+      'dynamic-thinking-toggle',
       'desktop-input-more-actions-button',
     ])
     expect(attachmentButton.compareDocumentPosition(divider)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
@@ -245,26 +269,25 @@ describe('ChatInputControls toolbar actions', () => {
     expect(agentButton.compareDocumentPosition(knowledgeButton)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    expect(knowledgeButton.compareDocumentPosition(moreButton)).toBe(
+    expect(knowledgeButton.compareDocumentPosition(webSearchButton)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    expect(agentButton).toHaveAttribute('data-icon-only', 'true')
-    expect(mockTeamSelectorButton).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iconOnly: true,
-        triggerTestId: 'agent-skill-selector-button',
-      })
+    expect(webSearchButton.compareDocumentPosition(deepThinkingButton)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     )
+    expect(deepThinkingButton.compareDocumentPosition(moreButton)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(knowledgeButton).toHaveAttribute('data-icon-only', 'true')
+    expect(webSearchButton).toHaveAttribute('data-icon-only', 'true')
+    expect(agentButton).toHaveAttribute('data-icon-only', 'true')
+    expect(screen.getByTestId('input-right-actions')).not.toContainElement(moreButton)
   })
 
   it('keeps skill selection inside the more actions menu', () => {
     render(<ChatInputControls {...createProps()} />)
 
-    const knowledgeButton = screen.getByTestId('chat-context-input')
     const moreButton = screen.getByTestId('desktop-input-more-actions-button')
-
-    expect(knowledgeButton).toHaveAttribute('data-icon-only', 'true')
-    expect(screen.queryByTestId('team-selector')).not.toBeInTheDocument()
     expect(screen.queryByTestId('skill-selector')).not.toBeInTheDocument()
     expect(screen.queryByTestId('clarification-toggle')).not.toBeInTheDocument()
     expect(screen.queryByTestId('correction-toggle')).not.toBeInTheDocument()

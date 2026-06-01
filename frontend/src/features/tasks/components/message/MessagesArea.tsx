@@ -12,7 +12,6 @@ import {
   FileText,
   ChevronDown,
   Download,
-  MessageSquare,
   Users,
   MoreHorizontal,
 } from 'lucide-react'
@@ -47,7 +46,6 @@ import {
 import { useUnifiedMessages, type DisplayMessage } from '../../hooks/useUnifiedMessages'
 import { useChatStreamContext } from '../../contexts/chatStreamContext'
 import { useTraceAction } from '@/hooks/useTraceAction'
-import { getRuntimeConfigSync } from '@/lib/runtime-config'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import {
   correctionApis,
@@ -943,16 +941,6 @@ function MessagesArea({
               <FileText className="h-4 w-4" />
               <span>{t('chat:export.export_docx') || 'Export DOCX'}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                const feedbackUrl = getRuntimeConfigSync().feedbackUrl
-                window.open(feedbackUrl, '_blank')
-              }}
-              className="flex items-center gap-2 cursor-pointer"
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>{t('common:navigation.feedback')}</span>
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -1023,19 +1011,6 @@ function MessagesArea({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const feedbackUrl = getRuntimeConfigSync().feedbackUrl
-            window.open(feedbackUrl, '_blank')
-          }}
-          className="flex items-center gap-1 h-8 pl-2 pr-3 rounded-[7px] text-sm"
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          {t('common:navigation.feedback')}
-        </Button>
       </div>
     )
   }, [

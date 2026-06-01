@@ -51,6 +51,10 @@ jest.mock('@/features/tasks/components/input/ChatInputMoreActions', () => ({
   default: () => <div data-testid="chat-input-more-actions" />,
 }))
 
+jest.mock('@/lib/runtime-config', () => ({
+  isChatContextEnabled: () => true,
+}))
+
 jest.mock('@/features/tasks/components/CorrectionModeToggle', () => ({
   __esModule: true,
   default: () => <div data-testid="correction-toggle" />,
@@ -113,6 +117,14 @@ function createProps(taskType: ChatInputControlsProps['taskType']): ChatInputCon
     setEnableDeepThinking: jest.fn(),
     enableClarification: false,
     setEnableClarification: jest.fn(),
+    enableReasoning: false,
+    setEnableReasoning: jest.fn(),
+    enableWebSearch: false,
+    setEnableWebSearch: jest.fn(),
+    selectedSearchEngine: null,
+    setSelectedSearchEngine: jest.fn(),
+    searchEngines: [],
+    isWebSearchAvailable: false,
     selectedContexts: [],
     setSelectedContexts: jest.fn(),
     attachmentState: {

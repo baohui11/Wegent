@@ -37,7 +37,7 @@ export default function DeepThinkingToggle({
             disabled={disabled}
             data-testid="dynamic-thinking-toggle"
             icon={<Brain className="h-4 w-4" />}
-            label={t('chat:deep_thinking.label')}
+            title={enabled ? t('chat:deep_thinking.disable') : t('chat:deep_thinking.enable')}
             className={cn(
               'transition-colors',
               enabled

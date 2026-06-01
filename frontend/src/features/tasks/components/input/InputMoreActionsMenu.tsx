@@ -36,6 +36,7 @@ interface InputMoreActionsMenuProps {
   selectedSkillNames: string[]
   onToggleSkill?: (skillName: string) => void
   skillSelectorRef?: RefObject<SkillSelectorPopoverRef | null>
+  align?: 'start' | 'center' | 'end'
 }
 
 export function InputMoreActionsMenu({
@@ -56,6 +57,7 @@ export function InputMoreActionsMenu({
   selectedSkillNames,
   onToggleSkill,
   skillSelectorRef,
+  align = 'start',
 }: InputMoreActionsMenuProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -93,7 +95,7 @@ export function InputMoreActionsMenu({
         </Tooltip>
 
         <PopoverContent
-          align="start"
+          align={align}
           side="top"
           className="w-56 p-1"
           data-testid="desktop-input-more-actions-menu"

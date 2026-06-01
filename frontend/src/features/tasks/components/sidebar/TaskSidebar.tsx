@@ -161,13 +161,6 @@ export default function TaskSidebar({
 
   const navigationButtons: NavigationButton[] = [
     {
-      label: t('common:navigation.flow'),
-      icon: Workflow,
-      path: paths.feed.getHref(),
-      isActive: pageType === 'flow',
-      buttonPageType: 'flow',
-    },
-    {
       label: t('common:navigation.code'),
       icon: Code,
       path: paths.code.getHref(),
@@ -181,6 +174,13 @@ export default function TaskSidebar({
       path: paths.wiki.getHref(),
       isActive: pageType === 'knowledge',
       buttonPageType: 'knowledge',
+    },
+    {
+      label: t('common:navigation.flow'),
+      icon: Workflow,
+      path: paths.feed.getHref(),
+      isActive: pageType === 'flow',
+      buttonPageType: 'flow',
     },
     {
       label: t('devices:my_devices'),
@@ -280,15 +280,15 @@ export default function TaskSidebar({
 
   const fixedNavigationButtons = navigationButtons.filter(
     btn =>
-      btn.buttonPageType === 'flow' ||
       btn.buttonPageType === 'code' ||
-      btn.buttonPageType === 'knowledge'
+      btn.buttonPageType === 'knowledge' ||
+      btn.buttonPageType === 'flow'
   )
   const moreNavigationButtons = navigationButtons.filter(
     btn =>
-      btn.buttonPageType !== 'flow' &&
       btn.buttonPageType !== 'code' &&
-      btn.buttonPageType !== 'knowledge'
+      btn.buttonPageType !== 'knowledge' &&
+      btn.buttonPageType !== 'flow'
   )
   const fixedSecondaryNavigationButtons = SIDEBAR_NAV_CONFIG.keepSecondaryNavFixed
     ? moreNavigationButtons

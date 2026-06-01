@@ -608,6 +608,8 @@ export function ChatInputControls({
                 onSelectEngine={setSelectedSearchEngine}
                 engines={searchEngines}
                 disabled={selectorsDisabled}
+                iconOnly
+                compact
               />
             )}
 
