@@ -1,7 +1,7 @@
 ---
 description: "Provides read_file/write_file/exec/list_files/read_file/write_file for running process and managing filesystems in the sandbox. Ideal for code testing, file management, and command execution. The sub_claude_agent tool is available for advanced use cases. You MUST load this skill BEFORE use sandbox tools."
 displayName: "沙箱环境"
-version: "2.1.0"
+version: "2.2.0"
 author: "Wegent Team"
 tags: ["sandbox", "code-execution", "filesystem", "automation"]
 bindShells: ["Chat"]
@@ -288,6 +288,14 @@ Download a file from Wegent attachment URL to sandbox for processing.
 - `file_path`: Full path to the downloaded file in sandbox
 - `file_size`: Size of the downloaded file in bytes
 
+**Notes:**
+- User-facing `/download` URLs are accepted; the tool resolves them to `/executor-download` internally
+- For S3/MinIO storage, the backend returns an internal presigned URL; the tool follows that redirect from the Chat Shell process and writes the file into the sandbox
+- Encrypted attachments are streamed directly from the backend (HTTP 200)
+
+**Limits:**
+- Maximum file size: 100MB
+
 **Example:**
 ```json
 {
@@ -420,6 +428,7 @@ Download a file from Wegent attachment URL to sandbox for processing.
 - **Read file limit**: 1MB (configurable)
 - **Write file limit**: 10MB (configurable)
 - **Upload file limit**: 100MB (configurable)
+- **Download file limit**: 100MB
 - **Command timeout**: 300 seconds (5 minutes)
 - **Claude timeout**: 1800 seconds (30 minutes, minimum: 600 seconds / 10 minutes)
 - **Total task timeout**: 7200 seconds (2 hours)

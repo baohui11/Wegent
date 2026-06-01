@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 import requests
 
 from executor.platform_compat import get_safe_path_name
+from shared.utils.executor_attachment_download import stream_executor_attachment_to_file
 
 logger = logging.getLogger(__name__)
 
@@ -211,28 +212,22 @@ class AttachmentDownloader:
         )
 
         try:
-            # Download file with streaming for large files
-            response = requests.get(
-                download_url,
-                headers=self.headers,
-                timeout=self.DEFAULT_TIMEOUT,
-                stream=True,
-            )
-
-            if response.status_code != 200:
-                error_msg = f"HTTP {response.status_code}"
-                logger.error(f"Failed to download attachment '{filename}': {error_msg}")
-                return {**att, "error": error_msg}
-
-            # Save file to workspace
             file_path = self.get_attachment_path(filename)
-            with open(file_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            with open(file_path, "wb") as file_handle:
+                stream_executor_attachment_to_file(
+                    download_url,
+                    file_handle,
+                    headers=self.headers,
+                    timeout=self.DEFAULT_TIMEOUT,
+                )
 
             logger.info(f"Downloaded attachment '{filename}' to {file_path}")
             return {**att, "local_path": file_path}
 
+        except requests.exceptions.HTTPError as e:
+            error_msg = str(e)
+            logger.error(f"Failed to download attachment '{filename}': {error_msg}")
+            return {**att, "error": error_msg}
         except requests.exceptions.Timeout:
             error_msg = "Download timeout"
             logger.error(f"Timeout downloading attachment '{filename}': {error_msg}")

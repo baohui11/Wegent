@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Sandbox attachment download tool using curl command.
+"""Sandbox attachment download tool.
 
 This module provides the SandboxDownloadAttachmentTool class that downloads
-files from Wegent Backend to the sandbox environment via API.
+files from Wegent Backend to the sandbox environment via the executor-download
+API, including S3 presigned URL redirects.
 """
 
 import json
@@ -17,10 +18,18 @@ from typing import Optional
 from langchain_core.callbacks import CallbackManagerForToolRun
 from pydantic import BaseModel, Field
 
+from shared.utils.executor_attachment_download import (
+    download_executor_attachment_bytes,
+    resolve_executor_download_url,
+)
+
 logger = logging.getLogger(__name__)
 
 # Default API base URL for attachment downloads
 DEFAULT_API_BASE_URL = "http://backend:8000"
+
+# Maximum download size (100 MB, aligned with upload_attachment)
+MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024
 
 
 class SandboxDownloadAttachmentInput(BaseModel):
@@ -28,7 +37,10 @@ class SandboxDownloadAttachmentInput(BaseModel):
 
     attachment_url: str = Field(
         ...,
-        description="Wegent attachment download URL (e.g., /api/attachments/123/download)",
+        description=(
+            "Wegent attachment URL (e.g., /api/attachments/123/download or "
+            "/api/attachments/123/executor-download)"
+        ),
     )
     save_path: str = Field(
         ...,
@@ -61,7 +73,7 @@ class SandboxDownloadAttachmentTool(BaseSandboxTool):
     """Tool for downloading files from Wegent Backend to E2B sandbox.
 
     This tool downloads files from Wegent's attachment storage to the
-    sandbox environment via the /api/attachments/{id}/download endpoint.
+    sandbox environment via the /api/attachments/{id}/executor-download endpoint.
     """
 
     name: str = "download_attachment"
@@ -69,7 +81,8 @@ class SandboxDownloadAttachmentTool(BaseSandboxTool):
     description: str = """Download a file from Wegent attachment URL to sandbox.
 
 Use this tool to download attachments from Wegent to the sandbox environment
-for processing or editing.
+for processing or editing. User-facing /download URLs are accepted and are
+automatically resolved to the executor-download endpoint.
 
 Parameters:
 - attachment_url (required): Wegent attachment URL (e.g., /api/attachments/123/download)
@@ -202,19 +215,8 @@ Example:
             )
             api_base_url = api_base_url.rstrip("/")
 
-            # Build full download URL
-            # attachment_url can be relative (e.g., /api/attachments/123/download) or full URL
-            if attachment_url.startswith("http://") or attachment_url.startswith(
-                "https://"
-            ):
-                download_url = attachment_url
-            else:
-                # Ensure attachment_url starts with /
-                if not attachment_url.startswith("/"):
-                    attachment_url = f"/{attachment_url}"
-                download_url = f"{api_base_url}{attachment_url}"
+            download_url = resolve_executor_download_url(attachment_url, api_base_url)
 
-            # Get auth token
             auth_token = self.auth_token
             if not auth_token:
                 error_msg = "No authentication token available for download"
@@ -226,40 +228,43 @@ Example:
                 await self._emit_tool_status("failed", error_msg)
                 return result
 
-            # Build curl command to download file
-            curl_cmd = (
-                f"curl -s -f -L "
-                f'-H "Authorization: Bearer {auth_token}" '
-                f'-o "{save_path}" '
-                f'"{download_url}"'
-            )
-
             logger.info(
-                f"[SandboxDownloadAttachmentTool] Executing download via curl from {download_url}"
+                "[SandboxDownloadAttachmentTool] Downloading via executor-download: %s",
+                download_url,
             )
 
-            # Execute curl command
-            result_obj = await sandbox.commands.run(
-                cmd=curl_cmd,
-                cwd="/home/user",
-                timeout=effective_timeout,
-            )
-
-            execution_time = time.time() - start_time
-
-            if result_obj.exit_code != 0:
-                error_msg = f"Download failed: {result_obj.stderr or 'HTTP error or file not found'}"
+            try:
+                file_bytes = await download_executor_attachment_bytes(
+                    download_url,
+                    headers={"Authorization": f"Bearer {auth_token}"},
+                    timeout=effective_timeout,
+                    max_bytes=MAX_DOWNLOAD_SIZE,
+                )
+            except ValueError as e:
+                error_msg = str(e)
+                result = self._format_error(
+                    error_message=error_msg,
+                    file_path=save_path,
+                    file_size=0,
+                )
+                await self._emit_tool_status("failed", error_msg)
+                return result
+            except Exception as e:
+                error_msg = f"Download failed: {e}"
                 logger.error(f"[SandboxDownloadAttachmentTool] {error_msg}")
                 result = self._format_error(
                     error_message=error_msg,
                     file_path=save_path,
                     file_size=0,
-                    stderr=result_obj.stderr,
                 )
                 await self._emit_tool_status("failed", error_msg)
                 return result
 
-            # Verify file was created and get its size
+            await sandbox.files.write(save_path, file_bytes)
+
+            execution_time = time.time() - start_time
+            file_size = len(file_bytes)
+
             try:
                 file_info = await sandbox.files.get_info(save_path)
                 file_size = file_info.size
