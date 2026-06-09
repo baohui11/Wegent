@@ -54,11 +54,6 @@
     "discard_changes": "Discard Changes",
     "reset_to_default": "Reset to Default"
   },
-  "resourceGuide": {
-    "title": "Agent management moved to Resource Library",
-    "description": "Agents, models, executors, skills, and retrievers are now managed in Resource Library.",
-    "action": "Go to Resource Library"
-  },
   "navigation": {
     "team": "Agent",
     "models": "Models",
