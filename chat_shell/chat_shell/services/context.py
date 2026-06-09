@@ -707,7 +707,8 @@ class ChatContext:
     ) -> list:
         """Build the complete list of extra tools from all sources.
 
-        This includes builtin tools (LoadSkillTool, WebSearchTool, DataTableTool),
+        This includes builtin tools (LoadSkillTool, DataTableTool),
+        skill-gated web search tools, and MCP tools.
         KB tools, skill tools, and MCP tools.
 
         Args:
@@ -762,22 +763,17 @@ class ChatContext:
                 len(self._request.skill_names or []),
             )
 
-        # Add WebSearchTool if enabled
+        # Direct web search injection for explicit enable_web_search (correction, OpenAPI).
+        # Normal Chat WS path uses web-research skill gating via skill_factory.
         if self._request.enable_web_search:
-            from chat_shell.tools.builtin import WebSearchTool
+            from chat_shell.tools.web_research_skill import create_web_research_tools
 
-            default_max_results = getattr(settings, "WEB_SEARCH_DEFAULT_MAX_RESULTS", 5)
             search_engine = self._request.search_engine
-            extra_tools.append(
-                WebSearchTool(
-                    engine_name=search_engine,
-                    default_max_results=default_max_results,
-                )
-            )
+            extra_tools.extend(create_web_research_tools(search_engine=search_engine))
             logger.debug(
-                "[CHAT_CONTEXT] Added WebSearchTool: engine=%s, max_results=%d",
+                "[CHAT_CONTEXT] Added direct web search tools (enable_web_search=true): "
+                "engine=%s",
                 search_engine,
-                default_max_results,
             )
         # Add DataTableTool if table_contexts provided
         logger.debug(

@@ -5,7 +5,7 @@
 """Web search tool integrated with backend search service.
 
 In HTTP mode, search is proxied through the backend internal API
-(/api/internal/web-search/search), which supports Bocha and other engines.
+(/api/internal/web-search/search), which supports Tavily and other engines.
 Legacy GET-based engines can still fall back to direct HTTP calls.
 In package mode, it uses the backend's search service directly.
 """
@@ -20,13 +20,23 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+WEB_SEARCH_MAX_RESULTS = 10
+
 
 class WebSearchInput(BaseModel):
     """Input schema for web search tool."""
 
     query: str = Field(description="Search query")
     max_results: int | None = Field(
-        default=None, description="Maximum number of results"
+        default=None,
+        description="Maximum number of results (1-10)",
+    )
+    country: str | None = Field(
+        default=None,
+        description=(
+            "Country hint for regional results (ISO code like CN or Tavily name like china). "
+            "Default is china when omitted. Pass empty string for global/English-focused search."
+        ),
     )
 
 
@@ -40,7 +50,8 @@ class WebSearchTool(BaseTool):
     name: str = "web_search"
     display_name: str = "搜索网页"
     description: str = (
-        "Search the web for information. Returns a list of relevant web pages with titles, URLs, and snippets."
+        "Search the web for information. Returns relevant pages with titles, URLs, and snippets. "
+        'Omit country for China-focused results (maps CN/china); pass country="" for global search.'
     )
     args_schema: type[BaseModel] = WebSearchInput
 
@@ -55,6 +66,7 @@ class WebSearchTool(BaseTool):
         self,
         query: str,
         max_results: int | None = None,
+        country: str | None = None,
         run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Synchronous run - not implemented, use async version."""
@@ -64,6 +76,7 @@ class WebSearchTool(BaseTool):
         self,
         query: str,
         max_results: int | None = None,
+        country: str | None = None,
         run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Execute web search asynchronously.
@@ -79,21 +92,32 @@ class WebSearchTool(BaseTool):
         effective_max_results = (
             max_results if max_results is not None else self.default_max_results
         )
+        effective_max_results = min(
+            max(effective_max_results, 1), WEB_SEARCH_MAX_RESULTS
+        )
 
         try:
             # Try to use backend search service (package mode)
-            return await self._search_via_backend(query, effective_max_results)
+            return await self._search_via_backend(
+                query, effective_max_results, country=country
+            )
         except ImportError:
             # HTTP mode: proxy search through backend internal API
             backend_result = await self._search_via_backend_http(
-                query, effective_max_results
+                query, effective_max_results, country=country
             )
             if backend_result is not None:
                 return backend_result
             # Legacy fallback: direct GET to search engine APIs (SearXNG, etc.)
             return await self._search_via_http(query, effective_max_results)
 
-    async def _search_via_backend(self, query: str, max_results: int) -> str:
+    async def _search_via_backend(
+        self,
+        query: str,
+        max_results: int,
+        *,
+        country: str | None = None,
+    ) -> str:
         """Search using backend's search service (package mode).
 
         Args:
@@ -115,7 +139,11 @@ class WebSearchTool(BaseTool):
             )
 
         # Execute search using search_raw to get list of results
-        results = await search_service.search_raw(query=query, limit=max_results)
+        results = await search_service.search_raw(
+            query=query,
+            limit=max_results,
+            country=country,
+        )
 
         # Format results
         formatted_results = []
@@ -139,7 +167,11 @@ class WebSearchTool(BaseTool):
         )
 
     async def _search_via_backend_http(
-        self, query: str, max_results: int
+        self,
+        query: str,
+        max_results: int,
+        *,
+        country: str | None = None,
     ) -> str | None:
         """Search via backend internal API (HTTP mode).
 
@@ -156,20 +188,21 @@ class WebSearchTool(BaseTool):
             )
             return None
 
-        auth_token = (
-            getattr(settings, "REMOTE_STORAGE_TOKEN", "")
-            or getattr(settings, "INTERNAL_SERVICE_TOKEN", "")
+        auth_token = getattr(settings, "REMOTE_STORAGE_TOKEN", "") or getattr(
+            settings, "INTERNAL_SERVICE_TOKEN", ""
         )
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if auth_token:
             headers["Authorization"] = f"Bearer {auth_token}"
 
-        payload = {
+        payload: dict[str, Any] = {
             "query": query,
             "limit": max_results,
         }
         if self.engine_name:
             payload["engine_name"] = self.engine_name
+        if country is not None:
+            payload["country"] = country
 
         logger.info(
             "[WebSearchTool] Searching via backend proxy: engine=%s, query=%s",
@@ -195,11 +228,13 @@ class WebSearchTool(BaseTool):
                 )
                 return json.dumps(
                     {
-                        "error": response.json().get("detail", response.text)
-                        if response.headers.get("content-type", "").startswith(
-                            "application/json"
-                        )
-                        else f"Backend search failed with status {response.status_code}",
+                        "error": (
+                            response.json().get("detail", response.text)
+                            if response.headers.get("content-type", "").startswith(
+                                "application/json"
+                            )
+                            else f"Backend search failed with status {response.status_code}"
+                        ),
                         "query": query,
                     },
                     ensure_ascii=False,

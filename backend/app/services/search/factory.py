@@ -15,11 +15,14 @@ from app.core.config import settings
 from .base import SearchServiceBase
 from .bocha_search import DEFAULT_BOCHA_WEB_SEARCH_URL, BochaSearchService
 from .http_search import HttpSearchService
+from .tavily_extract import TavilyExtractService
+from .tavily_search import TavilySearchService
 
 logger = logging.getLogger(__name__)
 
 # Cache for search service instances and config
 _search_services: dict[str, SearchServiceBase] = {}
+_tavily_extract_service: TavilyExtractService | None = None
 _engines_config: dict[str, Any] | None = None
 
 
@@ -72,6 +75,33 @@ def _create_search_service(
             freshness=engine_config.get("freshness", "noLimit"),
             summary=engine_config.get("summary", True),
             timeout=engine_config.get("timeout", 15),
+        )
+
+    if engine_type == "tavily":
+        api_key = engine_config.get("api_key") or getattr(
+            settings, "TAVILY_API_KEY", ""
+        )
+        if not api_key:
+            logger.error(
+                "TAVILY_API_KEY is required for tavily search engine: %s",
+                engine_name,
+            )
+            return None
+
+        return TavilySearchService(
+            api_key=api_key,
+            auto_parameters=engine_config.get(
+                "auto_parameters", settings.TAVILY_AUTO_PARAMETERS
+            ),
+            include_favicon=engine_config.get(
+                "include_favicon", settings.TAVILY_INCLUDE_FAVICON
+            ),
+            safe_search=engine_config.get("safe_search", settings.TAVILY_SAFE_SEARCH),
+            include_usage=engine_config.get(
+                "include_usage", settings.TAVILY_INCLUDE_USAGE
+            ),
+            default_country=engine_config.get("country", settings.TAVILY_COUNTRY),
+            timeout=float(engine_config.get("timeout", 60)),
         )
 
     base_url = engine_config.get("base_url")
@@ -140,6 +170,20 @@ def get_search_service(engine_name: str | None = None) -> SearchServiceBase | No
     return service
 
 
+def get_default_engine_name() -> str | None:
+    """Return the configured default search engine name, if any."""
+    config = _get_engines_config()
+    if not config or "engines" not in config:
+        return None
+
+    engines = config["engines"]
+    default_name = config.get("default")
+    if default_name and default_name in engines:
+        return default_name
+
+    return next(iter(engines), None)
+
+
 def get_available_engines() -> list[dict[str, str]]:
     """Get list of available search engines."""
     config = _get_engines_config()
@@ -149,3 +193,47 @@ def get_available_engines() -> list[dict[str, str]]:
         {"name": k, "display_name": v.get("display_name", k)}
         for k, v in config["engines"].items()
     ]
+
+
+def _resolve_tavily_api_key() -> str:
+    """Resolve Tavily API key from engine config or settings."""
+    config = _get_engines_config()
+    if config and "engines" in config:
+        default_name = get_default_engine_name()
+        if default_name:
+            engine_config = config["engines"].get(default_name, {})
+            if engine_config.get("type", "").lower() == "tavily":
+                api_key = engine_config.get("api_key") or ""
+                if api_key:
+                    return api_key
+        for engine_config in config["engines"].values():
+            if engine_config.get("type", "").lower() == "tavily":
+                api_key = engine_config.get("api_key") or ""
+                if api_key:
+                    return api_key
+
+    return getattr(settings, "TAVILY_API_KEY", "")
+
+
+def get_tavily_extract_service() -> TavilyExtractService | None:
+    """Get Tavily extract service when web search is enabled and API key is set."""
+    global _tavily_extract_service
+
+    if not getattr(settings, "WEB_SEARCH_ENABLED", False):
+        return None
+
+    api_key = _resolve_tavily_api_key()
+    if not api_key:
+        logger.info("Tavily extract unavailable: TAVILY_API_KEY not configured")
+        return None
+
+    if _tavily_extract_service is not None:
+        return _tavily_extract_service
+
+    _tavily_extract_service = TavilyExtractService(
+        api_key=api_key,
+        include_favicon=getattr(settings, "TAVILY_INCLUDE_FAVICON", True),
+        include_usage=getattr(settings, "TAVILY_INCLUDE_USAGE", True),
+    )
+    logger.info("Initialized Tavily extract service")
+    return _tavily_extract_service

@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.services.auth.internal_service_token import verify_internal_service_token
-from app.services.search.factory import get_search_service
+from app.services.search.factory import get_search_service, get_tavily_extract_service
+from app.services.search.tavily_extract import TAVILY_EXTRACT_MAX_URLS
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,14 @@ class WebSearchRequest(BaseModel):
     engine_name: Optional[str] = Field(
         None, description="Search engine name (uses default if omitted)"
     )
-    limit: int = Field(default=10, ge=1, le=50, description="Maximum results")
+    limit: int = Field(default=10, ge=1, le=10, description="Maximum results")
+    country: Optional[str] = Field(
+        default=None,
+        description=(
+            "Country hint for regional results (ISO code like CN or Tavily name like china). "
+            "Omit to use server default. Pass empty string for global search."
+        ),
+    )
 
 
 class WebSearchResponse(BaseModel):
@@ -60,10 +68,15 @@ async def search_web(request: WebSearchRequest) -> WebSearchResponse:
         request.query[:50],
     )
 
-    raw_results = await search_service.search_raw(
-        query=request.query,
-        limit=request.limit,
-    )
+    try:
+        raw_results = await search_service.search_raw(
+            query=request.query,
+            limit=request.limit,
+            country=request.country,
+        )
+    except Exception as exc:
+        logger.exception("Internal web search failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     formatted_results = [
         {
@@ -80,3 +93,42 @@ async def search_web(request: WebSearchRequest) -> WebSearchResponse:
         results=formatted_results,
         count=len(formatted_results),
     )
+
+
+class WebExtractRequest(BaseModel):
+    """Request body for Tavily web page extraction."""
+
+    urls: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=TAVILY_EXTRACT_MAX_URLS,
+        description="URLs to extract content from",
+    )
+
+
+@router.post("/extract")
+async def extract_web(request: WebExtractRequest) -> dict[str, Any]:
+    """Extract web page content using Tavily Extract API."""
+    if not settings.WEB_SEARCH_ENABLED:
+        raise HTTPException(status_code=400, detail="Web search is disabled")
+
+    extract_service = get_tavily_extract_service()
+    if not extract_service:
+        raise HTTPException(
+            status_code=400,
+            detail="Tavily extract service not configured",
+        )
+
+    logger.info(
+        "Internal web extract: url_count=%d first_url=%s",
+        len(request.urls),
+        request.urls[0][:80] if request.urls else "",
+    )
+
+    try:
+        return await extract_service.extract_urls(request.urls)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Internal web extract failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

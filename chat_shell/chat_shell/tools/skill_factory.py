@@ -395,6 +395,18 @@ async def prepare_skill_tools(
                     skill_name,
                 )
 
+    from chat_shell.tools.web_research_skill import (
+        register_web_research_tools_for_skills,
+    )
+
+    register_web_research_tools_for_skills(
+        skill_configs,
+        load_skill_tool=load_skill_tool,
+        preload_skills=preload_skills,
+        search_engine=getattr(task_data, "search_engine", None) if task_data else None,
+        immediate_tools=tools,
+    )
+
     # Load MCP tools from all skills if any MCP servers are configured
     if skill_mcp_configs:
         mcp_tools_with_server, skill_mcp_clients = await _load_skill_mcp_tools(

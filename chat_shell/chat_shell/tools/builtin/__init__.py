@@ -11,10 +11,12 @@ from .knowledge_base import KnowledgeBaseTool
 from .knowledge_listing import KbHeadTool, KbLsTool, KBToolCallCounter
 from .load_skill import LoadSkillTool
 from .silent_exit import SilentExitException
+from .web_extract import WebExtractTool
 from .web_search import WebSearchTool
 
 __all__ = [
     "WebSearchTool",
+    "WebExtractTool",
     "KnowledgeBaseTool",
     "KbLsTool",
     "KbHeadTool",

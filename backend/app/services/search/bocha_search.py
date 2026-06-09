@@ -41,7 +41,9 @@ class BochaSearchService(SearchServiceBase):
         self.summary = summary
         self.timeout = timeout
 
-    async def search_raw(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search_raw(
+        self, query: str, limit: int = 5, *, country: str | None = None
+    ) -> list[dict[str, Any]]:
         """Perform a Bocha web search and return normalized results."""
         if not query:
             return []

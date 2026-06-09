@@ -48,13 +48,21 @@ class SearchServiceBase(ABC):
             return f"Search failed: {str(e)}"
 
     @abstractmethod
-    async def search_raw(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search_raw(
+        self,
+        query: str,
+        limit: int = 5,
+        *,
+        country: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Perform a web search and return raw results.
 
         Args:
             query: The search query string
             limit: Maximum number of results to return (default: 5)
+            country: Optional ISO country code override. None uses engine default;
+                empty string disables regional filtering.
 
         Returns:
             list of search result dictionaries with keys like:

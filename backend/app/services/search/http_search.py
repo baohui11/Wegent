@@ -96,7 +96,9 @@ class HttpSearchService(SearchServiceBase):
 
         return current if isinstance(current, list) else []
 
-    async def search_raw(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search_raw(
+        self, query: str, limit: int = 5, *, country: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Perform a web search and return raw results.
 

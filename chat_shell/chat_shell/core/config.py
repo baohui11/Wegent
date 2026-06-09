@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     # Web search configuration
     WEB_SEARCH_ENABLED: bool = False
     WEB_SEARCH_ENGINES: str = "{}"
-    WEB_SEARCH_DEFAULT_MAX_RESULTS: int = 50
+    WEB_SEARCH_DEFAULT_MAX_RESULTS: int = 10
 
     # Workspace configuration
     WORKSPACE_ROOT: str = "/workspace"

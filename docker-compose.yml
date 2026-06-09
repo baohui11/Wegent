@@ -189,8 +189,14 @@ services:
       # Web search (Bocha / HTTP adapters) — required for /api/chat/search-engines and search tools
       WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-false}
       WEB_SEARCH_ENGINES: ${WEB_SEARCH_ENGINES:-{}}
-      WEB_SEARCH_DEFAULT_MAX_RESULTS: ${WEB_SEARCH_DEFAULT_MAX_RESULTS:-50}
+      WEB_SEARCH_DEFAULT_MAX_RESULTS: ${WEB_SEARCH_DEFAULT_MAX_RESULTS:-10}
       BOCHA_API_KEY: ${BOCHA_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      TAVILY_AUTO_PARAMETERS: ${TAVILY_AUTO_PARAMETERS:-true}
+      TAVILY_INCLUDE_FAVICON: ${TAVILY_INCLUDE_FAVICON:-true}
+      TAVILY_SAFE_SEARCH: ${TAVILY_SAFE_SEARCH:-false}
+      TAVILY_INCLUDE_USAGE: ${TAVILY_INCLUDE_USAGE:-true}
+      TAVILY_COUNTRY: ${TAVILY_COUNTRY:-CN}
       # OpenTelemetry Configuration (uncomment to enable)
       # OTEL_ENABLED: "true"
       # OTEL_SERVICE_NAME: "wegent-backend"
@@ -275,7 +281,7 @@ services:
       # Web search (HTTP mode: chat_shell calls search APIs directly)
       - CHAT_SHELL_WEB_SEARCH_ENABLED=${WEB_SEARCH_ENABLED:-false}
       - CHAT_SHELL_WEB_SEARCH_ENGINES=${WEB_SEARCH_ENGINES:-{}}
-      - CHAT_SHELL_WEB_SEARCH_DEFAULT_MAX_RESULTS=${WEB_SEARCH_DEFAULT_MAX_RESULTS:-50}
+      - CHAT_SHELL_WEB_SEARCH_DEFAULT_MAX_RESULTS=${WEB_SEARCH_DEFAULT_MAX_RESULTS:-10}
       # - CHAT_SHELL_REMOTE_STORAGE_TOKEN=${INTERNAL_SERVICE_TOKEN:-chat-shell-token}
       # OpenTelemetry Configuration (uncomment to enable)
       # - OTEL_ENABLED=true
