@@ -1,15 +1,12 @@
 import { useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import { getRuntimeConfig } from '@/config/runtime'
 import {
   POST_LOGIN_REDIRECT_KEY,
   sanitizeRedirectPath,
 } from '@/features/auth/redirect'
 import { useAuth } from '@/features/auth/useAuth'
-
-function navigateTo(path: string) {
-  window.history.pushState({}, '', path)
-  window.dispatchEvent(new PopStateEvent('popstate'))
-}
+import { useTranslation } from '@/hooks/useTranslation'
+import { navigateTo } from '@/lib/navigation'
 
 export function OidcCallbackPage() {
   const { t } = useTranslation('common')
@@ -51,11 +48,12 @@ export function OidcCallbackPage() {
       return
     }
 
-    window.location.href = `/api/auth/oidc/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
+    const { apiBaseUrl } = getRuntimeConfig()
+    window.location.href = `${apiBaseUrl}/auth/oidc/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
   }, [loginWithOidcToken])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-base">
+    <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="rounded-2xl border border-border bg-surface px-8 py-8 text-sm font-medium text-text-secondary shadow-[0_16px_44px_rgba(0,0,0,0.08)]">
         {t('workbench.oidc_processing', '正在处理 OpenID Connect 登录...')}
       </div>

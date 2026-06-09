@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from fastapi import HTTPException
 
+from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models.kind import Kind
 from app.models.subtask import Subtask
@@ -36,7 +37,70 @@ if TYPE_CHECKING:
     from shared.models.execution import ExecutionRequest
 
 logger = logging.getLogger(__name__)
+
+
+def apply_chat_web_search_defaults(
+    request: "ExecutionRequest",
+    *,
+    auto_enable: bool = True,
+    payload_search_engine: Optional[str] = None,
+) -> None:
+    """Resolve default search engine for Chat Shell when web search is configured.
+
+    Normal Chat tasks expose ``web_search`` / ``web_extract`` only when the
+    web-research skill is bound and loaded (skill-gated in chat_shell).
+
+    Callers that need unconditional tools (correction, OpenAPI) must set
+    ``enable_web_search=True`` explicitly on the execution request.
+    """
+    from app.services.search.factory import get_default_engine_name, get_search_service
+
+    shell_type = "Chat"
+    if request.bot:
+        shell_type = request.bot[0].get("shell_type", "Chat")
+
+    if shell_type != "Chat":
+        return
+
+    if not settings.WEB_SEARCH_ENABLED or not get_search_service():
+        return
+
+    if not auto_enable and not request.enable_web_search:
+        return
+
+    if payload_search_engine:
+        request.search_engine = payload_search_engine
+    elif not request.search_engine:
+        request.search_engine = get_default_engine_name()
+
+
 SELECTED_KB_PRELOAD_SKILL = "wegent-knowledge"
+
+
+def _reasoning_from_model_options(payload: Any) -> Optional[Dict[str, Any]]:
+    """Convert UI model options into execution reasoning config."""
+    if payload is None:
+        return None
+    model_options = getattr(payload, "model_options", None)
+    if not isinstance(model_options, dict):
+        return None
+    reasoning = model_options.get("reasoning")
+    summary = model_options.get("summary")
+    if not reasoning and not summary:
+        return None
+
+    result: Dict[str, Any] = {}
+    if isinstance(reasoning, dict):
+        effort = reasoning.get("effort") or reasoning.get("reasoning")
+        summary = summary or reasoning.get("summary")
+    else:
+        effort = reasoning
+
+    if effort:
+        result["effort"] = str(effort)
+    if summary:
+        result["summary"] = str(summary)
+    return result or None
 
 
 def _build_executor_attachment_payload(context: Any) -> dict[str, Any]:
@@ -182,6 +246,7 @@ async def build_execution_request(
     enable_tools: bool = True,
     enable_deep_thinking: bool = True,
     enable_web_search: bool = False,
+    auto_enable_web_search: bool = True,
     enable_clarification: bool = False,
     preload_skills: Optional[list] = None,
     previous_bot_id: Optional[int] = None,
@@ -207,6 +272,7 @@ async def build_execution_request(
         enable_tools: Whether to enable tool usage (default: True)
         enable_deep_thinking: Whether to enable deep thinking mode (default: True)
         enable_web_search: Whether to enable web search (default: False)
+        auto_enable_web_search: Auto-enable for Chat Shell when WEB_SEARCH_ENABLED
         enable_clarification: Whether to enable clarification mode (default: False)
         preload_skills: Optional list of skills to preload
         knowledge_base_names: Optional list of KB names in {'namespace': str, 'name': str} format
@@ -230,12 +296,14 @@ async def build_execution_request(
         # Build unified execution request
         builder = TaskRequestBuilder(db)
 
+        payload_search_engine: Optional[str] = None
+
         # Extract feature flags from payload if provided
         if payload is not None:
-            enable_web_search = getattr(payload, "enable_web_search", enable_web_search)
             enable_clarification = getattr(
                 payload, "enable_clarification", enable_clarification
             )
+            payload_search_engine = getattr(payload, "search_engine", None)
             additional_skills = getattr(payload, "additional_skills", None)
             if additional_skills:
                 preload_skills = list(preload_skills or []) + list(additional_skills)
@@ -274,10 +342,20 @@ async def build_execution_request(
             previous_bot_id=previous_bot_id,
         )
 
-        # Merge reasoning_config from API request into model_config
-        # Priority: API request reasoning_config > model's think_config
+        apply_chat_web_search_defaults(
+            request,
+            auto_enable=auto_enable_web_search,
+            payload_search_engine=payload_search_engine,
+        )
+
+        # Merge reasoning config from API/model selection into model_config.
+        # Priority: dynamic thinking toggle > explicit API reasoning_config >
+        # UI model_options > model think_config.
         think_config = request.model_config.get("think_config")
         dynamic_thinking = bool(request.model_config.get("dynamic_thinking", False))
+        selected_reasoning_config = reasoning_config or _reasoning_from_model_options(
+            payload
+        )
 
         if dynamic_thinking and payload is not None and think_config:
             enable_reasoning = getattr(payload, "enable_reasoning", True)
@@ -293,23 +371,34 @@ async def build_execution_request(
                 "[build_execution_request] Applied dynamic thinking toggle: enabled=%s",
                 enable_reasoning,
             )
-        elif reasoning_config:
-            request.model_config["reasoning"] = reasoning_config
+        elif selected_reasoning_config:
+            request.model_config["reasoning"] = selected_reasoning_config
             logger.info(
-                "[build_execution_request] Applied reasoning config from API request: %s",
-                reasoning_config,
+                "[build_execution_request] Applied selected reasoning config: %s",
+                selected_reasoning_config,
             )
         elif think_config:
-            # If no API reasoning_config but model has think_config, use it
             request.model_config["reasoning"] = think_config
             logger.info(
                 "[build_execution_request] Applied reasoning config from model think_config: %s",
                 think_config,
             )
 
-        # Store reasoning_config in ExecutionRequest for downstream access
-        if request.reasoning_config is None:
-            request.reasoning_config = request.model_config.get("reasoning")
+        request.reasoning_config = (
+            request.reasoning_config
+            or selected_reasoning_config
+            or request.model_config.get("reasoning")
+        )
+
+        if payload is not None:
+            interactive_form_answer = getattr(payload, "interactive_form_answer", None)
+            if interactive_form_answer:
+                if hasattr(interactive_form_answer, "model_dump"):
+                    request.interactive_form_answer = (
+                        interactive_form_answer.model_dump(mode="json")
+                    )
+                elif isinstance(interactive_form_answer, dict):
+                    request.interactive_form_answer = dict(interactive_form_answer)
 
         # Merge user-selected generate_params into videoConfig for video models
         # Validates params against model capabilities to reject invalid values

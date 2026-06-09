@@ -91,6 +91,59 @@ def test_build_response_output_includes_reasoning_content():
     assert output[0].status == "completed"
 
 
+def test_build_response_output_preserves_thinking_block_order():
+    subtask = _assistant_subtask(
+        subtask_id=109,
+        result={
+            "value": "Final answer",
+            "reasoning_content": "Before tool.After tool.",
+            "blocks": [
+                {
+                    "id": "thinking-1",
+                    "type": "thinking",
+                    "content": "Before tool.",
+                    "status": "done",
+                },
+                {
+                    "id": "shell_1",
+                    "type": "tool",
+                    "tool_use_id": "shell_1",
+                    "tool_name": "exec",
+                    "tool_input": {"command": "cat /etc/os-release"},
+                    "status": "done",
+                },
+                {
+                    "id": "thinking-2",
+                    "type": "thinking",
+                    "content": "After tool.",
+                    "status": "done",
+                },
+                {
+                    "id": "text-1",
+                    "type": "text",
+                    "content": "Final answer",
+                    "status": "done",
+                },
+            ],
+        },
+    )
+
+    output = build_response_output([subtask])
+
+    assert [item.type for item in output] == [
+        "message",
+        "shell_call",
+        "message",
+        "message",
+    ]
+    assert output[0].content[0].type == "reasoning"
+    assert output[0].content[0].text == "Before tool."
+    assert output[2].content[0].type == "reasoning"
+    assert output[2].content[0].text == "After tool."
+    assert output[3].content[0].type == "output_text"
+    assert output[3].content[0].text == "Final answer"
+
+
 def test_build_response_output_matches_tool_block_by_id():
     subtask = _assistant_subtask(
         subtask_id=103,
@@ -312,8 +365,8 @@ def test_build_response_output_restores_mcp_call_output_from_blocks():
 
     assert len(output) == 1
     assert output[0].type == "mcp_call"
-    assert output[0].output["pending_user_input"] is True
-    assert output[0].output["pending_user_input_payload"]["ask_id"] == "ask_108"
+    assert "pending_user_input" not in output[0].output
+    assert "pending_user_input_payload" not in output[0].output
 
 
 def test_extract_pending_user_input_state_from_tool_blocks():
@@ -344,11 +397,8 @@ def test_extract_pending_user_input_state_from_tool_blocks():
 
     pending_user_input, payload = extract_pending_user_input_state([subtask])
 
-    assert pending_user_input is True
-    assert payload == {
-        "type": "interactive_form_question",
-        "ask_id": "ask_109",
-    }
+    assert pending_user_input is False
+    assert payload is None
 
 
 def test_extract_pending_user_input_state_rebuilds_minimal_payload_from_fallback():
@@ -379,9 +429,5 @@ def test_extract_pending_user_input_state_rebuilds_minimal_payload_from_fallback
 
     pending_user_input, payload = extract_pending_user_input_state([subtask])
 
-    assert pending_user_input is True
-    assert payload == {
-        "ask_id": "ask_110",
-        "questions": [{"id": "exp_id", "question": "Enter exp id"}],
-        "type": "interactive_form_question",
-    }
+    assert pending_user_input is False
+    assert payload is None

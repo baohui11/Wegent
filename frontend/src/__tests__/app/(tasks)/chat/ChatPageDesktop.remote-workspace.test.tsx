@@ -60,6 +60,10 @@ jest.mock('@/features/tasks/components/sidebar', () => ({
   SearchDialog: () => <div>search-dialog</div>,
 }))
 
+jest.mock('@/features/layout/GithubStarButton', () => ({
+  GithubStarButton: () => <div>github-star</div>,
+}))
+
 jest.mock('@/features/common/UserContext', () => ({
   useUser: () => ({ user: null }),
 }))
@@ -80,25 +84,22 @@ jest.mock('@/contexts/DeviceContext', () => ({
   }),
 }))
 
-jest.mock('@/features/tasks/contexts/taskContext', () => ({
-  useTaskContext: () => ({
+jest.mock('@/features/tasks/session/TaskSession', () => ({
+  useTaskSession: () => ({
     refreshTasks: jest.fn(),
+    selectedTask: { id: 42 },
     selectedTaskDetail: {
       id: 42,
       title: 'Task 42',
+      status: 'RUNNING',
       team: {
         agent_type: 'chat',
         bots: [],
       },
     },
-    setSelectedTask: jest.fn(),
+    taskState: null,
+    selectTask: jest.fn(),
     refreshSelectedTaskDetail: jest.fn(),
-  }),
-}))
-
-jest.mock('@/features/tasks/contexts/chatStreamContext', () => ({
-  useChatStreamContext: () => ({
-    clearAllStreams: jest.fn(),
   }),
 }))
 
@@ -158,5 +159,7 @@ describe('ChatPageDesktop remote workspace integration', () => {
     render(<ChatPageDesktop />)
 
     expect(screen.getByTestId('remote-workspace-entry')).toHaveTextContent('42:false')
+    expect(screen.queryByText('search-dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('create-group-chat-dialog')).not.toBeInTheDocument()
   })
 })

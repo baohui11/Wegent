@@ -15,8 +15,7 @@ import {
   SearchDialog,
 } from '@/features/tasks/components/sidebar'
 import { Team } from '@/types/api'
-import { useTaskContext } from '@/features/tasks/contexts/taskContext'
-import { useChatStreamContext } from '@/features/tasks/contexts/chatStreamContext'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { paths } from '@/config/paths'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
 import { ChatArea } from '@/features/tasks/components/chat'
@@ -68,8 +67,8 @@ export function GeneratePageDesktop() {
   }, [teams, generateMode])
 
   // Task context for refreshing task list
-  const { refreshTasks, selectedTaskDetail, setSelectedTask, refreshSelectedTaskDetail } =
-    useTaskContext()
+  const { refreshTasks, selectedTaskDetail, selectTask, refreshSelectedTaskDetail } =
+    useTaskSession()
 
   // Sync generate mode from task detail when entering from history (taskId in URL)
   useEffect(() => {
@@ -84,18 +83,15 @@ export function GeneratePageDesktop() {
 
   // Handle task deletion
   const handleTaskDeleted = () => {
-    setSelectedTask(null)
+    selectTask(null)
     refreshTasks()
   }
 
   // Handle members changed (when converting to group chat or adding/removing members)
   const handleMembersChanged = () => {
     refreshTasks()
-    refreshSelectedTaskDetail(false)
+    void refreshSelectedTaskDetail()
   }
-
-  // Chat stream context
-  const { clearAllStreams } = useChatStreamContext()
 
   // Router for navigation
   const router = useRouter()
@@ -152,8 +148,7 @@ export function GeneratePageDesktop() {
   const handleNewTask = () => {
     // IMPORTANT: Clear selected task FIRST to ensure UI state is reset immediately
     // This prevents the UI from being stuck showing the previous task's messages
-    setSelectedTask(null)
-    clearAllStreams()
+    selectTask(null)
     router.replace(paths.generate.getHref())
   }
 
@@ -189,8 +184,7 @@ export function GeneratePageDesktop() {
           onMembersChanged={handleMembersChanged}
           isSidebarCollapsed={isCollapsed}
           hideGroupChatOptions={true}
-        >
-        </TopNavigation>
+        ></TopNavigation>
         {/* Chat area with current generation mode */}
         <ChatArea
           teams={filteredTeams}

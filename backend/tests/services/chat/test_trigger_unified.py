@@ -65,6 +65,62 @@ class TestBuildExecutionRequestUserSubtaskId:
                     mock_builder.build.assert_called_once()
                     mock_process_contexts.assert_awaited_once()
 
+    async def test_propagates_interactive_form_answer_to_execution_request(self):
+        """Deferred form answers must reach executors as structured data."""
+        from app.services.chat.trigger import unified as trigger_unified
+
+        mock_db = MagicMock()
+
+        request_from_builder = ExecutionRequest(task_id=1, subtask_id=2)
+        mock_builder = MagicMock()
+        mock_builder.build.return_value = request_from_builder
+        payload = SimpleNamespace(
+            enable_web_search=False,
+            enable_clarification=False,
+            additional_skills=None,
+            interactive_form_answer=SimpleNamespace(
+                model_dump=lambda mode="json": {
+                    "type": "interactive_form_question",
+                    "tool_use_id": "tool-1",
+                    "answers": {"language": "python"},
+                    "message": "selected python",
+                }
+            ),
+            generate_params=None,
+        )
+
+        with patch.object(trigger_unified, "SessionLocal", return_value=mock_db):
+            with patch(
+                "app.services.execution.TaskRequestBuilder", return_value=mock_builder
+            ):
+                task = MagicMock()
+                task.id = 1
+                task.json = {}
+
+                assistant_subtask = MagicMock()
+                assistant_subtask.id = 2
+
+                team = MagicMock()
+                user = MagicMock()
+                user.id = 7
+
+                result = await trigger_unified.build_execution_request(
+                    task=task,
+                    assistant_subtask=assistant_subtask,
+                    team=team,
+                    user=user,
+                    message="hello",
+                    payload=payload,
+                    user_subtask_id=None,
+                )
+
+                assert result.interactive_form_answer == {
+                    "type": "interactive_form_question",
+                    "tool_use_id": "tool-1",
+                    "answers": {"language": "python"},
+                    "message": "selected python",
+                }
+
     async def test_device_execution_keeps_sandbox_path_in_context_processing(self):
         """Device-routed tasks should keep sandbox path placeholders for executor rewrite."""
         from app.services.chat.trigger import unified as trigger_unified
@@ -512,3 +568,78 @@ class TestProcessContextsAttachments:
 
         assert result.knowledge_base_ids == [33]
         assert result.is_user_selected_kb is True
+
+
+@pytest.mark.unit
+class TestApplyChatWebSearchDefaults:
+    def test_sets_search_engine_for_chat_shell_when_configured(self, monkeypatch):
+        from app.services.chat.trigger import unified as trigger_unified
+
+        monkeypatch.setattr(
+            trigger_unified.settings,
+            "WEB_SEARCH_ENABLED",
+            True,
+        )
+
+        with patch(
+            "app.services.search.factory.get_search_service",
+            return_value=object(),
+        ):
+            with patch(
+                "app.services.search.factory.get_default_engine_name",
+                return_value="tavily",
+            ):
+                request = ExecutionRequest(
+                    task_id=1,
+                    subtask_id=2,
+                    bot=[{"shell_type": "Chat"}],
+                )
+                trigger_unified.apply_chat_web_search_defaults(request)
+
+        assert request.enable_web_search is False
+        assert request.search_engine == "tavily"
+
+    def test_skips_non_chat_shell(self, monkeypatch):
+        from app.services.chat.trigger import unified as trigger_unified
+
+        monkeypatch.setattr(
+            trigger_unified.settings,
+            "WEB_SEARCH_ENABLED",
+            True,
+        )
+
+        request = ExecutionRequest(
+            task_id=1,
+            subtask_id=2,
+            bot=[{"shell_type": "ClaudeCode"}],
+        )
+        trigger_unified.apply_chat_web_search_defaults(request)
+
+        assert request.enable_web_search is False
+        assert request.search_engine is None
+
+    def test_respects_auto_enable_false(self, monkeypatch):
+        from app.services.chat.trigger import unified as trigger_unified
+
+        monkeypatch.setattr(
+            trigger_unified.settings,
+            "WEB_SEARCH_ENABLED",
+            True,
+        )
+
+        with patch(
+            "app.services.search.factory.get_search_service",
+            return_value=object(),
+        ):
+            request = ExecutionRequest(
+                task_id=1,
+                subtask_id=2,
+                enable_web_search=False,
+                bot=[{"shell_type": "Chat"}],
+            )
+            trigger_unified.apply_chat_web_search_defaults(
+                request,
+                auto_enable=False,
+            )
+
+        assert request.enable_web_search is False

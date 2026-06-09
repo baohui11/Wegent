@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -20,13 +21,16 @@ from app.schemas.admin import (
     QuickAccessTeam,
     WelcomeConfigResponse,
 )
+from app.schemas.quick_launch import (
+    QuickLaunchFavoriteAgent,
+    QuickLaunchFunctionConfig,
+    QuickLaunchFunctionResponse,
+    QuickLaunchResponse,
+    normalize_quick_phrases,
+)
 from app.schemas.subscription import NotificationChannelInfo
 from app.schemas.user import UserCreate, UserInDB, UserUpdate
 from app.services.kind import kind_service
-from app.services.mcp_provider_registry import (
-    get_mcp_provider,
-    get_mcp_provider_service,
-)
 from app.services.subscription.notification_service import (
     subscription_notification_service,
 )
@@ -34,6 +38,7 @@ from app.services.user import user_service
 from app.services.user_mcp_service import user_mcp_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ==================== Feature Flags ====================
@@ -162,8 +167,10 @@ async def list_mcp_provider_services(
     current_user: User = Depends(security.get_current_user),
 ):
     """List MCP provider services merged with the current user's configuration."""
-    provider = get_mcp_provider(provider_id)
-    if not provider:
+    if not user_mcp_service.has_provider_services(
+        current_user.preferences,
+        provider_id,
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Unsupported MCP provider: {provider_id}",
@@ -187,7 +194,11 @@ async def get_mcp_provider_service_config(
     current_user: User = Depends(security.get_current_user),
 ):
     """Get the current user's MCP provider service configuration."""
-    service = get_mcp_provider_service(provider_id, service_id)
+    service = user_mcp_service.get_provider_service_definition(
+        current_user.preferences,
+        provider_id,
+        service_id,
+    )
     if not service:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -214,7 +225,11 @@ async def update_mcp_provider_service_config(
     current_user: User = Depends(security.get_current_user),
 ):
     """Update the current user's MCP provider service configuration."""
-    service = get_mcp_provider_service(provider_id, service_id)
+    service = user_mcp_service.get_provider_service_definition(
+        current_user.preferences,
+        provider_id,
+        service_id,
+    )
     if not service:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -317,6 +332,95 @@ def create_user(
 
 
 QUICK_ACCESS_CONFIG_KEY = "quick_access_recommended"
+QUICK_LAUNCH_FUNCTIONS_CONFIG_KEY = "quick_launch_functions"
+
+
+def _get_system_config_value(db: Session, key: str) -> tuple[int, dict]:
+    config = db.query(SystemConfig).filter(SystemConfig.config_key == key).first()
+    if not config:
+        return 0, {}
+    return config.version, config.config_value or {}
+
+
+def _get_user_quick_access_team_ids(current_user: User) -> list[int]:
+    preferences = {}
+    if current_user.preferences:
+        try:
+            preferences = json.loads(current_user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            preferences = {}
+
+    quick_access_config = preferences.get("quick_access", {})
+    return quick_access_config.get("teams", [])
+
+
+def _build_favorite_agent(team_id: int) -> Optional[QuickLaunchFavoriteAgent]:
+    team_data = kind_service.get_team_by_id(team_id)
+    if not team_data:
+        return None
+
+    metadata = team_data.get("metadata", {})
+    spec = team_data.get("spec", {})
+    title = metadata.get("displayName") or metadata.get("name", f"Team {team_id}")
+
+    return QuickLaunchFavoriteAgent(
+        id=team_data.get("id", team_id),
+        team_id=team_data.get("id", team_id),
+        name=metadata.get("name", f"team-{team_id}"),
+        title=title,
+        description=spec.get("description"),
+        icon=spec.get("icon"),
+        recommended_mode=spec.get("recommended_mode", "both"),
+        agent_type=team_data.get("agent_type"),
+        quick_phrases=normalize_quick_phrases(spec.get("quick_phrases")),
+    )
+
+
+def _build_system_function(
+    config: QuickLaunchFunctionConfig,
+) -> Optional[QuickLaunchFunctionResponse]:
+    if not config.enabled:
+        return None
+
+    team_data = kind_service.get_team_by_id(config.team_id)
+    if not team_data:
+        return None
+
+    metadata = team_data.get("metadata", {})
+    return QuickLaunchFunctionResponse(
+        **config.model_dump(),
+        name=metadata.get("name", f"team-{config.team_id}"),
+    )
+
+
+def _load_quick_launch_function_configs(
+    raw_functions: object,
+) -> list[QuickLaunchFunctionConfig]:
+    if not isinstance(raw_functions, list):
+        logger.warning(
+            "Skipping quick launch functions config because it is not a list"
+        )
+        return []
+
+    function_configs: list[QuickLaunchFunctionConfig] = []
+    for index, item in enumerate(raw_functions):
+        if not isinstance(item, dict):
+            logger.warning(
+                "Skipping invalid quick launch function config at index %s: expected object",
+                index,
+            )
+            continue
+
+        try:
+            function_configs.append(QuickLaunchFunctionConfig(**item))
+        except ValidationError as exc:
+            logger.warning(
+                "Skipping invalid quick launch function config at index %s: %s",
+                index,
+                exc,
+            )
+
+    return function_configs
 
 
 @router.get("/quick-access", response_model=QuickAccessResponse)
@@ -404,6 +508,41 @@ async def get_user_quick_access(
         user_version=user_version,
         show_system_recommended=show_system_recommended,
         teams=result_teams,
+    )
+
+
+@router.get("/quick-launch", response_model=QuickLaunchResponse)
+async def get_user_quick_launch(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(security.get_current_user),
+):
+    """
+    Get homepage launchers split into system functions and user favorite agents.
+    """
+    _, function_config = _get_system_config_value(db, QUICK_LAUNCH_FUNCTIONS_CONFIG_KEY)
+    raw_functions = function_config.get("functions", [])
+    function_configs = _load_quick_launch_function_configs(raw_functions)
+    system_functions = [
+        function
+        for function in (
+            _build_system_function(config)
+            for config in sorted(function_configs, key=lambda item: item.order)
+        )
+        if function is not None
+    ]
+
+    favorite_agents = [
+        agent
+        for agent in (
+            _build_favorite_agent(team_id)
+            for team_id in _get_user_quick_access_team_ids(current_user)
+        )
+        if agent is not None
+    ]
+
+    return QuickLaunchResponse(
+        system_functions=system_functions,
+        favorite_agents=favorite_agents,
     )
 
 
@@ -569,6 +708,7 @@ class DefaultTeamConfig(BaseModel):
 class DefaultTeamsResponse(BaseModel):
     """Response model for default teams configuration"""
 
+    wework: Optional[DefaultTeamConfig] = None
     chat: Optional[DefaultTeamConfig] = None
     code: Optional[DefaultTeamConfig] = None
     knowledge: Optional[DefaultTeamConfig] = None
@@ -601,6 +741,7 @@ async def get_default_teams(
     from app.core.config import settings
 
     return DefaultTeamsResponse(
+        wework=parse_default_team_config(settings.DEFAULT_TEAM_WEWORK),
         chat=parse_default_team_config(settings.DEFAULT_TEAM_CHAT),
         code=parse_default_team_config(settings.DEFAULT_TEAM_CODE),
         knowledge=parse_default_team_config(settings.DEFAULT_TEAM_KNOWLEDGE),

@@ -5,6 +5,7 @@
 'use client'
 
 import React, { useEffect, useState, Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -13,12 +14,16 @@ import { getToken, userApis } from '@/apis/user'
 import { LogIn } from 'lucide-react'
 import { useTheme } from '@/features/theme/ThemeProvider'
 import TopNavigation from '@/features/layout/TopNavigation'
-import { MessageBubble, type Message } from '@/features/tasks/components/message'
+import type { Message } from '@/features/tasks/components/message'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { User, SubtaskContextBrief } from '@/types/api'
 import { InAppBrowserGuard } from '@/components/InAppBrowserGuard'
 import { detectInAppBrowser } from '@/utils/browserDetection'
 import '@/features/common/scrollbar.css'
+
+const MessageBubble = dynamic(() => import('@/features/tasks/components/message/MessageBubble'), {
+  ssr: false,
+})
 
 /**
  * Public shared task page - no authentication required
@@ -204,8 +209,7 @@ function SharedTaskContent() {
   if (isLoading) {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation activePage="chat" variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation activePage="chat" variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
@@ -236,8 +240,7 @@ function SharedTaskContent() {
 
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation activePage="chat" variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation activePage="chat" variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
             {/* Error Icon */}

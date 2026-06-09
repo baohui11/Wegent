@@ -5,16 +5,15 @@
 'use client'
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { useTaskContext } from '../../contexts/taskContext'
-import type { TaskDetail, Team, GitRepoInfo, GitBranch } from '@/types/api'
-import {
-  Share2,
-  FileText,
-  ChevronDown,
-  Download,
-  Users,
-  MoreHorizontal,
-} from 'lucide-react'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
+import type {
+  TaskDetail,
+  Team,
+  GitRepoInfo,
+  GitBranch,
+  InteractiveFormAnswerPayload,
+} from '@/types/api'
+import { Share2, FileText, ChevronDown, Download, Users, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -43,8 +42,7 @@ import {
   ForwardMessageDialog,
   type ForwardableMessage,
 } from '@/features/inbox/components/ForwardMessageDialog'
-import { useUnifiedMessages, type DisplayMessage } from '../../hooks/useUnifiedMessages'
-import { useChatStreamContext } from '../../contexts/chatStreamContext'
+import { useMessagePresenter, type DisplayMessage } from '../../presentation/useMessagePresenter'
 import { useTraceAction } from '@/hooks/useTraceAction'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import {
@@ -61,6 +59,12 @@ import { useSocket } from '@/contexts/SocketContext'
 import type { CorrectionStage, CorrectionField } from '@/types/socket'
 import type { Model } from '../../hooks/useModelSelection'
 import type { UnifiedModel } from '@/apis/models'
+import { TaskRuntimeGlyph } from './TaskRuntimeGlyph'
+import { MessageLoadingStage } from './MessageLoadingStage'
+
+type SendMessageOptions = {
+  interactiveFormAnswer?: InteractiveFormAnswerPayload
+}
 
 /**
  * Component to render a streaming message with typewriter effect.
@@ -73,7 +77,7 @@ interface StreamingMessageBubbleProps {
   selectedBranch?: GitBranch | null
   theme: 'light' | 'dark'
   t: (key: string) => string
-  onSendMessage?: (content: string) => void
+  onSendMessage?: (content: string, options?: SendMessageOptions) => void
   index: number
   isGroupChat?: boolean
   isPendingConfirmation?: boolean
@@ -168,7 +172,7 @@ interface MessagesAreaProps {
   selectedBranch?: GitBranch | null
   onShareButtonRender?: (button: React.ReactNode) => void
   onContentChange?: () => void
-  onSendMessage?: (content: string) => void
+  onSendMessage?: (content: string, options?: SendMessageOptions) => void
   /** Callback for sending message with a specific model override (used for regenerate) */
   onSendMessageWithModel?: (
     content: string,
@@ -232,8 +236,14 @@ function MessagesArea({
 }: MessagesAreaProps) {
   const { t } = useTranslation()
   const { toast } = useToast()
-  const { selectedTaskDetail, refreshSelectedTaskDetail, refreshTasks, setSelectedTask } =
-    useTaskContext()
+  const {
+    selectedTaskDetail,
+    refreshSelectedTaskDetail,
+    refreshTasks,
+    selectTask,
+    cleanupMessagesAfterEdit,
+    taskState,
+  } = useTaskSession()
   const { theme } = useTheme()
   const { user } = useUser()
   const { traceAction } = useTraceAction()
@@ -243,7 +253,7 @@ function MessagesArea({
   // Use unified messages hook - SINGLE SOURCE OF TRUTH
   // Pass pendingTaskId to query messages when selectedTaskDetail.id is not yet available
   // State machine handles recovery automatically (page refresh, reconnect, visibility)
-  const { messages, streamingSubtaskIds, isStreaming } = useUnifiedMessages({
+  const { messages, streamingSubtaskIds, isStreaming } = useMessagePresenter({
     team: selectedTeam || null,
     isGroupChat,
     pendingTaskId,
@@ -346,7 +356,7 @@ function MessagesArea({
 
   // Load persisted correction data from subtask.result when task detail changes
   // Load persisted correction data from messages when they change
-  // Note: Now using messages from useUnifiedMessages instead of selectedTaskDetail.subtasks
+  // Note: Now using presented TaskSession messages instead of selectedTaskDetail.subtasks
   useEffect(() => {
     if (messages.length === 0) return
 
@@ -597,7 +607,7 @@ function MessagesArea({
         return
       }
 
-      // Use the messages from useUnifiedMessages which includes WebSocket updates
+      // Use the messages from TaskSession which includes WebSocket updates
       // This is the SAME data that's displayed in the UI
       const exportableMessages: SelectableMessage[] = messages
         .filter(msg => msg.status === 'completed') // Only export completed messages
@@ -685,8 +695,7 @@ function MessagesArea({
     prepareExport('docx')
   }, [prepareExport])
 
-  // Removed polling - relying entirely on WebSocket real-time updates
-  // Task details will be updated via WebSocket events in taskContext
+  // Message content is driven by the socket-backed TaskStateMachine state.
 
   // Notify parent component when content changes (for scroll management)
   useLayoutEffect(() => {
@@ -697,15 +706,15 @@ function MessagesArea({
 
   // Handle user leaving group chat
   const handleLeaveGroupChat = useCallback(() => {
-    setSelectedTask(null)
-  }, [setSelectedTask])
+    selectTask(null)
+  }, [selectTask])
 
   // Handle members changed in group chat panel
   const handleMembersChanged = useCallback(() => {
     // Refresh both task list (to move task to correct category)
     // and task detail (to update is_group_chat flag and enable @ feature)
     refreshTasks()
-    refreshSelectedTaskDetail(false)
+    void refreshSelectedTaskDetail()
   }, [refreshTasks, refreshSelectedTaskDetail])
 
   // Handle edit button click - enter edit mode for a message
@@ -719,9 +728,6 @@ function MessagesArea({
   const handleEditCancel = useCallback(() => {
     setEditingMessageId(null)
   }, [])
-
-  // Get cleanupMessagesAfterEdit from chat stream context
-  const { cleanupMessagesAfterEdit } = useChatStreamContext()
 
   // Handle save edit - call API to edit message, then resend to trigger AI response
   const handleEditSave = useCallback(
@@ -746,7 +752,7 @@ function MessagesArea({
           }
 
           // Refresh task detail to reload messages from backend
-          await refreshSelectedTaskDetail(true)
+          await refreshSelectedTaskDetail()
 
           // Automatically resend the edited message to trigger AI response
           // This is the ChatGPT-style behavior: edit message -> delete all from edited -> resend as new
@@ -828,7 +834,7 @@ function MessagesArea({
       try {
         // 4.5. Refresh task detail first to ensure we have latest state from backend
         // This helps detect any running subtasks that frontend might have missed
-        await refreshSelectedTaskDetail(false)
+        await refreshSelectedTaskDetail()
 
         // 5. Call the edit message API with the SAME content (this will delete the AI response)
         const response = await subtaskApis.editMessage(userSubtaskId, originalUserContent)
@@ -840,7 +846,7 @@ function MessagesArea({
           }
 
           // 7. Refresh task detail to sync with backend
-          await refreshSelectedTaskDetail(true)
+          await refreshSelectedTaskDetail()
 
           // 8. Resend the same user message with the selected model to trigger new AI response
           // Pass the original contexts (attachments, knowledge bases, etc.) to preserve them
@@ -858,7 +864,7 @@ function MessagesArea({
         // If backend says AI is generating, refresh task detail to sync frontend state
         if (errorMessage.includes('AI is generating')) {
           // Refresh to get latest state from backend
-          await refreshSelectedTaskDetail(false)
+          await refreshSelectedTaskDetail()
         }
 
         toast({
@@ -1109,9 +1115,14 @@ function MessagesArea({
   // Handle ask_user_question form submission - send the pre-formatted message as a new conversation
   // AskUserForm already formats the message with question text and option labels
   const handleAskUserSubmit = useCallback(
-    (_askId: string, formattedMessage: string) => {
+    (_askId: string, formattedMessage: string, answer: InteractiveFormAnswerPayload) => {
       if (!onSendMessage) return
-      onSendMessage(formattedMessage)
+      onSendMessage(formattedMessage, {
+        interactiveFormAnswer: {
+          ...answer,
+          message: formattedMessage,
+        },
+      })
     },
     [onSendMessage]
   )
@@ -1126,18 +1137,35 @@ function MessagesArea({
     return null
   }, [messages])
 
+  const isSyncingMessages =
+    messages.length === 0 &&
+    (taskState?.phase === 'waiting_socket' ||
+      taskState?.phase === 'joining' ||
+      taskState?.phase === 'syncing')
+
+  const showRuntimeWatermark =
+    taskState !== null &&
+    !isSyncingMessages &&
+    (messages.length === 0 || taskState.phase === 'error')
+
   return (
     <div
-      className="flex-1 w-full max-w-3xl mx-auto flex flex-col"
+      className="relative min-h-0 flex-1 w-full max-w-3xl mx-auto flex flex-col"
       data-chat-container="true"
       translate="no"
     >
+      <TaskRuntimeGlyph taskState={taskState} visible={showRuntimeWatermark} />
+
       {/* Messages Area */}
       {(messages.length > 0 ||
         streamingSubtaskIds.length > 0 ||
         selectedTaskDetail?.id ||
         hasMessagesFromParent) && (
-        <div className="flex-1 space-y-8 messages-container" data-testid="messages-container">
+        <div
+          className="relative z-10 flex-1 space-y-8 messages-container"
+          data-testid="messages-container"
+        >
+          {isSyncingMessages && <MessageLoadingStage />}
           {messages.map((msg, index) => {
             const messageKey = msg.subtaskId
               ? `${msg.type}-${msg.subtaskId}`

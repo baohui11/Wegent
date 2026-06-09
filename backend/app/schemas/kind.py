@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.schemas.quick_launch import QuickPhraseMixin
 from app.utils.workspace_archive_time import normalize_workspace_archive_datetime
 
 
@@ -238,6 +239,14 @@ class ModelSpec(BaseModel):
         ModelCategoryType.LLM,
         description="Model category type (llm, tts, stt, embedding, rerank). Defaults to 'llm' for backward compatibility.",
     )
+    modelGroup: Optional[str] = Field(
+        None,
+        description="Primary user-defined group used when displaying model selectors.",
+    )
+    modelSubGroup: Optional[str] = Field(
+        None,
+        description="Secondary user-defined group used within the primary model group.",
+    )
     ttsConfig: Optional[TTSConfig] = Field(
         None, description="TTS-specific configuration (when modelType='tts')"
     )
@@ -412,7 +421,7 @@ class TeamMember(BaseModel):
     )
 
 
-class TeamSpec(BaseModel):
+class TeamSpec(QuickPhraseMixin):
     """Team specification"""
 
     members: List[TeamMember]

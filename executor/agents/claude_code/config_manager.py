@@ -17,10 +17,10 @@ import string
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from executor.agents.env_value import resolve_env_value as _resolve_env_value
 from executor.config.config import get_wegent_mcp_url
 from shared.logger import setup_logger
 from shared.models.execution import ExecutionRequest
-from shared.utils.crypto import decrypt_sensitive_data, is_data_encrypted
 
 logger = setup_logger("claude_code_config_manager")
 
@@ -108,34 +108,7 @@ def resolve_env_value(value: str) -> str:
     Returns:
         The resolved value
     """
-    import re
-
-    if not value:
-        return value
-
-    # Check for ${VAR_NAME} pattern and replace with env var
-    env_var_pattern = r"^\$\{([^}]+)\}$"
-    match = re.match(env_var_pattern, value)
-    if match:
-        var_name = match.group(1)
-        resolved = os.environ.get(var_name, "")
-        if resolved:
-            logger.info(f"Resolved env var ${{{var_name}}} from environment")
-        else:
-            logger.warning(f"Environment variable {var_name} not found")
-        return resolved
-
-    # Check if encrypted and decrypt
-    if is_data_encrypted(value):
-        decrypted = decrypt_sensitive_data(value)
-        if decrypted:
-            logger.info("Decrypted sensitive data")
-            return decrypted
-        logger.warning("Failed to decrypt sensitive data")
-        return ""
-
-    # Return as-is
-    return value
+    return _resolve_env_value(value, logger_override=logger)
 
 
 def build_claude_json_config() -> Dict[str, Any]:
@@ -340,13 +313,37 @@ def _collect_mcp_servers_for_claude(
                 continue
             mcp_servers = bot.get("mcp_servers") or bot.get("mcpServers")
             _append_mcp_servers(collected, mcp_servers, f"bot[{index}]")
+        _append_global_mcp_servers(collected)
         return collected
 
     mcp_servers = primary_bot_config.get("mcp_servers") or primary_bot_config.get(
         "mcpServers"
     )
     _append_mcp_servers(collected, mcp_servers, "bot[0]")
+    _append_global_mcp_servers(collected)
     return collected
+
+
+def _append_global_mcp_servers(target: list[dict[str, Any]]) -> None:
+    """Append MCP servers synced to this local device."""
+    try:
+        from executor.modes.local.capabilities import GlobalCapabilityStore
+
+        manifest = GlobalCapabilityStore().load()
+    except Exception as exc:
+        logger.warning("[MCP] Failed to load global MCP manifest: %s", exc)
+        return
+
+    appended: list[str] = []
+    for name, record in manifest.get("mcps", {}).items():
+        if not isinstance(record, dict):
+            continue
+        server = record.get("server") or {}
+        if not isinstance(server, dict):
+            continue
+        target.append({"name": name, **server})
+        appended.append(name)
+    logger.info("[MCP] Appended global MCP servers: names=%s", appended)
 
 
 def extract_claude_options(task_data: ExecutionRequest) -> Dict[str, Any]:

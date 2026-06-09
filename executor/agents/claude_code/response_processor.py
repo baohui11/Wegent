@@ -18,6 +18,14 @@ from claude_agent_sdk.types import (
     UserMessage,
 )
 
+from executor.agents.claude_code.deferred_mcp_proxy import (
+    WAITING_FOR_USER_INPUT_REASON,
+    is_interactive_form_tool,
+    proxy_deferred_mcp_tool,
+)
+from executor.agents.claude_code.standalone_chat_workspace import (
+    finalize_standalone_chat_workspace,
+)
 from shared.logger import setup_logger
 from shared.models import ResponsesAPIEmitter
 from shared.models.task import ExecutionResult
@@ -48,6 +56,16 @@ def contains_api_error(text: str) -> bool:
     return any(pattern in text for pattern in API_ERROR_PATTERNS)
 
 
+def _standalone_workspace_result_fields(state_manager, content: str) -> dict[str, str]:
+    """Return extra response.completed fields for a new standalone chat workspace."""
+
+    task_data = getattr(state_manager, "task_data", None) if state_manager else None
+    workspace_path = finalize_standalone_chat_workspace(task_data, content)
+    if not workspace_path:
+        return {}
+    return {"standalone_chat_workspace_path": workspace_path}
+
+
 def _tool_result_completion(block: ToolResultBlock) -> tuple[str, str | None]:
     """Translate Claude tool result errors into emitter terminal status."""
     if not block.is_error:
@@ -65,6 +83,7 @@ async def process_response(
     thinking_manager=None,
     task_state_manager=None,
     session_id: str = None,
+    mcp_servers: Any = None,
 ) -> Union[TaskStatus, str]:
     """
     Process the response messages from Claude
@@ -217,6 +236,7 @@ async def process_response(
                         task_state_manager,
                         cancellation_in_progress,
                         saw_sdk_interrupt_messages,
+                        mcp_servers,
                     )
 
                     if result_status == "RETRY":
@@ -722,6 +742,17 @@ async def _handle_stream_event(
                 f"StreamEvent: input_json_delta with {len(partial_json)} chars"
             )
 
+        elif delta_type == "thinking_delta":
+            thinking = delta.get("thinking", "")
+            if thinking:
+                try:
+                    await emitter.reasoning(thinking)
+                    logger.debug(
+                        f"StreamEvent: sent thinking_delta with {len(thinking)} chars"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send stream thinking_delta: {e}")
+
     elif event_type == "content_block_start":
         # A new content block is starting
         content_block = event.get("content_block", {})
@@ -817,6 +848,7 @@ async def _process_result_message(
     task_state_manager=None,
     cancellation_in_progress: bool = False,
     saw_sdk_interrupt_messages: bool = False,
+    mcp_servers: Any = None,
 ) -> Union[TaskStatus, str, None]:
     """
     Process a ResultMessage from Claude
@@ -892,6 +924,89 @@ async def _process_result_message(
             f"🔇 Silent exit will be added to result: reason={silent_exit_reason}"
         )
 
+    deferred_tool_use = getattr(msg, "deferred_tool_use", None)
+    if (
+        stop_reason == "tool_deferred"
+        and deferred_tool_use
+        and is_interactive_form_tool(deferred_tool_use.name)
+    ):
+        logger.info(
+            "Proxying deferred interactive form MCP tool call: id=%s, name=%s",
+            deferred_tool_use.id,
+            deferred_tool_use.name,
+        )
+
+        arguments = (
+            deferred_tool_use.input
+            if isinstance(deferred_tool_use.input, dict)
+            else None
+        )
+        try:
+            proxy_result = await proxy_deferred_mcp_tool(
+                deferred_tool_use=deferred_tool_use,
+                mcp_servers=mcp_servers,
+            )
+        except Exception as e:
+            error_message = f"Deferred MCP proxy failed: {e}"
+            logger.error(error_message, exc_info=True)
+            await emitter.tool_done(
+                call_id=deferred_tool_use.id,
+                name=deferred_tool_use.name,
+                arguments=arguments,
+                output=error_message,
+                tool_protocol="mcp_call",
+                status="failed",
+                error=error_message,
+            )
+            if state_manager:
+                state_manager.set_task_status(TaskStatus.FAILED.value)
+                state_manager.report_progress(
+                    progress=100,
+                    status=TaskStatus.FAILED.value,
+                    message=error_message,
+                )
+            await emitter.error(error_message)
+            return TaskStatus.FAILED
+
+        await emitter.tool_done(
+            call_id=proxy_result.tool_use_id,
+            name=proxy_result.tool_name,
+            arguments=arguments,
+            output=proxy_result.output_text,
+            tool_protocol="mcp_call",
+            server_label=proxy_result.server_name,
+            status="failed" if proxy_result.is_error else "completed",
+            error=proxy_result.output_text if proxy_result.is_error else None,
+        )
+
+        if proxy_result.is_error or not proxy_result.is_deferred_user_input:
+            error_message = (
+                proxy_result.output_text
+                if proxy_result.is_error
+                else "Deferred MCP tool did not request user input."
+            )
+            logger.error(error_message)
+            if state_manager:
+                state_manager.set_task_status(TaskStatus.FAILED.value)
+                state_manager.report_progress(
+                    progress=100,
+                    status=TaskStatus.FAILED.value,
+                    message=error_message,
+                )
+            await emitter.error(error_message)
+            return TaskStatus.FAILED
+
+        if state_manager:
+            state_manager.set_task_status(TaskStatus.COMPLETED.value)
+        await emitter.done(
+            content="",
+            usage=msg.usage,
+            stop_reason="tool_deferred",
+            silent_exit=True,
+            silent_exit_reason=WAITING_FOR_USER_INPUT_REASON,
+        )
+        return TaskStatus.COMPLETED
+
     # If it's a successful result message, send the result back via emitter
     if msg.subtype == "success" and not msg.is_error:
         # Get task info from state_manager
@@ -947,6 +1062,9 @@ async def _process_result_message(
                 )
 
                 # Send done event (response.completed) via emitter
+                extra_fields = _standalone_workspace_result_fields(
+                    state_manager, content
+                )
                 await emitter.done(
                     content=content,
                     usage=msg.usage,
@@ -954,6 +1072,7 @@ async def _process_result_message(
                     silent_exit_reason=(
                         silent_exit_reason if silent_exit_reason else None
                     ),
+                    **extra_fields,
                 )
                 logger.info(f"Sent done event for task {task_id}")
             except Exception as e:
@@ -975,9 +1094,13 @@ async def _process_result_message(
             state_manager.set_task_status(TaskStatus.COMPLETED.value)
 
             # Send done event (response.completed) via emitter
+            extra_fields = _standalone_workspace_result_fields(
+                state_manager, result_str
+            )
             await emitter.done(
                 content=result_str,
                 usage=msg.usage,
+                **extra_fields,
             )
             logger.info(f"Sent done event for task {task_id}")
         return TaskStatus.COMPLETED

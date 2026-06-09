@@ -103,6 +103,26 @@ def _extract_shell_call_input(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _extract_reasoning_event_content(
+    event_type: str, data: dict[str, Any]
+) -> Optional[str]:
+    if event_type == ResponsesAPIStreamEvents.REASONING_SUMMARY_TEXT_DELTA.value:
+        delta = data.get("delta")
+        if delta is None:
+            return ""
+        return delta if isinstance(delta, str) else str(delta)
+
+    if event_type == ResponsesAPIStreamEvents.RESPONSE_PART_ADDED.value:
+        part = data.get("part", {})
+        if isinstance(part, dict) and part.get("type") == "reasoning":
+            text = part.get("text")
+            if text is None:
+                return ""
+            return text if isinstance(text, str) else str(text)
+
+    return None
+
+
 def _build_shell_call_context(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "protocol": "shell_call",
@@ -120,11 +140,24 @@ def extract_completed_result(response_data: dict) -> dict:
     """
     # Extract text content from response output
     value = ""
+    reasoning_parts: list[str] = []
     for item in response_data.get("output", []):
         if isinstance(item, dict):
             for content_block in item.get("content", []):
-                if isinstance(content_block, dict) and content_block.get("text"):
-                    value += content_block["text"]
+                if not isinstance(content_block, dict):
+                    continue
+                text = content_block.get("text")
+                if not text:
+                    continue
+                block_type = content_block.get("type")
+                if block_type == "reasoning":
+                    reasoning_parts.append(text)
+                elif block_type in (None, "output_text", "text"):
+                    value += text
+
+    reasoning_content = response_data.get("reasoning_content")
+    if reasoning_content is None and reasoning_parts:
+        reasoning_content = "".join(reasoning_parts)
 
     return {
         "value": value,
@@ -136,7 +169,10 @@ def extract_completed_result(response_data: dict) -> dict:
         "loaded_skills": response_data.get("loaded_skills"),
         "stop_reason": response_data.get("stop_reason"),
         "messages_chain": response_data.get("messages_chain"),
-        "reasoning_content": response_data.get("reasoning_content"),
+        "standalone_chat_workspace_path": response_data.get(
+            "standalone_chat_workspace_path"
+        ),
+        "reasoning_content": reasoning_content,
     }
 
 
@@ -324,15 +360,17 @@ class ResponsesAPIEventParser:
                 message_id=message_id,
             )
 
-        elif event_type == ResponsesAPIStreamEvents.RESPONSE_PART_ADDED.value:
-            # response.reasoning_summary_part.added -> THINKING
-            part = data.get("part", {})
-            if part.get("type") == "reasoning":
+        elif event_type in (
+            ResponsesAPIStreamEvents.RESPONSE_PART_ADDED.value,
+            ResponsesAPIStreamEvents.REASONING_SUMMARY_TEXT_DELTA.value,
+        ):
+            reasoning_content = _extract_reasoning_event_content(event_type, data)
+            if reasoning_content is not None:
                 return ExecutionEvent(
                     type=EventType.THINKING,
                     task_id=task_id,
                     subtask_id=subtask_id,
-                    content=part.get("text", ""),
+                    content=reasoning_content,
                     message_id=message_id,
                 )
             return None
@@ -1257,6 +1295,10 @@ class ExecutionDispatcher:
                     )
 
                 if not cancelled and not terminal_event_type:
+                    error_message = (
+                        "Chat Shell SSE stream ended without terminal event "
+                        f"after {event_count} events"
+                    )
                     logger.warning(
                         "[ExecutionDispatcher] SSE stream ended without terminal event: "
                         "task_id=%d, subtask_id=%d, request_id=%s, total_events=%d",
@@ -1273,6 +1315,16 @@ class ExecutionDispatcher:
                             "task_id": str(request.task_id),
                             "subtask_id": str(request.subtask_id),
                         },
+                    )
+                    await emitter.emit(
+                        ExecutionEvent(
+                            type=EventType.ERROR,
+                            task_id=request.task_id,
+                            subtask_id=request.subtask_id,
+                            message_id=request.message_id,
+                            error=error_message,
+                            error_code="sse_stream_no_terminal",
+                        )
                     )
 
                 # Log when stream iteration completes

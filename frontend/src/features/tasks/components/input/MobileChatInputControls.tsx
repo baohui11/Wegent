@@ -32,6 +32,7 @@ import type { ContextItem } from '@/types/context'
 import type { UnifiedSkill } from '@/apis/skills'
 import type { SearchEngine } from '@/apis/chat'
 import {
+  canSwitchModelAfterMessages,
   canUseChatContexts,
   isChatShell,
   teamRequiresWorkspace,
@@ -98,23 +99,21 @@ export interface MobileChatInputControlsProps {
   onFileSelect: (files: File | File[]) => void
 
   // State flags
-  isLoading: boolean
   isStreaming: boolean
-  isAwaitingResponseStart?: boolean
   isStopping: boolean
   hasMessages: boolean
   shouldHideChatInput: boolean
   isModelSelectionRequired: boolean
   isAttachmentReadyToSend: boolean
   taskInputMessage: string
-  isSubtaskStreaming: boolean
+  hasAttachments?: boolean
   canQueueMessage?: boolean
   canSendGuidance?: boolean
+  canCancelTask?: boolean
 
   // Actions
   onStopStream: () => void
   onCancelTask?: () => void
-  isCancelling?: boolean
   onSendMessage: () => void
   onSendGuidance?: () => void
 
@@ -173,21 +172,19 @@ export function MobileChatInputControls({
   selectedContexts,
   setSelectedContexts,
   onFileSelect,
-  isLoading,
   isStreaming,
-  isAwaitingResponseStart = false,
   isStopping,
   hasMessages,
   shouldHideChatInput,
   isModelSelectionRequired,
   isAttachmentReadyToSend,
   taskInputMessage,
-  isSubtaskStreaming,
+  hasAttachments = false,
   canQueueMessage = false,
   canSendGuidance = false,
+  canCancelTask,
   onStopStream,
   onCancelTask,
-  isCancelling = false,
   onSendMessage,
   onSendGuidance,
   hasNoTeams = false,
@@ -222,7 +219,8 @@ export function MobileChatInputControls({
     taskType !== 'video'
   const showClarificationAction = isChatShell(selectedTeam)
   const showWebSearchAction = isChatShell(selectedTeam) && isWebSearchAvailable
-  const showDynamicThinkingAction = isChatShell(selectedTeam) && Boolean(selectedModel?.dynamicThinking)
+  const showDynamicThinkingAction =
+    isChatShell(selectedTeam) && Boolean(selectedModel?.dynamicThinking)
   const showCorrectionAction = isChatShell(selectedTeam) && Boolean(onCorrectionModeToggle)
   const showGuidanceAction = isChatShell(selectedTeam) && Boolean(onSendGuidance)
   const showRepositoryAction =
@@ -235,19 +233,16 @@ export function MobileChatInputControls({
   // Render send button based on state
   const renderSendButton = () => {
     const sendState = getChatSendState({
-      isLoading,
       isStreaming,
-      isAwaitingResponseStart,
       isStopping,
       isModelSelectionRequired,
       isAttachmentReadyToSend,
       hasNoTeams,
       shouldHideChatInput,
       taskInputMessage,
-      selectedTaskStatus: selectedTaskDetail?.status,
-      isSubtaskStreaming,
-      isGroupChat: selectedTaskDetail?.is_group_chat,
+      hasAttachments,
       canQueueMessage,
+      canCancelTask,
     })
 
     const renderStopAction = () => (
@@ -272,10 +267,6 @@ export function MobileChatInputControls({
     )
 
     const renderCancelTaskAction = () => {
-      if (isCancelling) {
-        return renderStoppingAction()
-      }
-
       return (
         <ActionButton
           onClick={onCancelTask}
@@ -314,7 +305,7 @@ export function MobileChatInputControls({
           <SendButton
             onClick={onSendMessage}
             disabled={sendState.isPrimaryDisabled}
-            isLoading={isLoading}
+            isLoading={false}
             ariaLabel="Queue message"
             compact
           />
@@ -326,7 +317,7 @@ export function MobileChatInputControls({
       <SendButton
         onClick={onSendMessage}
         disabled={sendState.isPrimaryDisabled}
-        isLoading={isLoading}
+        isLoading={false}
         compact
       />
     )
@@ -366,7 +357,7 @@ export function MobileChatInputControls({
                 {showAttachmentAction && (
                   <AttachmentButton
                     onFileSelect={onFileSelect}
-                    disabled={isLoading || isStreaming}
+                    disabled={isStreaming}
                     triggerVariant="menu-item"
                   />
                 )}
@@ -378,7 +369,7 @@ export function MobileChatInputControls({
                     selectedSkillNames={selectedSkillNames}
                     onToggleSkill={onToggleSkill}
                     isChatShell={isChatShell(selectedTeam)}
-                    disabled={isLoading || isStreaming}
+                    disabled={isStreaming}
                     readOnly={hasMessages}
                     triggerVariant="menu-item"
                   />
@@ -423,7 +414,7 @@ export function MobileChatInputControls({
               <MobileClarificationToggle
                 enabled={enableClarification}
                 onToggle={setEnableClarification}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
               />
             )}
 
@@ -432,7 +423,7 @@ export function MobileChatInputControls({
               <MobileCorrectionModeToggle
                 enabled={enableCorrectionMode}
                 onToggle={onCorrectionModeToggle}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
                 correctionModelName={correctionModelName}
                 taskId={selectedTaskDetail?.id ?? null}
               />
@@ -486,8 +477,8 @@ export function MobileChatInputControls({
               selectedTeam={selectedTeamForDisplay}
               teams={filteredTeams}
               onTeamSelect={onTeamChange}
-              disabled={isLoading || isStreaming}
-              isLoading={isLoading}
+              disabled={isStreaming}
+              isLoading={false}
               hideTriggerIcon={false}
             />
           </div>
@@ -502,7 +493,7 @@ export function MobileChatInputControls({
               forceOverride={forceOverride}
               setForceOverride={setForceOverride}
               selectedTeam={selectedTeam}
-              disabled={isLoading || isStreaming || (hasMessages && !isChatShell(selectedTeam))}
+              disabled={isStreaming || (hasMessages && !canSwitchModelAfterMessages(selectedTeam))}
               teamId={teamId}
               taskId={taskId}
               taskModelId={taskModelId}

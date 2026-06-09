@@ -5,6 +5,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import TopNavigation from '@/features/layout/TopNavigation'
 import UserMenu from '@/features/layout/UserMenu'
@@ -12,13 +13,15 @@ import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
 import { useTranslation } from '@/hooks/useTranslation'
 import { saveLastTab } from '@/utils/userPreferences'
-import {
-  wikiStyles,
-  WikiDetailSidebar,
-  useMermaidInit,
-  WikiContent,
-  useWikiDetail,
-} from '@/features/knowledge'
+import { wikiStyles } from '@/features/knowledge/wikiStyles'
+import { WikiDetailSidebar } from '@/features/knowledge/WikiDetailSidebar'
+import { useMermaidInit } from '@/features/knowledge/useMermaidInit'
+import { useWikiDetail } from '@/features/knowledge/useWikiDetail'
+
+const WikiContent = dynamic(
+  () => import('@/features/knowledge/WikiContent').then(mod => ({ default: mod.WikiContent })),
+  { ssr: false }
+)
 
 export default function WikiDetailPage() {
   const { t: _t } = useTranslation()

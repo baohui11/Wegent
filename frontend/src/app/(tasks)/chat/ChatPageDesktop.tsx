@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { useTeamContext } from '@/contexts/TeamContext'
@@ -13,13 +14,11 @@ import {
   TaskSidebar,
   ResizableSidebar,
   CollapsedSidebarButtons,
-  SearchDialog,
 } from '@/features/tasks/components/sidebar'
 import { Team } from '@/types/api'
 import { saveLastTab } from '@/utils/userPreferences'
 import { useUser } from '@/features/common/UserContext'
-import { useTaskContext } from '@/features/tasks/contexts/taskContext'
-import { useChatStreamContext } from '@/features/tasks/contexts/chatStreamContext'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { useDevices } from '@/contexts/DeviceContext'
 import { paths } from '@/config/paths'
 import { Button } from '@/components/ui/button'
@@ -31,15 +30,29 @@ import { useToast } from '@/hooks/use-toast'
 import { canEditTeam } from '@/utils/team-permissions'
 import { listGroups } from '@/apis/groups'
 import { fetchBotsList } from '@/features/settings/services/bots'
-import TeamEditDialog from '@/features/settings/components/TeamEditDialog'
 import type { BaseRole } from '@/types/base-role'
-import { CreateGroupChatDialog } from '@/features/tasks/components/group-chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
 import { useIsDesktop } from '@/features/layout/hooks/useMediaQuery'
 import WebSearchPanelToggle from '@/features/layout/WebSearchPanelToggle'
 import { WebSearchResultsPanel } from '@/features/tasks/components/web-search/WebSearchResultsPanel'
 import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
 import { useWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
+
+const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
+  ssr: false,
+})
+
+const TeamEditDialog = dynamic(() => import('@/features/settings/components/TeamEditDialog'), {
+  ssr: false,
+})
+
+const CreateGroupChatDialog = dynamic(
+  () =>
+    import('@/features/tasks/components/group-chat/CreateGroupChatDialog').then(mod => ({
+      default: mod.CreateGroupChatDialog,
+    })),
+  { ssr: false }
+)
 
 /**
  * Desktop-specific implementation of Chat Page
@@ -68,13 +81,8 @@ export function ChatPageDesktop() {
   const { teams, isTeamsLoading, refreshTeams } = useTeamContext()
 
   // Task context for refreshing task list
-  const {
-    refreshTasks,
-    selectedTask,
-    selectedTaskDetail,
-    setSelectedTask,
-    refreshSelectedTaskDetail,
-  } = useTaskContext()
+  const { refreshTasks, selectedTask, selectedTaskDetail, selectTask, refreshSelectedTaskDetail } =
+    useTaskSession()
 
   // Device context - when a device is selected, switch to 'task' mode
   const { selectedDeviceId, devices } = useDevices()
@@ -96,18 +104,15 @@ export function ChatPageDesktop() {
 
   // Handle task deletion
   const handleTaskDeleted = () => {
-    setSelectedTask(null)
+    selectTask(null)
     refreshTasks()
   }
 
   // Handle members changed (when converting to group chat or adding/removing members)
   const handleMembersChanged = () => {
     refreshTasks()
-    refreshSelectedTaskDetail(false)
+    void refreshSelectedTaskDetail()
   }
-
-  // Chat stream context
-  const { clearAllStreams } = useChatStreamContext()
 
   // User state for git token check
   const { user } = useUser()
@@ -233,7 +238,7 @@ export function ChatPageDesktop() {
     deps: teamEditDeps,
     onTeamUpdated: useCallback(() => {
       refreshTeams()
-      refreshSelectedTaskDetail(false)
+      void refreshSelectedTaskDetail()
     }, [refreshTeams, refreshSelectedTaskDetail]),
   })
 
@@ -283,8 +288,7 @@ export function ChatPageDesktop() {
   const handleNewTask = () => {
     // IMPORTANT: Clear selected task FIRST to ensure UI state is reset immediately
     // This prevents the UI from being stuck showing the previous task's messages
-    setSelectedTask(null)
-    clearAllStreams()
+    selectTask(null)
     // Force a hard reload to ensure a fresh start when already on /chat
     window.location.href = paths.chat.getHref()
   }
@@ -396,14 +400,21 @@ export function ChatPageDesktop() {
         </div>
       </div>
       {/* Create Group Chat Dialog */}
-      <CreateGroupChatDialog open={isCreateGroupChatOpen} onOpenChange={setIsCreateGroupChatOpen} />
+      {isCreateGroupChatOpen && (
+        <CreateGroupChatDialog
+          open={isCreateGroupChatOpen}
+          onOpenChange={setIsCreateGroupChatOpen}
+        />
+      )}
       {/* Search Dialog - rendered at page level for global shortcut support */}
-      <SearchDialog
-        open={isSearchDialogOpen}
-        onOpenChange={setIsSearchDialogOpen}
-        shortcutDisplayText={shortcutDisplayText}
-        pageType="chat"
-      />
+      {isSearchDialogOpen && (
+        <SearchDialog
+          open={isSearchDialogOpen}
+          onOpenChange={setIsSearchDialogOpen}
+          shortcutDisplayText={shortcutDisplayText}
+          pageType="chat"
+        />
+      )}
     </div>
   )
 }

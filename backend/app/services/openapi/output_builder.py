@@ -45,42 +45,16 @@ def _parse_arguments(value: str) -> dict[str, Any]:
 def normalize_tool_output(value: Any) -> Any:
     if isinstance(value, str):
         try:
-            return json.loads(value)
+            value = json.loads(value)
         except (TypeError, ValueError):
             return value
+
+    if isinstance(value, dict):
+        sanitized = dict(value)
+        sanitized.pop("pending_user_input", None)
+        sanitized.pop("pending_user_input_payload", None)
+        return sanitized
     return value
-
-
-def _build_pending_user_input_payload(
-    *,
-    block: dict[str, Any],
-    tool_output: dict[str, Any],
-) -> Optional[dict[str, Any]]:
-    payload = tool_output.get("pending_user_input_payload")
-    if isinstance(payload, dict):
-        return payload
-
-    ask_id = tool_output.get("ask_id")
-    tool_input = block.get("tool_input")
-    if not isinstance(tool_input, dict):
-        tool_input = {}
-
-    fallback_payload: dict[str, Any] = {}
-    if isinstance(ask_id, str) and ask_id:
-        fallback_payload["ask_id"] = ask_id
-
-    questions = tool_input.get("questions")
-    if isinstance(questions, list) and questions:
-        fallback_payload["questions"] = questions
-
-    if fallback_payload:
-        fallback_payload["type"] = (
-            str(tool_output.get("type") or block.get("tool_name") or "")
-            or "interactive_form_question"
-        )
-        return fallback_payload
-
-    return None
 
 
 def _extract_text_content(value: Any) -> str:
@@ -394,7 +368,20 @@ def _build_items_from_blocks(
         return []
 
     output: list[ResponseOutputItem] = []
-    text_parts: list[str] = []
+    emitted_text = False
+    emitted_reasoning = False
+
+    def append_message(content: list[OutputTextContent]) -> None:
+        output.append(
+            OutputMessage(
+                type="message",
+                id=f"msg_{subtask.id}_{len(output)}",
+                status=_message_status(subtask, status_override),
+                role="assistant",
+                content=content,
+            )
+        )
+
     for block in blocks:
         if not isinstance(block, dict):
             continue
@@ -403,23 +390,31 @@ def _build_items_from_blocks(
         elif block.get("type") == "text":
             content = block.get("content")
             if isinstance(content, str) and content:
-                text_parts.append(content)
+                emitted_text = True
+                append_message(
+                    [
+                        OutputTextContent(
+                            type="output_text", text=content, annotations=[]
+                        )
+                    ]
+                )
+        elif block.get("type") == "thinking":
+            content = block.get("content")
+            if isinstance(content, str) and content:
+                emitted_reasoning = True
+                append_message(
+                    [OutputTextContent(type="reasoning", text=content, annotations=[])]
+                )
 
     final_text = (
-        content_override or "\n".join(text_parts) or str(result.get("value") or "")
+        "" if emitted_text else content_override or str(result.get("value") or "")
     )
     final_reasoning = str(result.get("reasoning_content") or "")
-    if final_text or final_reasoning:
-        output.append(
-            OutputMessage(
-                type="message",
-                id=f"msg_{subtask.id}",
-                status=_message_status(subtask, status_override),
-                role="assistant",
-                content=_build_message_content(
-                    text=final_text,
-                    reasoning=final_reasoning,
-                ),
+    if final_text or (final_reasoning and not emitted_reasoning):
+        append_message(
+            _build_message_content(
+                text=final_text,
+                reasoning="" if emitted_reasoning else final_reasoning,
             )
         )
 
@@ -504,28 +499,5 @@ def build_response_output(
 def extract_pending_user_input_state(
     subtasks: Iterable[Subtask],
 ) -> tuple[bool, Optional[dict[str, Any]]]:
-    """Extract persisted interactive-form pending state from assistant tool blocks."""
-    for subtask in subtasks:
-        result = subtask.result if isinstance(subtask.result, dict) else {}
-        blocks = result.get("blocks")
-        if not isinstance(blocks, list):
-            continue
-
-        for block in blocks:
-            if not isinstance(block, dict):
-                continue
-
-            output = normalize_tool_output(block.get("tool_output"))
-            if not isinstance(output, dict):
-                continue
-
-            if output.get("pending_user_input") is True:
-                payload = _build_pending_user_input_payload(
-                    block=block,
-                    tool_output=output,
-                )
-                if payload is not None:
-                    return True, payload
-                return True, None
-
+    """Do not expose legacy pending-user-input state through Responses API."""
     return False, None

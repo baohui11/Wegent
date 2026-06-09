@@ -107,7 +107,11 @@ jest.mock('@/features/tasks/components/CorrectionModeToggle', () => ({
 jest.mock('@/features/tasks/components/selector/SearchEngineSelector', () => ({
   __esModule: true,
   default: ({ iconOnly }: { iconOnly?: boolean }) => (
-    <button type="button" data-testid="web-search-toggle" data-icon-only={iconOnly ? 'true' : 'false'} />
+    <button
+      type="button"
+      data-testid="web-search-toggle"
+      data-icon-only={iconOnly ? 'true' : 'false'}
+    />
   ),
 }))
 
@@ -160,7 +164,11 @@ function createProps(): ChatInputControlsProps {
     selectedTeam,
     teams: [selectedTeam],
     onTeamChange: jest.fn(),
-    selectedModel: { id: '1', name: 'model', dynamicThinking: true } as ChatInputControlsProps['selectedModel'],
+    selectedModel: {
+      id: '1',
+      name: 'model',
+      dynamicThinking: true,
+    } as ChatInputControlsProps['selectedModel'],
     setSelectedModel: jest.fn(),
     forceOverride: false,
     setForceOverride: jest.fn(),
@@ -194,7 +202,6 @@ function createProps(): ChatInputControlsProps {
     },
     onFileSelect: jest.fn(),
     onAttachmentRemove: jest.fn(),
-    isLoading: false,
     isStreaming: false,
     isStopping: false,
     hasMessages: false,
@@ -204,7 +211,6 @@ function createProps(): ChatInputControlsProps {
     isModelSelectionRequired: false,
     isAttachmentReadyToSend: true,
     taskInputMessage: 'hello',
-    isSubtaskStreaming: false,
     onStopStream: jest.fn(),
     onSendMessage: jest.fn(),
     availableSkills: [

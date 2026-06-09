@@ -5,19 +5,16 @@
 export type ChatPrimaryAction = 'send' | 'queue' | 'stop' | 'cancel' | 'loading'
 
 interface ChatSendStateInput {
-  isLoading: boolean
   isStreaming: boolean
-  isAwaitingResponseStart: boolean
   isStopping: boolean
   isModelSelectionRequired: boolean
   isAttachmentReadyToSend: boolean
   hasNoTeams: boolean
   shouldHideChatInput: boolean
   taskInputMessage: string
-  selectedTaskStatus?: string | null
-  isSubtaskStreaming: boolean
-  isGroupChat?: boolean
+  hasAttachments?: boolean
   canQueueMessage?: boolean
+  canCancelTask?: boolean
 }
 
 export interface ChatSendState {
@@ -29,14 +26,19 @@ export interface ChatSendState {
 
 export function getChatSendState(input: ChatSendStateInput): ChatSendState {
   const hasTextContent = input.taskInputMessage.trim().length > 0
-  const hasMessage = input.shouldHideChatInput || hasTextContent
-  const baseDisabled =
-    input.isLoading ||
+  const hasUserProvidedContent = hasTextContent || Boolean(input.hasAttachments)
+  const hasSendableContent = input.shouldHideChatInput || hasUserProvidedContent
+  const sendDisabled =
     input.isModelSelectionRequired ||
     !input.isAttachmentReadyToSend ||
     input.hasNoTeams ||
-    !hasMessage
-  const isActiveStream = input.isStreaming || input.isAwaitingResponseStart || input.isStopping
+    !hasSendableContent
+  const queueDisabled =
+    input.isModelSelectionRequired ||
+    !input.isAttachmentReadyToSend ||
+    input.hasNoTeams ||
+    !hasUserProvidedContent
+  const isActiveStream = input.isStreaming || input.isStopping
 
   if (input.isStopping) {
     return {
@@ -47,7 +49,7 @@ export function getChatSendState(input: ChatSendStateInput): ChatSendState {
     }
   }
 
-  if (isActiveStream && input.canQueueMessage && hasTextContent && !baseDisabled) {
+  if (isActiveStream && input.canQueueMessage && !queueDisabled) {
     return {
       primaryAction: 'queue',
       isPrimaryDisabled: false,
@@ -65,16 +67,7 @@ export function getChatSendState(input: ChatSendStateInput): ChatSendState {
     }
   }
 
-  if (input.selectedTaskStatus === 'PENDING' && !input.isSubtaskStreaming && input.isGroupChat) {
-    return {
-      primaryAction: 'send',
-      isPrimaryDisabled: baseDisabled,
-      showStopAction: false,
-      showPendingAction: false,
-    }
-  }
-
-  if (input.selectedTaskStatus === 'PENDING') {
+  if (input.canCancelTask) {
     return {
       primaryAction: 'cancel',
       isPrimaryDisabled: false,
@@ -83,18 +76,9 @@ export function getChatSendState(input: ChatSendStateInput): ChatSendState {
     }
   }
 
-  if (input.selectedTaskStatus === 'CANCELLING') {
-    return {
-      primaryAction: 'loading',
-      isPrimaryDisabled: true,
-      showStopAction: true,
-      showPendingAction: false,
-    }
-  }
-
   return {
     primaryAction: 'send',
-    isPrimaryDisabled: baseDisabled,
+    isPrimaryDisabled: sendDisabled,
     showStopAction: false,
     showPendingAction: false,
   }

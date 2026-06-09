@@ -16,6 +16,7 @@ supporting page refresh recovery during streaming.
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -809,6 +810,7 @@ class SessionManager:
         status: Optional[str] = None,
         tool_output: Optional[str] = None,
         tool_input: Optional[Dict[str, Any]] = None,
+        render_payload: Optional[Dict[str, Any]] = None,
         tool_protocol: Optional[str] = None,
         server_label: Optional[str] = None,
     ) -> None:
@@ -823,7 +825,8 @@ class SessionManager:
             tool_use_id: Tool use ID
             status: New status (optional, e.g. "done", "error")
             tool_output: Optional tool output to set
-            tool_input: Optional tool input/arguments to update (used by interactive_form_question MCP tool)
+            tool_input: Optional tool input/arguments to update
+            render_payload: Optional UI-only renderer payload to update
             tool_protocol: Optional Responses protocol type
             server_label: Optional MCP server label
         """
@@ -847,6 +850,8 @@ class SessionManager:
                     existing_block["tool_output"] = tool_output
                 if tool_input is not None:
                     existing_block["tool_input"] = tool_input
+                if render_payload is not None:
+                    existing_block["render_payload"] = render_payload
                 if tool_protocol is not None:
                     existing_block["tool_protocol"] = tool_protocol
                 if server_label is not None:
@@ -949,6 +954,8 @@ class SessionManager:
             return
 
         try:
+            await self._finalize_current_thinking_block(subtask_id)
+
             # Append to accumulated content using Redis APPEND (O(1))
             streaming_key = self._get_streaming_key(subtask_id)
             text_block_key = self._get_current_text_block_key(subtask_id)
@@ -1016,10 +1023,6 @@ class SessionManager:
 
         Creates a new thinking block if there isn't one currently active.
 
-        Args:
-            subtask_id: Subtask ID
-            content: Thinking content to append
-
         Returns:
             Tuple of (block dict, is_new) where is_new indicates block creation
         """
@@ -1039,6 +1042,8 @@ class SessionManager:
             return {}, False
 
         try:
+            await self._finalize_current_text_block(subtask_id)
+
             thinking_block_key = self._get_current_thinking_block_key(subtask_id)
             blocks_key = self._get_blocks_key(subtask_id)
 
@@ -1062,7 +1067,10 @@ class SessionManager:
                             await redis_client.expire(blocks_key, STREAMING_TTL)
                             return last_block, is_new
 
-                block = create_thinking_block(content=content)
+                block = create_thinking_block(
+                    content=content,
+                    block_id=f"thinking-{uuid.uuid4().hex[:12]}",
+                )
                 await redis_client.rpush(blocks_key, json.dumps(block))
                 await redis_client.set(
                     thinking_block_key, block["id"], ex=STREAMING_TTL
@@ -1239,10 +1247,16 @@ class SessionManager:
             streaming_key = self._get_streaming_key(subtask_id)
             blocks_key = self._get_blocks_key(subtask_id)
             text_block_key = self._get_current_text_block_key(subtask_id)
+            thinking_block_key = self._get_current_thinking_block_key(subtask_id)
 
             redis_client = await self._cache._get_client()
             try:
-                await redis_client.delete(streaming_key, blocks_key, text_block_key)
+                await redis_client.delete(
+                    streaming_key,
+                    blocks_key,
+                    text_block_key,
+                    thinking_block_key,
+                )
                 logger.debug(
                     f"[SessionManager] Cleaned up streaming state for subtask {subtask_id}"
                 )

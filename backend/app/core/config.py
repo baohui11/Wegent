@@ -523,9 +523,15 @@ class Settings(BaseSettings):
     WEB_SEARCH_ENABLED: bool = False  # Enable/disable web search feature
     WEB_SEARCH_ENGINES: str = "{}"  # JSON configuration for search API adapter
     WEB_SEARCH_DEFAULT_MAX_RESULTS: int = (
-        50  # Default max results when not specified by LLM or engine config
+        10  # Default max results when not specified by LLM or engine config
     )
     BOCHA_API_KEY: str = ""  # API key for Bocha Web Search (type=bocha engines)
+    TAVILY_API_KEY: str = ""  # API key for Tavily Search (type=tavily engines)
+    TAVILY_AUTO_PARAMETERS: bool = True
+    TAVILY_INCLUDE_FAVICON: bool = True
+    TAVILY_SAFE_SEARCH: bool = False
+    TAVILY_INCLUDE_USAGE: bool = True
+    TAVILY_COUNTRY: str = "china"  # Tavily country name; CN also accepted via mapping
 
     # Message compression configuration
     # Enable/disable automatic message compression when context limit is exceeded
@@ -601,6 +607,9 @@ class Settings(BaseSettings):
     )
     DEFAULT_TEAM_TASK: str = (
         "wegent-wework#default"  # Default team for task mode (devices/chat page)
+    )
+    DEFAULT_TEAM_WEWORK: str = (
+        "wegent-wework-hidden#default"  # Default hidden team for WeWork workbench
     )
 
     # JSON configuration for MCP servers (similar to Claude Desktop format)

@@ -23,6 +23,10 @@ class FakeRedisClient:
         self.values[key] = value
         return True
 
+    async def append(self, key, value):
+        self.values[key] = self.values.get(key, "") + value
+        return len(self.values[key])
+
     async def delete(self, *keys):
         for key in keys:
             self.values.pop(key, None)
@@ -114,6 +118,26 @@ async def test_add_thinking_content_appends_to_same_block():
     blocks = await manager.get_blocks(303)
     assert len(blocks) == 1
     assert blocks[0]["type"] == "thinking"
+
+
+@pytest.mark.asyncio
+async def test_thinking_blocks_are_split_by_text_boundaries():
+    manager = SessionManager()
+    redis_client = FakeRedisClient()
+    manager._cache = FakeCache(redis_client)
+
+    await manager.add_thinking_content(subtask_id=303, content="First ")
+    await manager.add_thinking_content(subtask_id=303, content="thought.")
+    await manager.add_text_content(subtask_id=303, content="Answer.")
+    await manager.add_thinking_content(subtask_id=303, content="Second thought.")
+
+    blocks = await manager.finalize_and_get_blocks(303)
+
+    assert [block["type"] for block in blocks] == ["thinking", "text", "thinking"]
+    assert blocks[0]["content"] == "First thought."
+    assert blocks[1]["content"] == "Answer."
+    assert blocks[2]["content"] == "Second thought."
+    assert [block["status"] for block in blocks] == ["done", "done", "done"]
 
 
 @pytest.mark.asyncio

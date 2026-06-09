@@ -103,6 +103,7 @@ class StatusUpdatingEmitter(ResultEmitter):
             EventType.TOOL_ARGUMENT_DELTA.value,
             EventType.TOOL_ARGUMENT_DONE.value,
             EventType.TOOL_RESULT.value,
+            EventType.THINKING.value,
         ):
             await session_manager.touch_task_streaming_activity(self._task_id)
 

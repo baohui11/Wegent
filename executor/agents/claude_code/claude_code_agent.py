@@ -26,6 +26,9 @@ from executor.agents.claude_code.config_manager import (
     extract_claude_options,
     get_claude_config_dir,
 )
+from executor.agents.claude_code.deferred_mcp_proxy import (
+    install_deferred_mcp_proxy_hook,
+)
 from executor.agents.claude_code.git_operations import (
     add_to_git_exclude,
     setup_claude_md_symlink,
@@ -57,6 +60,10 @@ from executor.agents.claude_code.skill_deployer import (
     setup_claudecode_dir,
     setup_coordinate_mode,
 )
+from executor.agents.claude_code.standalone_chat_workspace import (
+    prepare_standalone_chat_workspace,
+    prepared_standalone_chat_workspace_path,
+)
 from executor.config import config
 from executor.hooks.pre_execute_hook import get_pre_execute_hook
 from executor.services.task_identity import build_task_identity_context
@@ -68,7 +75,6 @@ from shared.models.responses_api_emitter import ResponsesAPIEmitter
 from shared.models.task import ExecutionResult, ThinkingStep
 from shared.status import TaskStatus
 from shared.telemetry.decorators import add_span_event, trace_async
-from shared.utils import git_util
 
 logger = setup_logger("claude_code_agent")
 
@@ -462,7 +468,11 @@ class ClaudeCodeAgent(Agent):
                     # Continue execution with original systemPrompt
 
             # Setup SubAgent configuration files for coordinate mode
-            setup_coordinate_mode(self.task_data, self.project_path, self.options)
+            setup_coordinate_mode(
+                self.task_data,
+                self._coordinate_mode_workspace_path(),
+                self.options,
+            )
 
             # Download attachments for this task
             self._download_attachments()
@@ -499,42 +509,35 @@ class ClaudeCodeAgent(Agent):
 
         project_id = getattr(self.task_data, "project_id", None)
         workspace_source = getattr(self.task_data, "workspace_source", None)
-        if not project_id or not workspace_source:
-            return
-
         project_path = getattr(self.task_data, "project_workspace_path", None)
-        if project_path:
-            project_path = os.path.expanduser(str(project_path))
-            if not os.path.isabs(project_path):
-                project_path = os.path.join(config.get_workspace_root(), project_path)
-        elif workspace_source == "git" and self.task_data.git_url:
-            repo_name = git_util.get_repo_name_from_url(self.task_data.git_url)
-            safe_repo_name = repo_name.replace("/", "_").replace("\\", "_")
-            project_path = os.path.join(
-                config.get_workspace_root(),
-                "projects",
-                str(project_id),
-                safe_repo_name,
+        if not workspace_source:
+            standalone_path = prepare_standalone_chat_workspace(
+                self.task_data, self.prompt
             )
+            if standalone_path:
+                self.task_data.workspace_source = "local_path"
+                self.task_data.project_workspace_path = standalone_path
+                workspace_source = "local_path"
+                project_path = standalone_path
 
+        project_path = self.prepare_project_workspace_path()
         if not project_path:
             return
 
-        if workspace_source == "local_path":
-            os.makedirs(project_path, exist_ok=True)
-        else:
-            parent_dir = os.path.dirname(project_path)
-            if parent_dir:
-                os.makedirs(parent_dir, exist_ok=True)
-
-        self.project_path = project_path
         self.options["cwd"] = project_path
         SessionManager.set_task_session_root(
             self.task_id, os.path.join(config.WEGENT_EXECUTOR_HOME, "sessions")
         )
-        logger.info(
-            "Using project workspace path for task %s: %s", self.task_id, project_path
-        )
+
+    def _coordinate_mode_workspace_path(self) -> Optional[str]:
+        """Return where coordinate-mode Claude internals should be written."""
+
+        if (
+            prepared_standalone_chat_workspace_path(self.task_data)
+            and self._claude_config_dir
+        ):
+            return os.path.dirname(self._claude_config_dir)
+        return self.project_path
 
     def execute(self) -> TaskStatus:
         """
@@ -881,6 +884,8 @@ class ClaudeCodeAgent(Agent):
                 self.thinking_manager,
                 self.task_state_manager,
                 session_id=self.session_id,
+                mcp_servers=self.options.get("mcp_servers")
+                or self.options.get("mcpServers"),
             )
 
             # Task completed or failed
@@ -976,6 +981,7 @@ class ClaudeCodeAgent(Agent):
         self.options = prepare_options_for_windows(
             self.options, self._get_claude_config_dir()
         )
+        self.options = install_deferred_mcp_proxy_hook(self.options)
 
         # Add stderr callback to capture CLI stderr output
         self.options["stderr"] = self._stderr_callback

@@ -5,12 +5,16 @@ import { WorkbenchProvider } from '@/features/workbench/WorkbenchProvider'
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { WorkbenchPage } from '@/pages/WorkbenchPage'
+import { PluginsPage } from '@/pages/PluginsPage'
+import { PluginManagementPage } from '@/pages/PluginManagementPage'
+import { stripAppBasePath } from '@/config/runtime'
+import { AppearanceProvider } from '@/features/appearance'
 
 function useCurrentPath() {
-  const [path, setPath] = useState(window.location.pathname)
+  const [path, setPath] = useState(stripAppBasePath(window.location.pathname))
 
   useEffect(() => {
-    const handlePopState = () => setPath(window.location.pathname)
+    const handlePopState = () => setPath(stripAppBasePath(window.location.pathname))
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
@@ -36,15 +40,23 @@ function AppRoutes() {
 
   return (
     <WorkbenchProvider user={user}>
-      <WorkbenchPage />
+      {path === '/plugins/manage' ? (
+        <PluginManagementPage />
+      ) : path === '/plugins' ? (
+        <PluginsPage />
+      ) : (
+        <WorkbenchPage />
+      )}
     </WorkbenchProvider>
   )
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <AppearanceProvider>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </AppearanceProvider>
   )
 }

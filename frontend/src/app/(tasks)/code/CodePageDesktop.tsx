@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import { useTeamContext } from '@/contexts/TeamContext'
 import TopNavigation from '@/features/layout/TopNavigation'
@@ -12,23 +13,27 @@ import {
   TaskSidebar,
   ResizableSidebar,
   CollapsedSidebarButtons,
-  SearchDialog,
 } from '@/features/tasks/components/sidebar'
 import WorkbenchToggle from '@/features/layout/WorkbenchToggle'
 import { OpenMenu } from '@/features/tasks/components/input'
 import { Team, WorkbenchData } from '@/types/api'
 import type { MessageBlock } from '@/features/tasks/components/message/thinking/types'
-import { useTaskContext } from '@/features/tasks/contexts/taskContext'
-import { useChatStreamContext } from '@/features/tasks/contexts/chatStreamContext'
-import { useTaskStateMachine } from '@/features/tasks/hooks/useTaskStateMachine'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { saveLastTab } from '@/utils/userPreferences'
 import { calculateOpenLinks } from '@/utils/openLinks'
 import { useUser } from '@/features/common/UserContext'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
-import { Workbench } from '@/features/tasks/components'
 import { ChatArea } from '@/features/tasks/components/chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
 import { paths } from '@/config/paths'
+
+const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
+  ssr: false,
+})
+
+const Workbench = dynamic(() => import('@/features/tasks/components/workbench/Workbench'), {
+  ssr: false,
+})
 
 /**
  * Desktop-specific implementation of Code Page
@@ -54,27 +59,25 @@ export function CodePageDesktop() {
   const {
     selectedTask,
     selectedTaskDetail,
-    setSelectedTask,
+    selectTask,
     refreshTasks,
     refreshSelectedTaskDetail,
-  } = useTaskContext()
-
-  // Chat stream context for clearAllStreams
-  const { clearAllStreams } = useChatStreamContext()
+    taskState: sessionTaskState,
+  } = useTaskSession()
 
   // Get current task title for top navigation
   const currentTaskTitle = selectedTaskDetail?.title
 
   // Handle task deletion
   const handleTaskDeleted = () => {
-    setSelectedTask(null)
+    selectTask(null)
     refreshTasks()
   }
 
   // Handle members changed (when converting to group chat or adding/removing members)
   const handleMembersChanged = () => {
     refreshTasks()
-    refreshSelectedTaskDetail(false)
+    void refreshSelectedTaskDetail()
   }
 
   // User state for git token check
@@ -132,8 +135,8 @@ export function CodePageDesktop() {
     return calculateOpenLinks(selectedTaskDetail)
   }, [selectedTaskDetail])
 
-  // Use reactive state machine hook for real-time updates
-  const { state: taskState } = useTaskStateMachine(selectedTaskDetail?.id)
+  const taskState =
+    sessionTaskState && sessionTaskState.taskId === selectedTaskDetail?.id ? sessionTaskState : null
 
   // Get real-time blocks and workbench data from state machine
   // Priority: state machine (real-time) > selectedTaskDetail (API polling)
@@ -197,8 +200,7 @@ export function CodePageDesktop() {
   const handleNewTask = () => {
     // IMPORTANT: Clear selected task FIRST to ensure UI state is reset immediately
     // This prevents the UI from being stuck showing the previous task's messages
-    setSelectedTask(null)
-    clearAllStreams()
+    selectTask(null)
     // Force a hard reload to ensure a fresh start when already on /code
     window.location.href = paths.code.getHref()
   }
@@ -293,12 +295,14 @@ export function CodePageDesktop() {
         </div>
       </div>
       {/* Search Dialog - rendered at page level for global shortcut support */}
-      <SearchDialog
-        open={isSearchDialogOpen}
-        onOpenChange={setIsSearchDialogOpen}
-        shortcutDisplayText={shortcutDisplayText}
-        pageType="code"
-      />
+      {isSearchDialogOpen && (
+        <SearchDialog
+          open={isSearchDialogOpen}
+          onOpenChange={setIsSearchDialogOpen}
+          shortcutDisplayText={shortcutDisplayText}
+          pageType="code"
+        />
+      )}
     </div>
   )
 }

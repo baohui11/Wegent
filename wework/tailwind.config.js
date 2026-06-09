@@ -1,17 +1,28 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}', './wecode/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
         primary: 'rgb(var(--color-primary) / <alpha-value>)',
+        'primary-contrast': 'rgb(var(--color-primary-contrast) / <alpha-value>)',
         'text-primary': 'rgb(var(--color-text-primary) / <alpha-value>)',
         'text-secondary': 'rgb(var(--color-text-secondary) / <alpha-value>)',
         'text-muted': 'rgb(var(--color-text-muted) / <alpha-value>)',
-        base: 'rgb(var(--color-bg-base) / <alpha-value>)',
+        background: 'rgb(var(--color-bg-base) / <alpha-value>)',
         surface: 'rgb(var(--color-bg-surface) / <alpha-value>)',
         border: 'rgb(var(--color-border) / <alpha-value>)',
         muted: 'rgb(var(--color-muted) / <alpha-value>)',
+        hover: 'rgb(var(--color-bg-hover))',
+        sidebar: 'rgb(var(--color-sidebar))',
+        'sidebar-active': 'rgb(var(--color-sidebar-active) / <alpha-value>)',
+        'sidebar-hover': 'rgb(var(--color-sidebar-hover))',
+        'sidebar-text-primary': 'rgb(var(--color-sidebar-text-primary) / <alpha-value>)',
+        'sidebar-text-secondary': 'rgb(var(--color-sidebar-text-secondary) / <alpha-value>)',
+        'sidebar-text-muted': 'rgb(var(--color-sidebar-text-muted) / <alpha-value>)',
+        'mobile-drawer': 'rgb(var(--color-mobile-drawer))',
+        popover: 'rgb(var(--color-popover) / <alpha-value>)',
+        'code-bg': 'rgb(var(--color-code-bg) / <alpha-value>)',
       },
       borderRadius: {
         DEFAULT: 'var(--radius)',

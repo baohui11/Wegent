@@ -134,7 +134,6 @@ function createProps(taskType: ChatInputControlsProps['taskType']): ChatInputCon
     },
     onFileSelect: jest.fn(),
     onAttachmentRemove: jest.fn(),
-    isLoading: false,
     isStreaming: false,
     isStopping: false,
     hasMessages: false,
@@ -144,7 +143,6 @@ function createProps(taskType: ChatInputControlsProps['taskType']): ChatInputCon
     isModelSelectionRequired: false,
     isAttachmentReadyToSend: true,
     taskInputMessage: 'hello',
-    isSubtaskStreaming: false,
     onStopStream: jest.fn(),
     onSendMessage: jest.fn(),
   }

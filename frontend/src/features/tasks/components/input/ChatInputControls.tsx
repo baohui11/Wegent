@@ -27,7 +27,11 @@ import type {
 import type { ContextItem } from '@/types/context'
 import type { UnifiedSkill } from '@/apis/skills'
 import type { SearchEngine } from '@/apis/chat'
-import { canUseChatContexts, isChatShell } from '../../service/messageService'
+import {
+  canSwitchModelAfterMessages,
+  canUseChatContexts,
+  isChatShell,
+} from '../../service/messageService'
 import { supportsAttachments } from '../../service/attachmentService'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import { MobileChatInputControls } from './MobileChatInputControls'
@@ -110,9 +114,7 @@ export interface ChatInputControlsProps {
   onAttachmentRemove: (attachmentId: number) => void
 
   // State flags
-  isLoading: boolean
   isStreaming: boolean
-  isAwaitingResponseStart?: boolean
   isStopping: boolean
   hasMessages: boolean
   shouldCollapseSelectors: boolean
@@ -121,14 +123,13 @@ export interface ChatInputControlsProps {
   isModelSelectionRequired: boolean
   isAttachmentReadyToSend: boolean
   taskInputMessage: string
-  isSubtaskStreaming: boolean
   canQueueMessage?: boolean
   canSendGuidance?: boolean
+  canCancelTask?: boolean
 
   // Actions
   onStopStream: () => void
   onCancelTask?: () => void
-  isCancelling?: boolean
   onSendMessage: () => void
   onSendGuidance?: () => void
 
@@ -231,12 +232,10 @@ export function ChatInputControls({
   onCorrectionModeToggle,
   selectedContexts,
   setSelectedContexts,
-  attachmentState: _attachmentState,
+  attachmentState,
   onFileSelect,
   onAttachmentRemove: _onAttachmentRemove,
-  isLoading,
   isStreaming,
-  isAwaitingResponseStart = false,
   isStopping,
   hasMessages,
   shouldCollapseSelectors,
@@ -245,12 +244,11 @@ export function ChatInputControls({
   isModelSelectionRequired,
   isAttachmentReadyToSend,
   taskInputMessage,
-  isSubtaskStreaming,
   canQueueMessage = false,
   canSendGuidance = false,
+  canCancelTask,
   onStopStream,
   onCancelTask,
-  isCancelling = false,
   onSendMessage,
   onSendGuidance,
   hasNoTeams = false,
@@ -300,19 +298,16 @@ export function ChatInputControls({
   // Determine the send button state
   const renderSendButton = () => {
     const sendState = getChatSendState({
-      isLoading,
       isStreaming,
-      isAwaitingResponseStart,
       isStopping,
       isModelSelectionRequired,
       isAttachmentReadyToSend,
       hasNoTeams,
       shouldHideChatInput,
       taskInputMessage,
-      selectedTaskStatus: selectedTaskDetail?.status,
-      isSubtaskStreaming,
-      isGroupChat: selectedTaskDetail?.is_group_chat,
+      hasAttachments: attachmentState.attachments.length > 0,
       canQueueMessage,
+      canCancelTask,
     })
 
     const renderStopAction = () => (
@@ -337,10 +332,6 @@ export function ChatInputControls({
     )
 
     const renderCancelTaskAction = () => {
-      if (isCancelling) {
-        return renderStoppingAction()
-      }
-
       return (
         <ActionButton
           onClick={onCancelTask}
@@ -379,7 +370,7 @@ export function ChatInputControls({
           <SendButton
             onClick={onSendMessage}
             disabled={sendState.isPrimaryDisabled}
-            isLoading={isLoading}
+            isLoading={false}
             ariaLabel="Queue message"
           />
         </div>
@@ -390,7 +381,7 @@ export function ChatInputControls({
       <SendButton
         onClick={onSendMessage}
         disabled={sendState.isPrimaryDisabled}
-        isLoading={isLoading}
+        isLoading={false}
       />
     )
   }
@@ -435,21 +426,19 @@ export function ChatInputControls({
         selectedContexts={selectedContexts}
         setSelectedContexts={setSelectedContexts}
         onFileSelect={onFileSelect}
-        isLoading={isLoading}
         isStreaming={isStreaming}
-        isAwaitingResponseStart={isAwaitingResponseStart}
         isStopping={isStopping}
         hasMessages={hasMessages}
         shouldHideChatInput={shouldHideChatInput}
         isModelSelectionRequired={isModelSelectionRequired}
         isAttachmentReadyToSend={isAttachmentReadyToSend}
         taskInputMessage={taskInputMessage}
-        isSubtaskStreaming={isSubtaskStreaming}
+        hasAttachments={attachmentState.attachments.length > 0}
         canQueueMessage={canQueueMessage}
         canSendGuidance={canSendGuidance}
+        canCancelTask={canCancelTask}
         onStopStream={onStopStream}
         onCancelTask={onCancelTask}
-        isCancelling={isCancelling}
         onSendMessage={onSendMessage}
         onSendGuidance={onSendGuidance}
         hasNoTeams={hasNoTeams}
@@ -463,7 +452,7 @@ export function ChatInputControls({
     )
   }
 
-  const selectorsDisabled = isLoading || isStreaming
+  const selectorsDisabled = isStreaming
   const showClarificationAction = isChatShell(selectedTeam)
   const showCorrectionAction = isChatShell(selectedTeam) && Boolean(onCorrectionModeToggle)
 
@@ -482,18 +471,14 @@ export function ChatInputControls({
           <GenerateModeSelector
             selectedMode={taskType as GenerateMode}
             onModeChange={onGenerateModeChange}
-            disabled={isLoading || isStreaming || hasMessages}
+            disabled={isStreaming || hasMessages}
           />
         )}
 
         {/* Reference image upload button - show for image and video generation modes,
             placed between the mode toggle and the model selector */}
         {isGenerationMode && (
-          <AttachmentButton
-            onFileSelect={onFileSelect}
-            disabled={isLoading || isStreaming}
-            accept="image/*"
-          />
+          <AttachmentButton onFileSelect={onFileSelect} disabled={isStreaming} accept="image/*" />
         )}
 
         {/* Video Mode Controls - show when taskType is 'video' */}
@@ -507,7 +492,7 @@ export function ChatInputControls({
                 forceOverride={false}
                 setForceOverride={() => {}}
                 selectedTeam={null}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
                 isLoading={isVideoModelsLoading}
                 modelCategoryType="video"
               />
@@ -525,7 +510,7 @@ export function ChatInputControls({
                 selectedResolution={selectedResolution}
                 onResolutionChange={onResolutionChange}
                 availableResolutions={availableResolutions ?? ['480p', '720p', '1080p']}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
               />
             )}
           </>
@@ -542,7 +527,7 @@ export function ChatInputControls({
                 forceOverride={false}
                 setForceOverride={() => {}}
                 selectedTeam={null}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
                 isLoading={isImageModelsLoading}
                 modelCategoryType="image"
               />
@@ -553,7 +538,7 @@ export function ChatInputControls({
               <ImageSizeSelector
                 selectedSize={selectedImageSize}
                 onSizeChange={onImageSizeChange}
-                disabled={isLoading || isStreaming}
+                disabled={isStreaming}
               />
             )}
           </>
@@ -567,7 +552,7 @@ export function ChatInputControls({
           >
             {/* File Upload Button - show for shells that support attachments (Chat, ClaudeCode) */}
             {supportsAttachments(selectedTeam) && (
-              <AttachmentButton onFileSelect={onFileSelect} disabled={isLoading || isStreaming} />
+              <AttachmentButton onFileSelect={onFileSelect} disabled={isStreaming} />
             )}
 
             {/* Divider between attachment and other controls */}
@@ -586,7 +571,7 @@ export function ChatInputControls({
               selectedTaskDetail={selectedTaskDetail}
               taskType={taskType}
               hasMessages={hasMessages}
-              isLoading={isLoading}
+              isLoading={false}
               isStreaming={isStreaming}
               hasNoTeams={hasNoTeams}
             />
@@ -678,7 +663,9 @@ export function ChatInputControls({
                 forceOverride={forceOverride}
                 setForceOverride={setForceOverride}
                 selectedTeam={selectedTeam}
-                disabled={isLoading || isStreaming || (hasMessages && !isChatShell(selectedTeam))}
+                disabled={
+                  isStreaming || (hasMessages && !canSwitchModelAfterMessages(selectedTeam))
+                }
                 compact={shouldCollapseSelectors}
                 teamId={teamId}
                 taskId={taskId}

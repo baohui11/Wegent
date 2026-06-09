@@ -26,14 +26,13 @@ import { useChatAreaState } from './useChatAreaState'
 import { useChatStreamHandlers } from './useChatStreamHandlers'
 import { allBotsHavePredefinedModel } from '../selector/ModelSelector'
 import { QuoteProvider, SelectionTooltip, useQuote } from '../text-selection'
-import type { Team, SubtaskContextBrief, TaskType } from '@/types/api'
+import type { InteractiveFormAnswerPayload, Team, SubtaskContextBrief, TaskType } from '@/types/api'
 import type { Model } from '../../hooks/useModelSelection'
 import type { ContextItem, QueueMessageContext } from '@/types/context'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useRouter } from 'next/navigation'
-import { useTaskContext } from '../../contexts/taskContext'
-import { useTaskStateMachine } from '../../hooks/useTaskStateMachine'
-import { useOptionalChatStreamContext } from '../../contexts/chatStreamContext'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
+import { useOptionalTaskSession } from '@/features/tasks/session/TaskSession'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -57,6 +56,10 @@ import { useModelSelection } from '../../hooks/useModelSelection'
 import { QueueMessageHandler } from '@/features/inbox'
 import type { ChatAreaExtension } from './types'
 import { useProjectContext } from '@/features/projects/contexts/projectContext'
+import {
+  buildInteractiveFormCancellation,
+  findPendingInteractiveForm,
+} from './interactiveFormPending'
 
 /**
  * Threshold in pixels for determining when to collapse selectors.
@@ -66,6 +69,10 @@ const COLLAPSE_SELECTORS_THRESHOLD = 420
 
 /** Generation mode type - video or image */
 type GenerateMode = 'video' | 'image'
+
+type SendMessageOptions = {
+  interactiveFormAnswer?: InteractiveFormAnswerPayload
+}
 
 const PIPELINE_NEXT_STEP_CONTEXT_TYPES = new Set<SubtaskContextBrief['context_type']>([
   'attachment',
@@ -159,26 +166,48 @@ function ChatAreaContent({
   emptyStateContent,
   extension,
 }: ChatAreaProps) {
-  const { t } = useTranslation()
+  const { t } = useTranslation('chat')
   const { toast } = useToast()
   const router = useRouter()
-  const chatStreamContext = useOptionalChatStreamContext()
+  const chatStreamContext = useOptionalTaskSession()
 
   // Pipeline stage info state - shared between PipelineStageIndicator and MessagesArea
   const [pipelineStageInfo, setPipelineStageInfo] = useState<PipelineStageInfo | null>(null)
   const [isPipelineNextStepOpen, setIsPipelineNextStepOpen] = useState(false)
   const [isPipelineNextStepConfirming, setIsPipelineNextStepConfirming] = useState(false)
   const [pendingReplacementMessage, setPendingReplacementMessage] = useState<string | null>(null)
+  const [pendingReplacementOptions, setPendingReplacementOptions] =
+    useState<SendMessageOptions | null>(null)
   const [isPendingReplacementOpen, setIsPendingReplacementOpen] = useState(false)
   const [isPendingReplacementConfirming, setIsPendingReplacementConfirming] = useState(false)
+  const [pendingFormReplacementMessage, setPendingFormReplacementMessage] = useState<string | null>(
+    null
+  )
+  const [isPendingFormReplacementOpen, setIsPendingFormReplacementOpen] = useState(false)
+  const [isPendingFormReplacementConfirming, setIsPendingFormReplacementConfirming] =
+    useState(false)
+  const [pendingQuickPhrase, setPendingQuickPhrase] = useState<string | null>(null)
+  const [isQuickPhraseOverwriteOpen, setIsQuickPhraseOverwriteOpen] = useState(false)
+  const [focusInputAtEndSignal, setFocusInputAtEndSignal] = useState(0)
   const { quote, clearQuote, formatQuoteForMessage } = useQuote()
 
   // Task context
-  const { selectedTask, selectedTaskDetail, setSelectedTask, accessDenied } = useTaskContext()
+  const {
+    selectedTask,
+    selectedTaskDetail,
+    selectTask,
+    accessDenied,
+    taskState: sessionTaskState,
+  } = useTaskSession()
   const effectiveTaskId = selectedTask?.id ?? selectedTaskDetail?.id
 
-  // Use useTaskStateMachine hook for reactive state updates (SINGLE SOURCE OF TRUTH per AGENTS.md)
-  const { state: taskState } = useTaskStateMachine(effectiveTaskId)
+  const taskState =
+    sessionTaskState && sessionTaskState.taskId === effectiveTaskId ? sessionTaskState : null
+  const runtimeTaskStatus = taskState?.runtime.taskStatus
+  const pendingInteractiveForm = useMemo(
+    () => findPendingInteractiveForm(taskState?.messages?.values()),
+    [taskState?.messages]
+  )
 
   // Video model selection state - only enabled for video mode
   // Uses unified useModelSelection hook with modelCategoryType='video'
@@ -583,7 +612,6 @@ function ChatAreaContent({
     effectiveRequiresWorkspace: chatState.effectiveRequiresWorkspace,
     taskInputMessage: chatState.taskInputMessage,
     setTaskInputMessage: chatState.setTaskInputMessage,
-    setIsLoading: chatState.setIsLoading,
     enableDeepThinking: chatState.enableDeepThinking,
     enableReasoning: chatState.enableReasoning,
     enableClarification: chatState.enableClarification,
@@ -629,7 +657,6 @@ function ChatAreaContent({
     const hasSelectedTask = Boolean(effectiveTaskId)
     const hasNewTaskStream =
       !effectiveTaskId && streamHandlers.pendingTaskId && streamHandlers.isStreaming
-    const hasLocalPending = streamHandlers.localPendingMessage !== null
     // Use taskState from state machine (single source of truth)
     const hasUnifiedMessages = taskState?.messages && taskState.messages.size > 0
 
@@ -638,24 +665,14 @@ function ChatAreaContent({
       return true
     }
 
-    // In inputAlwaysAtBottom mode (knowledge notebook), only consider actual messages
-    // not just the presence of selectedTaskDetail
-    if (inputAlwaysAtBottom) {
-      return Boolean(
-        streamHandlers.hasPendingUserMessage ||
-        streamHandlers.isStreaming ||
-        hasNewTaskStream ||
-        hasLocalPending ||
-        hasUnifiedMessages
-      )
-    }
-
+    // Fallback: consider task selected (hasSelectedTask) as having messages to avoid
+    // brief hasMessages=false gap between task creation and state machine message population,
+    // which would cause empty-state content (e.g. SummaryCard) to flash.
     return Boolean(
       hasSelectedTask ||
       streamHandlers.hasPendingUserMessage ||
       streamHandlers.isStreaming ||
       hasNewTaskStream ||
-      hasLocalPending ||
       hasUnifiedMessages
     )
   }, [
@@ -663,9 +680,7 @@ function ChatAreaContent({
     streamHandlers.hasPendingUserMessage,
     streamHandlers.isStreaming,
     streamHandlers.pendingTaskId,
-    streamHandlers.localPendingMessage,
     taskState?.messages,
-    inputAlwaysAtBottom,
   ])
 
   const pipelineNextStepMessages = useMemo<PipelineNextStepMessage[]>(() => {
@@ -727,14 +742,12 @@ function ChatAreaContent({
   const canSubmit = useMemo(() => {
     return (
       !disabledReason &&
-      !chatState.isLoading &&
       (!streamHandlers.isStreaming || streamHandlers.canQueueMessage) &&
       !isModelSelectionRequired &&
       chatState.isAttachmentReadyToSend
     )
   }, [
     disabledReason,
-    chatState.isLoading,
     streamHandlers.isStreaming,
     streamHandlers.canQueueMessage,
     isModelSelectionRequired,
@@ -772,26 +785,101 @@ function ChatAreaContent({
   selectedContextsRef.current = chatState.selectedContexts
 
   const shouldConfirmPendingReplacement =
-    selectedTaskDetail?.status === 'PENDING' && !selectedTaskDetail?.is_group_chat
+    runtimeTaskStatus === 'PENDING' &&
+    !streamHandlers.canQueueMessage &&
+    !selectedTaskDetail?.is_group_chat
+
+  const applyQuickPhraseToInput = useCallback(
+    (phrase: string) => {
+      setTaskInputMessage(phrase)
+      setFocusInputAtEndSignal(signal => signal + 1)
+    },
+    [setTaskInputMessage]
+  )
+
+  const handleQuickPhraseSelect = useCallback(
+    (phrase: string) => {
+      if (chatState.taskInputMessage.trim()) {
+        setPendingQuickPhrase(phrase)
+        setIsQuickPhraseOverwriteOpen(true)
+        return
+      }
+
+      applyQuickPhraseToInput(phrase)
+    },
+    [applyQuickPhraseToInput, chatState.taskInputMessage]
+  )
+
+  const handleConfirmQuickPhraseOverwrite = useCallback(() => {
+    if (!pendingQuickPhrase) return
+
+    applyQuickPhraseToInput(pendingQuickPhrase)
+    setPendingQuickPhrase(null)
+    setIsQuickPhraseOverwriteOpen(false)
+  }, [applyQuickPhraseToInput, pendingQuickPhrase])
 
   const sendOrConfirmPendingReplacement = useCallback(
-    async (message: string) => {
+    async (message: string, options?: SendMessageOptions) => {
       const trimmedMessage = message.trim()
-      if (!trimmedMessage && !chatState.shouldHideChatInput) return
+      const hasAttachments = chatState.attachmentState.attachments.length > 0
+      if (!trimmedMessage && !hasAttachments && !chatState.shouldHideChatInput) return
+
+      if (pendingInteractiveForm && !options?.interactiveFormAnswer) {
+        setPendingFormReplacementMessage(trimmedMessage)
+        setIsPendingFormReplacementOpen(true)
+        return
+      }
 
       if (shouldConfirmPendingReplacement) {
         setPendingReplacementMessage(trimmedMessage)
+        setPendingReplacementOptions(options ?? null)
         setIsPendingReplacementOpen(true)
         return
       }
 
-      await streamHandlers.handleSendMessage(trimmedMessage)
+      await streamHandlers.handleSendMessage(trimmedMessage, options)
     },
-    [chatState.shouldHideChatInput, shouldConfirmPendingReplacement, streamHandlers]
+    [
+      chatState.attachmentState.attachments.length,
+      chatState.shouldHideChatInput,
+      pendingInteractiveForm,
+      shouldConfirmPendingReplacement,
+      streamHandlers,
+    ]
   )
 
+  const handleConfirmPendingFormReplacement = useCallback(async () => {
+    if (
+      !pendingFormReplacementMessage ||
+      !pendingInteractiveForm ||
+      isPendingFormReplacementConfirming
+    ) {
+      return
+    }
+
+    setIsPendingFormReplacementConfirming(true)
+    try {
+      const cancellation = buildInteractiveFormCancellation(
+        pendingInteractiveForm,
+        pendingFormReplacementMessage
+      )
+      setPendingFormReplacementMessage(null)
+      setIsPendingFormReplacementOpen(false)
+      await streamHandlers.handleSendMessage(cancellation.message, {
+        interactiveFormAnswer: cancellation.answer,
+      })
+    } finally {
+      setIsPendingFormReplacementConfirming(false)
+    }
+  }, [
+    isPendingFormReplacementConfirming,
+    pendingFormReplacementMessage,
+    pendingInteractiveForm,
+    streamHandlers,
+  ])
+
   const handleConfirmPendingReplacement = useCallback(async () => {
-    if (!pendingReplacementMessage || isPendingReplacementConfirming) return
+    if (pendingReplacementMessage === null || isPendingReplacementConfirming) return
 
     setIsPendingReplacementConfirming(true)
     try {
@@ -799,13 +887,20 @@ function ChatAreaContent({
       if (!cancelled) return
 
       const message = pendingReplacementMessage
+      const options = pendingReplacementOptions ?? undefined
       setPendingReplacementMessage(null)
+      setPendingReplacementOptions(null)
       setIsPendingReplacementOpen(false)
-      await streamHandlers.handleSendMessage(message)
+      await streamHandlers.handleSendMessage(message, options)
     } finally {
       setIsPendingReplacementConfirming(false)
     }
-  }, [pendingReplacementMessage, isPendingReplacementConfirming, streamHandlers])
+  }, [
+    pendingReplacementMessage,
+    pendingReplacementOptions,
+    isPendingReplacementConfirming,
+    streamHandlers,
+  ])
 
   // Handle queue message loaded from inbox - adds the message(s) as context(s)
   // Supports both single message and batch processing
@@ -849,7 +944,7 @@ function ChatAreaContent({
   const { handleDragEnter, handleDragLeave, handleDragOver, handleDrop, handlePasteFile } =
     useAttachmentUpload({
       team: chatState.selectedTeam,
-      isLoading: chatState.isLoading,
+      isSendPending: streamHandlers.hasPendingUserMessage,
       isStreaming: streamHandlers.isStreaming,
       attachmentState: chatState.attachmentState,
       onFileSelect: chatState.handleFileSelect,
@@ -865,11 +960,21 @@ function ChatAreaContent({
 
   // Callback for child components to send messages
   const handleSendMessageFromChild = useCallback(
-    async (content: string) => {
+    async (content: string, options?: SendMessageOptions) => {
       const existingInput = taskInputMessageRef.current.trim()
       const combinedMessage = existingInput ? `${content}\n\n---\n\n${existingInput}` : content
       setTaskInputMessage('')
-      await sendOrConfirmPendingReplacement(combinedMessage)
+      await sendOrConfirmPendingReplacement(
+        combinedMessage,
+        options?.interactiveFormAnswer
+          ? {
+              interactiveFormAnswer: {
+                ...options.interactiveFormAnswer,
+                message: combinedMessage,
+              },
+            }
+          : options
+      )
     },
     [sendOrConfirmPendingReplacement, setTaskInputMessage]
   )
@@ -951,7 +1056,7 @@ function ChatAreaContent({
       if (!taskId || !teamId) {
         toast({
           variant: 'destructive',
-          title: t('chat:pipeline.next_step_dialog.missing_task'),
+          title: t('pipeline.next_step_dialog.missing_task'),
         })
         return
       }
@@ -959,7 +1064,7 @@ function ChatAreaContent({
       if (!chatStreamContext) {
         toast({
           variant: 'destructive',
-          title: t('chat:pipeline.confirm_failed'),
+          title: t('pipeline.confirm_failed'),
         })
         return
       }
@@ -987,13 +1092,13 @@ function ChatAreaContent({
 
         setIsPipelineNextStepOpen(false)
         toast({
-          title: t('chat:pipeline.stage_confirmed'),
+          title: t('pipeline.stage_confirmed'),
         })
       } catch (error) {
         console.error('Failed to confirm pipeline next step:', error)
         toast({
           variant: 'destructive',
-          title: t('chat:pipeline.confirm_failed'),
+          title: t('pipeline.confirm_failed'),
         })
       } finally {
         setIsPipelineNextStepConfirming(false)
@@ -1154,7 +1259,7 @@ function ChatAreaContent({
   // Handle access denied state
   if (accessDenied) {
     const handleGoHome = () => {
-      setSelectedTask(null)
+      selectTask(null)
       router.push('/chat')
     }
 
@@ -1197,6 +1302,7 @@ function ChatAreaContent({
   const inputCardProps = {
     taskInputMessage: chatState.taskInputMessage,
     setTaskInputMessage: chatState.setTaskInputMessage,
+    focusInputAtEndSignal,
     selectedTeam: chatState.selectedTeam,
     teams: teams,
     externalApiParams: chatState.externalApiParams,
@@ -1221,13 +1327,16 @@ function ChatAreaContent({
     onDrop: handleDrop,
     canSubmit,
     canQueueMessage: streamHandlers.canQueueMessage,
+    canCancelTask: streamHandlers.canCancelTask,
     queuedMessages: streamHandlers.queuedMessages,
     onCancelQueuedMessage: streamHandlers.cancelQueuedMessage,
+    onEditQueuedMessage: streamHandlers.editQueuedMessage,
     onSendQueuedAsGuidance: streamHandlers.sendQueuedAsGuidance,
     canSendGuidance: streamHandlers.canSendGuidance,
     guidanceMessages: streamHandlers.guidanceMessages,
     expiredGuidanceMessages: streamHandlers.expiredGuidanceMessages,
     onCancelGuidance: streamHandlers.cancelGuidance,
+    onEditGuidanceMessage: streamHandlers.editGuidanceMessage,
     onSendExpiredGuidanceAsMessage: streamHandlers.sendExpiredGuidanceAsMessage,
     handleSendMessage: async (overrideMessage?: string) => {
       // Format message with quote if present, then clear quote
@@ -1284,9 +1393,7 @@ function ChatAreaContent({
     attachmentState: chatState.attachmentState,
     onFileSelect: chatState.handleFileSelect,
     onAttachmentRemove: chatState.handleAttachmentRemove,
-    isLoading: chatState.isLoading,
     isStreaming: streamHandlers.isStreaming,
-    isAwaitingResponseStart: streamHandlers.isAwaitingResponseStart,
     isStopping: streamHandlers.isStopping,
     hasMessages,
     shouldCollapseSelectors,
@@ -1294,10 +1401,8 @@ function ChatAreaContent({
     shouldHideChatInput: chatState.shouldHideChatInput,
     isModelSelectionRequired,
     isAttachmentReadyToSend: chatState.isAttachmentReadyToSend,
-    isSubtaskStreaming: streamHandlers.isSubtaskStreaming,
     onStopStream: streamHandlers.stopStream,
     onCancelTask: streamHandlers.handleCancelTask,
-    isCancelling: streamHandlers.isCancelling,
     onSendMessage: () => {
       // Format message with quote if present, then clear quote
       const message = formatQuoteForMessage(chatState.taskInputMessage.trim())
@@ -1478,6 +1583,7 @@ function ChatAreaContent({
                   teams={teams}
                   selectedTeam={chatState.selectedTeam}
                   onTeamSelect={handleTeamSelect}
+                  onPhraseSelect={handleQuickPhraseSelect}
                   currentMode={taskType}
                   isLoading={isTeamsLoading}
                   isTeamsLoading={isTeamsLoading}
@@ -1574,27 +1680,55 @@ function ChatAreaContent({
         />
       )}
       <AlertDialog
-        open={isPendingReplacementOpen}
+        open={isQuickPhraseOverwriteOpen}
         onOpenChange={open => {
-          if (isPendingReplacementConfirming) return
-          setIsPendingReplacementOpen(open)
+          setIsQuickPhraseOverwriteOpen(open)
           if (!open) {
-            setPendingReplacementMessage(null)
+            setPendingQuickPhrase(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[420px] max-w-[calc(100vw-32px)] rounded-2xl border-border bg-base">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('quick_launch.overwrite_confirm_title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('quick_launch.overwrite_confirm_description')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="quick-phrase-overwrite-cancel">
+              {t('quick_launch.overwrite_confirm_cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="quick-phrase-overwrite-confirm"
+              onClick={handleConfirmQuickPhraseOverwrite}
+              className="bg-primary text-white hover:bg-primary/90"
+            >
+              {t('quick_launch.overwrite_confirm_action')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={isPendingFormReplacementOpen}
+        onOpenChange={open => {
+          if (isPendingFormReplacementConfirming) return
+          setIsPendingFormReplacementOpen(open)
+          if (!open) {
+            setPendingFormReplacementMessage(null)
           }
         }}
       >
         <AlertDialogContent className="w-[520px] max-w-[calc(100vw-32px)] gap-0 overflow-hidden rounded-2xl border-border bg-base p-0 shadow-2xl">
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             <Command className="h-4 w-4 text-text-secondary" />
-            <span className="text-sm text-text-secondary">
-              {t('chat:pending_task_confirm.eyebrow')}
-            </span>
+            <span className="text-sm text-text-secondary">{t('pending_form_confirm.eyebrow')}</span>
             <AlertDialogCancel
-              disabled={isPendingReplacementConfirming}
+              disabled={isPendingFormReplacementConfirming}
               className="ml-auto mt-0 h-8 w-8 rounded-full border-0 bg-transparent p-0 text-text-muted hover:bg-surface hover:text-text-primary"
             >
               <X className="h-4 w-4" />
-              <span className="sr-only">{t('chat:pending_task_confirm.wait')}</span>
+              <span className="sr-only">{t('pending_form_confirm.keep')}</span>
             </AlertDialogCancel>
           </div>
           <AlertDialogHeader className="space-y-0 px-5 py-5 text-left">
@@ -1602,10 +1736,78 @@ function ChatAreaContent({
               <MessageSquareText className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div>
                 <AlertDialogTitle className="text-sm font-semibold text-text-primary">
-                  {t('chat:pending_task_confirm.title')}
+                  {t('pending_form_confirm.title')}
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm leading-6 text-text-secondary">
-                  {t('chat:pending_task_confirm.description')}
+                  {t('pending_form_confirm.description')}
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-2 gap-2 px-5 pb-5 pt-0 sm:space-x-0">
+            <AlertDialogCancel
+              disabled={isPendingFormReplacementConfirming}
+              className="mt-0 flex h-auto flex-col items-start justify-start gap-0 rounded-xl border-border bg-base px-4 py-3 text-left hover:bg-surface"
+            >
+              <span className="block text-sm font-medium text-text-primary">
+                {t('pending_form_confirm.keep')}
+              </span>
+              <span className="mt-1 block text-xs font-normal text-text-secondary">
+                {t('pending_form_confirm.keep_hint')}
+              </span>
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => {
+                event.preventDefault()
+                void handleConfirmPendingFormReplacement()
+              }}
+              disabled={isPendingFormReplacementConfirming}
+              className="flex h-auto flex-col items-start justify-start gap-0 rounded-xl border border-primary bg-primary/8 px-4 py-3 text-left hover:bg-primary/12"
+            >
+              <span className="block text-sm font-medium text-primary">
+                {isPendingFormReplacementConfirming
+                  ? t('pending_form_confirm.confirming')
+                  : t('pending_form_confirm.confirm')}
+              </span>
+              <span className="mt-1 block text-xs font-normal text-text-secondary">
+                {t('pending_form_confirm.confirm_hint')}
+              </span>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={isPendingReplacementOpen}
+        onOpenChange={open => {
+          if (isPendingReplacementConfirming) return
+          setIsPendingReplacementOpen(open)
+          if (!open) {
+            setPendingReplacementMessage(null)
+            setPendingReplacementOptions(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[520px] max-w-[calc(100vw-32px)] gap-0 overflow-hidden rounded-2xl border-border bg-base p-0 shadow-2xl">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            <Command className="h-4 w-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">{t('pending_task_confirm.eyebrow')}</span>
+            <AlertDialogCancel
+              disabled={isPendingReplacementConfirming}
+              className="ml-auto mt-0 h-8 w-8 rounded-full border-0 bg-transparent p-0 text-text-muted hover:bg-surface hover:text-text-primary"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">{t('pending_task_confirm.wait')}</span>
+            </AlertDialogCancel>
+          </div>
+          <AlertDialogHeader className="space-y-0 px-5 py-5 text-left">
+            <div className="flex items-start gap-3 rounded-xl bg-surface p-4">
+              <MessageSquareText className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <AlertDialogTitle className="text-sm font-semibold text-text-primary">
+                  {t('pending_task_confirm.title')}
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-1 text-sm leading-6 text-text-secondary">
+                  {t('pending_task_confirm.description')}
                 </AlertDialogDescription>
               </div>
             </div>
@@ -1616,10 +1818,10 @@ function ChatAreaContent({
               className="mt-0 flex h-auto flex-col items-start justify-start gap-0 rounded-xl border-border bg-base px-4 py-3 text-left hover:bg-surface"
             >
               <span className="block text-sm font-medium text-text-primary">
-                {t('chat:pending_task_confirm.wait')}
+                {t('pending_task_confirm.wait')}
               </span>
               <span className="mt-1 block text-xs font-normal text-text-secondary">
-                {t('chat:pending_task_confirm.wait_hint')}
+                {t('pending_task_confirm.wait_hint')}
               </span>
             </AlertDialogCancel>
             <AlertDialogAction
@@ -1632,11 +1834,11 @@ function ChatAreaContent({
             >
               <span className="block text-sm font-medium text-primary">
                 {isPendingReplacementConfirming
-                  ? t('chat:pending_task_confirm.confirming')
-                  : t('chat:pending_task_confirm.confirm')}
+                  ? t('pending_task_confirm.confirming')
+                  : t('pending_task_confirm.confirm')}
               </span>
               <span className="mt-1 block text-xs font-normal text-text-secondary">
-                {t('chat:pending_task_confirm.confirm_hint')}
+                {t('pending_task_confirm.confirm_hint')}
               </span>
             </AlertDialogAction>
           </AlertDialogFooter>

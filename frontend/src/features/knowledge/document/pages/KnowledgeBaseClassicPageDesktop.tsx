@@ -19,8 +19,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { saveLastTab } from '@/utils/userPreferences'
 import { useUser } from '@/features/common/UserContext'
-import { useTaskContext } from '@/features/tasks/contexts/taskContext'
-import { useChatStreamContext } from '@/features/tasks/contexts/chatStreamContext'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useKnowledgeBaseDetail } from '@/features/knowledge/document/hooks'
@@ -77,10 +76,7 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
   const { user, isLoading: isUserLoading } = useUser()
 
   // Task context
-  const { setSelectedTask } = useTaskContext()
-
-  // Chat stream context
-  const { clearAllStreams, stopStream, getStreamingTaskIds } = useChatStreamContext()
+  const { selectedTaskDetail, selectTask, stopStream, isStreaming } = useTaskSession()
 
   // Tab state for documents/permissions
   const [activeTab, setActiveTab] = useState<'documents' | 'permissions'>('documents')
@@ -131,16 +127,15 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
 
   // Handle new task from collapsed sidebar button
   const handleNewTask = () => {
-    // Clear state and navigate immediately for responsive UI
-    setSelectedTask(null)
-    clearAllStreams()
-    router.push('/chat')
+    if (isStreaming) {
+      void stopStream(selectedTaskDetail?.id).catch(error => {
+        console.error('Failed to stop stream:', error)
+      })
+    }
 
-    // Stop streams in the background without blocking navigation
-    const streamingIds = getStreamingTaskIds()
-    Promise.all(streamingIds.map(id => stopStream(id))).catch(error => {
-      console.error('Failed to stop streams:', error)
-    })
+    // Clear state and navigate immediately for responsive UI
+    selectTask(null)
+    router.push('/chat')
   }
 
   // Check if user can manage this knowledge base
@@ -229,8 +224,7 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
           title={knowledgeBase.name}
           onMobileSidebarToggle={() => {}}
           isSidebarCollapsed={isCollapsed}
-        >
-        </TopNavigation>
+        ></TopNavigation>
 
         {/* Content area - Document List with optional Permission Management Tab */}
         <div className="flex-1 overflow-auto p-4 sm:p-6">
