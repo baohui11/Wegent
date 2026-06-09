@@ -54,7 +54,7 @@ def _merge_blocks(
 ) -> list[dict[str, Any]]:
     """Merge persisted and in-memory blocks while preserving first-seen order."""
     merged: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
+    block_indexes: dict[str, int] = {}
 
     for candidate in (existing_blocks, new_blocks):
         if not isinstance(candidate, list):
@@ -63,10 +63,15 @@ def _merge_blocks(
             if not isinstance(block, dict):
                 continue
             block_id = str(block.get("id") or "")
-            if block_id and block_id in seen_ids:
+            if block_id and block_id in block_indexes:
+                existing = merged[block_indexes[block_id]]
+                merged[block_indexes[block_id]] = {
+                    **existing,
+                    **{key: value for key, value in block.items() if value is not None},
+                }
                 continue
             if block_id:
-                seen_ids.add(block_id)
+                block_indexes[block_id] = len(merged)
             merged.append(block)
 
     return merged
@@ -95,6 +100,7 @@ def prepare_execution_session(
     should_trigger_ai: bool = True,
     bot_ids_override: Optional[List[int]] = None,
     video_config: Optional[Dict[str, Any]] = None,
+    prepared_task: Optional[TaskResource] = None,
 ) -> ExecutionSessionSetup:
     """Create or reuse task/session state before building an execution request."""
     from app.services.task_status import mark_task_pending
@@ -208,6 +214,10 @@ def prepare_execution_session(
                 resolved_task_params.model_id,
                 resolved_task_params.auto_delete_executor,
             )
+
+    if not task and prepared_task is not None:
+        task = prepared_task
+        subtask_user_id = user.id
 
     if not task:
         task = create_new_task(db, user, team, resolved_task_params)
@@ -400,7 +410,6 @@ async def persist_completed_result(
     )
     if normalized_status == "COMPLETED":
         await _persist_standalone_workspace_path(task_id, result)
-
     try:
         await chat_storage.session_manager.cleanup_streaming_state(
             subtask_id,

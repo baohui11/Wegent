@@ -198,6 +198,8 @@ export default function SimpleTeamEditForm({
       searchResults: t('common:models.search_results', 'Search results'),
       noModels: t('common:models.no_models', 'No models available'),
       noMatch: t('common:models.no_match', 'No matching models'),
+      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
+      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [t]
   )

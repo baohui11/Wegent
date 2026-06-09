@@ -9,9 +9,21 @@ Tests the core functionality of unified context management.
 Uses mocks to avoid database dependencies.
 """
 
+import importlib
 from unittest.mock import Mock, patch
 
 import pytest
+
+
+class _FakeStorageBackend:
+    backend_type = "mysql"
+
+    def __init__(self):
+        self.saved: list[tuple[str, bytes, dict]] = []
+
+    def save(self, storage_key: str, binary_data: bytes, metadata: dict) -> str:
+        self.saved.append((storage_key, binary_data, metadata))
+        return storage_key
 
 
 class TestSubtaskContextBrief:
@@ -66,6 +78,95 @@ class TestSubtaskContextBrief:
         assert brief.id == 888
         assert brief.document_id == 456
         assert brief.source_config == {"url": "https://example.com/table"}
+
+
+class TestContextServiceAttachmentCopy:
+    """Test trusted attachment copy operations."""
+
+    def test_copy_attachment_for_user_creates_quick_launch_preset_copy(
+        self, monkeypatch
+    ) -> None:
+        from app.models.subtask_context import (
+            ContextStatus,
+            ContextType,
+            SubtaskContext,
+        )
+        from app.services.context import context_service
+
+        context_service_module = importlib.import_module(
+            "app.services.context.context_service"
+        )
+
+        source = SubtaskContext(
+            subtask_id=0,
+            user_id=1,
+            context_type=ContextType.ATTACHMENT.value,
+            name="template.pdf",
+            status=ContextStatus.READY.value,
+            extracted_text="Template extracted text",
+            text_length=23,
+            image_base64="",
+            type_data={
+                "original_filename": "template.pdf",
+                "file_extension": ".pdf",
+                "file_size": 2048,
+                "mime_type": "application/pdf",
+                "storage_backend": "mysql",
+                "storage_key": "attachments/source",
+            },
+        )
+        source.id = 50
+        storage = _FakeStorageBackend()
+        added_contexts = []
+        db = Mock()
+
+        def add_context(context):
+            added_contexts.append(context)
+
+        def flush_context():
+            if added_contexts and added_contexts[-1].id is None:
+                added_contexts[-1].id = 501
+
+        db.add.side_effect = add_context
+        db.flush.side_effect = flush_context
+        monkeypatch.setattr(
+            context_service_module,
+            "get_storage_backend",
+            lambda _db: storage,
+        )
+        monkeypatch.setattr(
+            context_service,
+            "get_attachment_binary_data",
+            lambda _db, _context: b"template-bytes",
+        )
+
+        copied = context_service.copy_attachment_for_user(
+            db=db,
+            source_context=source,
+            target_user_id=7,
+            source_metadata={
+                "source": "quick_launch_preset",
+                "quick_launch_function_id": "create_ppt",
+                "quick_launch_preset_id": "roadmap",
+            },
+        )
+
+        assert copied.id == 501
+        assert copied.user_id == 7
+        assert copied.subtask_id == 0
+        assert copied.context_type == ContextType.ATTACHMENT.value
+        assert copied.status == ContextStatus.READY.value
+        assert copied.extracted_text == "Template extracted text"
+        assert copied.text_length == 23
+        assert copied.type_data["source"] == "quick_launch_preset"
+        assert copied.type_data["source_attachment_id"] == 50
+        assert copied.type_data["quick_launch_function_id"] == "create_ppt"
+        assert copied.type_data["quick_launch_preset_id"] == "roadmap"
+        assert copied.type_data["original_filename"] == "template.pdf"
+        assert copied.type_data["storage_key"].endswith("_7_501")
+        assert storage.saved[0][1] == b"template-bytes"
+        db.commit.assert_called_once()
+        db.refresh.assert_called_once_with(copied)
 
 
 class TestContextServiceKnowledgeBaseRetrieval:
@@ -1673,16 +1774,28 @@ class TestContextServiceDirectUpload:
 
         cs_module = self._cs_module()
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
-                patch.object(cs_module, "_should_encrypt", return_value=False):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=True
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=False),
+        ):
             assert cs.supports_direct_upload() is True
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=False), \
-                patch.object(cs_module, "_should_encrypt", return_value=False):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=False
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=False),
+        ):
             assert cs.supports_direct_upload() is False
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
-                patch.object(cs_module, "_should_encrypt", return_value=True):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=True
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=True),
+        ):
             assert cs.supports_direct_upload() is False
 
     def test_prepare_direct_upload_rejects_when_unsupported(self):
@@ -1691,8 +1804,12 @@ class TestContextServiceDirectUpload:
 
         cs_module = self._cs_module()
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=False), \
-                patch.object(cs_module, "_should_encrypt", return_value=False):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=False
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=False),
+        ):
             with pytest.raises(StorageError):
                 cs.prepare_direct_upload(
                     db=Mock(),
@@ -1706,8 +1823,12 @@ class TestContextServiceDirectUpload:
 
         cs_module = self._cs_module()
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
-                patch.object(cs_module, "_should_encrypt", return_value=False):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=True
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=False),
+        ):
             with pytest.raises(ValueError, match="File size exceeds maximum limit"):
                 cs.prepare_direct_upload(
                     db=Mock(),
@@ -1739,9 +1860,13 @@ class TestContextServiceDirectUpload:
             "https://minio.example.com/attachments/key?X-Amz-Sig=foo"
         )
 
-        with patch.object(cs_module, "is_external_storage_configured", return_value=True), \
-                patch.object(cs_module, "_should_encrypt", return_value=False), \
-                patch.object(cs_module, "get_storage_backend", return_value=mock_backend):
+        with (
+            patch.object(
+                cs_module, "is_external_storage_configured", return_value=True
+            ),
+            patch.object(cs_module, "_should_encrypt", return_value=False),
+            patch.object(cs_module, "get_storage_backend", return_value=mock_backend),
+        ):
             context, upload_url, expires_at = cs.prepare_direct_upload(
                 db=mock_db,
                 user_id=7,
@@ -1787,8 +1912,10 @@ class TestContextServiceDirectUpload:
         mock_backend = Mock()
         mock_backend.exists.return_value = False
 
-        with patch.object(cs, "get_context_optional", return_value=context), \
-                patch.object(cs_module, "get_storage_backend", return_value=mock_backend):
+        with (
+            patch.object(cs, "get_context_optional", return_value=context),
+            patch.object(cs_module, "get_storage_backend", return_value=mock_backend),
+        ):
             with pytest.raises(StorageError):
                 cs.finalize_direct_upload(
                     db=mock_db,

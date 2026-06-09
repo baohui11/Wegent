@@ -208,6 +208,8 @@ export function PromptDraftDialog({ open, onOpenChange, taskId }: PromptDraftDia
       searchResults: t('common:models.search_results', 'Search results'),
       noModels: t('common:models.no_models', 'No models available'),
       noMatch: t('common:models.no_match', 'No matching models'),
+      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
+      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [t]
   )
@@ -466,6 +468,13 @@ export function PromptDraftDialog({ open, onOpenChange, taskId }: PromptDraftDia
                   placeholder={t('promptDraft.modelPlaceholder')}
                   dataTestId="prompt-draft-grouped-model-select"
                   getModelKey={item => `${item.type}-${item.namespace}-${item.name}`}
+                  renderModelMeta={item =>
+                    item.provider ? (
+                      <span className="block truncate text-xs text-text-muted">
+                        {item.provider}
+                      </span>
+                    ) : null
+                  }
                 />
               </div>
             </div>

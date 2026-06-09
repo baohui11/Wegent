@@ -88,6 +88,8 @@ export function RegenerateModelPopover({
       searchResults: t('common:models.search_results', 'Search results'),
       noModels: t('correction.no_models'),
       noMatch: t('common:models.no_match', 'No matching models'),
+      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
+      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [t]
   )
@@ -138,6 +140,11 @@ export function RegenerateModelPopover({
                   : t('correction.user_model')}
               </span>
             )}
+            renderModelMeta={model =>
+              model.modelId ? (
+                <span className="block truncate text-xs text-text-muted">{model.modelId}</span>
+              ) : null
+            }
           />
         )}
       </PopoverContent>

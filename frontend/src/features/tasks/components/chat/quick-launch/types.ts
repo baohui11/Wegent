@@ -1,6 +1,16 @@
 import type { Team } from '@/types/api'
+import type { QuickLaunchInputOptions } from '@/types/api'
+import type { TeamTargetPage } from '../../selector/team-selector-utils'
 
 export type QuickLauncherKind = 'system_function' | 'favorite_agent'
+
+export interface QuickInputPreset {
+  id: string
+  title: string
+  prompt?: string | null
+  options?: QuickLaunchInputOptions | null
+  source_attachment_ids?: number[]
+}
 
 export interface QuickLauncher {
   key: string
@@ -9,5 +19,11 @@ export interface QuickLauncher {
   description?: string | null
   icon?: string | null
   team: Team
-  quickPhrases: string[]
+  targetPage: TeamTargetPage
+  inputPresets: QuickInputPreset[]
+}
+
+export interface QuickPresetSelection {
+  launcher: QuickLauncher
+  preset: QuickInputPreset
 }

@@ -5,7 +5,7 @@
 """use mediumblob for skill binaries
 
 Revision ID: a2b3c4d5e6f7
-Revises: 9d4be4601172
+Revises: e5f6a7b8c901
 Create Date: 2026-06-01
 
 """
@@ -34,7 +34,7 @@ def upgrade() -> None:
         "binary_data",
         existing_type=sa.LargeBinary(),
         type_=mysql.MEDIUMBLOB(),
-        existing_nullable=False,
+        existing_nullable=True,
     )
 
 
@@ -49,5 +49,5 @@ def downgrade() -> None:
         "binary_data",
         existing_type=mysql.MEDIUMBLOB(),
         type_=sa.LargeBinary(),
-        existing_nullable=False,
+        existing_nullable=True,
     )

@@ -4,6 +4,21 @@
 
 import { apiClient } from './client'
 
+export interface QuickLaunchInputOptions {
+  enable_deep_thinking?: boolean | null
+  enable_clarification?: boolean | null
+  force_override?: boolean | null
+  selected_skill_names?: string[]
+}
+
+export interface QuickLaunchInputPreset {
+  id: string
+  title: string
+  prompt?: string | null
+  options?: QuickLaunchInputOptions | null
+  source_attachment_ids?: number[]
+}
+
 export interface QuickLaunchFunctionConfig {
   id: string
   title: string
@@ -12,7 +27,7 @@ export interface QuickLaunchFunctionConfig {
   team_id: number
   enabled: boolean
   order: number
-  quick_phrases: string[]
+  input_presets: QuickLaunchInputPreset[]
 }
 
 export interface QuickLaunchFunctionsResponse {

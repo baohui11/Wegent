@@ -7,7 +7,6 @@
 import dynamic from 'next/dynamic'
 import { UserProvider } from '@/features/common/UserContext'
 import { TaskSessionProvider } from '@/features/tasks/session/TaskSession'
-import { WebSearchResultsProvider } from '@/features/tasks/session/WebSearchResultsContext'
 import { SocketProvider } from '@/contexts/SocketContext'
 import { DeviceProvider } from '@/contexts/DeviceContext'
 import { TeamProvider } from '@/contexts/TeamContext'
@@ -56,12 +55,10 @@ export default function TasksLayout({ children }: { children: React.ReactNode })
               <PetProvider>
                 <SetupWizardProvider>
                   <TaskSessionProvider>
-                    <WebSearchResultsProvider>
-                      {children}
-                      <PetStreamingBridge />
-                      <PetWidget />
-                      <GlobalAdminSetupWizard />
-                    </WebSearchResultsProvider>
+                    {children}
+                    <PetStreamingBridge />
+                    <PetWidget />
+                    <GlobalAdminSetupWizard />
                   </TaskSessionProvider>
                 </SetupWizardProvider>
               </PetProvider>

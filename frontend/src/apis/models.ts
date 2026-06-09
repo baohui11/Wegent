@@ -109,7 +109,6 @@ export interface ModelCRD {
     rerankConfig?: RerankConfig
     videoConfig?: VideoGenerationConfig
     imageConfig?: ImageGenerationConfig
-    dynamic_thinking?: boolean
   }
   status?: {
     state: string
@@ -171,6 +170,8 @@ export interface UnifiedModel {
   dynamicThinking?: boolean
   modelGroup?: string | null
   modelSubGroup?: string | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 export interface UnifiedModelListResponse {

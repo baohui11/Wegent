@@ -21,7 +21,7 @@ const mockT = (key: string, options?: Record<string, unknown>) =>
     'teams.description': 'Agents can run tasks.',
     'teams.filter_all': 'All',
     'teams.filter_chat': 'Chat',
-    'teams.filter_code': 'Agent',
+    'teams.filter_code': 'Code',
     'teams.filter_mode': 'Mode',
     'settings:team.list.filterDevice': 'Device',
     'teams.active': 'Active',

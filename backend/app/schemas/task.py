@@ -91,7 +91,7 @@ class TaskCreate(BaseModel):
     force_override_bot_model_type: Optional[str] = (
         None  # Model type: 'public', 'user', 'group'
     )
-    model_options: Optional[dict[str, str]] = None
+    model_options: Optional[dict[str, Any]] = None
     # API key name field
     api_key_name: Optional[str] = None  # API key name used for this request
 
@@ -152,6 +152,7 @@ class TaskInDB(TaskBase):
     preserve_executor: bool = (
         False  # Whether to preserve executor pod after task completion
     )
+    execution_workspace_source: Optional[str] = None
 
     class Config:
         """Pydantic config."""
@@ -185,7 +186,7 @@ class TaskDetail(BaseModel):
     subtasks: Any = None
     model_id: Optional[str] = None
     force_override_bot_model_type: Optional[str] = None
-    model_options: Optional[dict[str, str]] = None
+    model_options: Optional[dict[str, Any]] = None
     is_group_chat: bool = False  # Whether this is a group chat task
     is_group_owner: bool = False  # Whether current user is the owner (for group chats)
     member_count: Optional[int] = None  # Number of members (for group chats)
@@ -193,6 +194,7 @@ class TaskDetail(BaseModel):
         None  # App preview information (set by expose_service tool)
     )
     device_id: Optional[str] = None  # Device ID used for execution (for task history)
+    execution_workspace_source: Optional[str] = None
     preserve_executor: bool = (
         False  # Whether to preserve executor pod after task completion
     )
@@ -254,6 +256,7 @@ class TaskLite(BaseModel):
     client_origin: str = CLIENT_ORIGIN_FRONTEND
     device_id: Optional[str] = None
     device_name: Optional[str] = None
+    execution_workspace_source: Optional[str] = None
     git_repo: Optional[str] = None
     is_group_chat: bool = False  # Whether this is a group chat task
     knowledge_base_id: Optional[int] = (

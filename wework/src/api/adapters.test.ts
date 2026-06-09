@@ -30,6 +30,68 @@ describe('REST adapters', () => {
     )
   })
 
+  test('creates Git workspace projects from the wework client origin', async () => {
+    const client = mockClient()
+    vi.mocked(client.post).mockResolvedValueOnce({
+      project: { id: 9, name: 'Wegent' },
+      checkout_path: 'Wegent',
+      reused_existing_checkout: false,
+    })
+
+    await createProjectApi(client).createGitWorkspaceProject({
+      device_id: 'device-1',
+      name: 'Wegent',
+      git: {
+        url: 'https://github.com/wecode-ai/Wegent.git',
+        repo: 'wecode-ai/Wegent',
+        repoId: 101,
+        domain: 'github.com',
+        branch: 'main',
+      },
+    })
+
+    expect(client.post).toHaveBeenCalledWith('/projects/git-workspace', {
+      device_id: 'device-1',
+      name: 'Wegent',
+      client_origin: 'wework',
+      git: {
+        url: 'https://github.com/wecode-ai/Wegent.git',
+        repo: 'wecode-ai/Wegent',
+        repoId: 101,
+        domain: 'github.com',
+        branch: 'main',
+      },
+    })
+  })
+
+  test('loads Wework project worktrees from the project adapter', async () => {
+    const client = mockClient()
+    vi.mocked(client.get).mockResolvedValueOnce({ total: 0, devices: [] })
+
+    await createProjectApi(client).listWorktrees()
+
+    expect(client.get).toHaveBeenCalledWith('/projects/worktrees?client_origin=wework')
+  })
+
+  test('deletes Wework project worktrees from the project adapter', async () => {
+    const client = mockClient()
+    vi.mocked(client.delete).mockResolvedValueOnce({
+      worktree_id: '1386',
+      path: '/workspace/worktrees/1386/Wegent',
+      deleted_task_ids: [1288],
+    })
+
+    await createProjectApi(client).deleteWorktree({
+      device_id: 'device-1',
+      worktree_id: '1386',
+      project_id: 7,
+    })
+
+    expect(client.delete).toHaveBeenCalledWith(
+      '/projects/worktrees/device-1/1386?project_id=7&client_origin=wework',
+    )
+  })
+
   test('loads recent online and offline workbench tasks', async () => {
     const client = mockClient()
     vi.mocked(client.get).mockResolvedValueOnce({ total: 0, items: [] })
@@ -48,6 +110,17 @@ describe('REST adapters', () => {
     await createTaskApi(client).getTaskDetail(8)
 
     expect(client.get).toHaveBeenCalledWith('/tasks/8?client_origin=wework')
+  })
+
+  test('searches conversation tasks in the wework client origin', async () => {
+    const client = mockClient()
+    vi.mocked(client.get).mockResolvedValueOnce({ total: 0, items: [] })
+
+    await createTaskApi(client).searchTasks('胡云鹏', { limit: 30 })
+
+    expect(client.get).toHaveBeenCalledWith(
+      '/tasks/wework/conversation-search?keyword=%E8%83%A1%E4%BA%91%E9%B9%8F&page=1&limit=30',
+    )
   })
 
   test('picks default team for wework first, then code and chat', async () => {
@@ -107,6 +180,7 @@ describe('REST adapters', () => {
     })
     await api.updateInstalledSystemSkill(42, false)
     await api.uninstallInstalledSystemSkill(42)
+    await api.installPersonalSkill(77)
     await api.updatePersonalSkillEnabled(77, false)
 
     expect(client.post).toHaveBeenCalledWith('/system-skills/install', {
@@ -120,6 +194,9 @@ describe('REST adapters', () => {
     })
     expect(client.put).toHaveBeenCalledWith('/system-skills/installed/42', {
       enabled: false,
+    })
+    expect(client.post).toHaveBeenCalledWith('/system-skills/install/personal', {
+      skillId: 77,
     })
     expect(client.put).toHaveBeenCalledWith('/v1/kinds/skills/77/enabled', {
       enabled: false,
@@ -249,6 +326,52 @@ describe('REST adapters', () => {
       2,
       '/devices/device-1/commands',
       expect.objectContaining({ command_key: 'project_workspace_root' }),
+    )
+  })
+
+  test('creates a directory through the device command API', async () => {
+    const client = mockClient()
+    vi.mocked(client.post).mockResolvedValueOnce({
+      success: true,
+      stdout: '',
+      stderr: '',
+    })
+
+    const api = createDeviceApi(client)
+
+    await expect(api.createDirectory('device-1', '  /home/ubuntu/new-app  ')).resolves.toBeUndefined()
+
+    expect(client.post).toHaveBeenCalledWith(
+      '/devices/device-1/commands',
+      expect.objectContaining({
+        command_key: 'mkdir_p',
+        args: ['/home/ubuntu/new-app'],
+      }),
+    )
+  })
+
+  test('rejects blank directory paths before calling the device command API', async () => {
+    const client = mockClient()
+    const api = createDeviceApi(client)
+
+    await expect(api.createDirectory('device-1', '   ')).rejects.toThrow(
+      'Directory path is required',
+    )
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
+  test('throws backend command errors when directory creation fails', async () => {
+    const client = mockClient()
+    vi.mocked(client.post).mockResolvedValueOnce({
+      success: false,
+      stdout: '',
+      stderr: 'mkdir failed',
+    })
+
+    const api = createDeviceApi(client)
+
+    await expect(api.createDirectory('device-1', '/home/ubuntu/new-app')).rejects.toThrow(
+      'mkdir failed',
     )
   })
 

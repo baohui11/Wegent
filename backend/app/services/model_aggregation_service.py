@@ -88,10 +88,11 @@ class UnifiedModel:
             str
         ] = None,  # New: llm, tts, stt, embedding, rerank
         is_advanced: bool = False,
-        dynamic_thinking: bool = False,
         model_group: Optional[str] = None,
         model_sub_group: Optional[str] = None,
         runtime_family: Optional[str] = None,
+        created_at: Optional[Any] = None,
+        updated_at: Optional[Any] = None,
     ):
         self.name = name
         self.type = (
@@ -107,9 +108,10 @@ class UnifiedModel:
             model_category_type or "llm"
         )  # Default to 'llm' for backward compatibility
         self.is_advanced = is_advanced
-        self.dynamic_thinking = dynamic_thinking
         self.model_group = model_group
         self.model_sub_group = model_sub_group
+        self.created_at = created_at
+        self.updated_at = updated_at
         self.runtime_family = runtime_family or build_model_runtime_family(
             provider, self.config
         )
@@ -136,11 +138,12 @@ class UnifiedModel:
             "namespace": self.namespace,
             "modelCategoryType": self.model_category_type,
             "isAdvanced": self.is_advanced,
-            "dynamicThinking": self.dynamic_thinking,
             "modelGroup": self.model_group,
             "modelSubGroup": self.model_sub_group,
             "runtime": self.runtime,
             "config": safe_config,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
     def to_full_dict(self) -> Dict[str, Any]:
@@ -180,7 +183,6 @@ class ModelAggregationService:
                 "config": {},
                 "model_category_type": "llm",
                 "is_advanced": False,
-                "dynamic_thinking": False,
                 "model_group": None,
                 "model_sub_group": None,
             }
@@ -236,9 +238,6 @@ class ModelAggregationService:
                     if model_crd.spec.isAdvanced
                     else False
                 ),
-                "dynamic_thinking": bool(
-                    getattr(model_crd.spec, "dynamic_thinking", False) or False
-                ),
                 "model_group": model_crd.spec.modelGroup,
                 "model_sub_group": model_crd.spec.modelSubGroup,
             }
@@ -251,7 +250,6 @@ class ModelAggregationService:
                 "config": {},
                 "model_category_type": "llm",
                 "is_advanced": False,
-                "dynamic_thinking": False,
                 "model_group": None,
                 "model_sub_group": None,
             }
@@ -507,9 +505,10 @@ class ModelAggregationService:
                     namespace=resource.namespace,
                     model_category_type=info.get("model_category_type", "llm"),
                     is_advanced=info.get("is_advanced", False),
-                    dynamic_thinking=info.get("dynamic_thinking", False),
                     model_group=info.get("model_group"),
                     model_sub_group=info.get("model_sub_group"),
+                    created_at=resource.created_at,
+                    updated_at=resource.updated_at,
                 )
                 result.append(unified)
                 seen_names[resource.name] = resource_type
@@ -558,11 +557,12 @@ class ModelAggregationService:
                 namespace="default",
                 model_category_type=public_model_category_type,
                 is_advanced=model_dict.get("is_advanced", False),
-                dynamic_thinking=model_dict.get("dynamic_thinking", False),
                 model_group=model_dict.get("modelGroup")
                 or model_dict.get("model_group"),
                 model_sub_group=model_dict.get("modelSubGroup")
                 or model_dict.get("model_sub_group"),
+                created_at=model_dict.get("created_at"),
+                updated_at=model_dict.get("updated_at"),
             )
 
             # If name already exists as user model, we still add public model
@@ -620,9 +620,10 @@ class ModelAggregationService:
                     model_id=info["model_id"],
                     config=info["config"],
                     is_active=resource.is_active,
-                    dynamic_thinking=info.get("dynamic_thinking", False),
                     model_group=info.get("model_group"),
                     model_sub_group=info.get("model_sub_group"),
+                    created_at=resource.created_at,
+                    updated_at=resource.updated_at,
                 ).to_full_dict()
 
         elif model_type == ModelType.PUBLIC:
@@ -645,11 +646,12 @@ class ModelAggregationService:
                             "model_category_type", "llm"
                         ),
                         is_advanced=model_dict.get("is_advanced", False),
-                        dynamic_thinking=model_dict.get("dynamic_thinking", False),
                         model_group=model_dict.get("modelGroup")
                         or model_dict.get("model_group"),
                         model_sub_group=model_dict.get("modelSubGroup")
                         or model_dict.get("model_sub_group"),
+                        created_at=model_dict.get("created_at"),
+                        updated_at=model_dict.get("updated_at"),
                     ).to_full_dict()
 
         return None

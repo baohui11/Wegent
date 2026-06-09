@@ -45,8 +45,9 @@ const makeLauncher = (overrides: Partial<QuickLauncher>): QuickLauncher => ({
   type: 'system_function',
   key: 'system:create_ppt',
   title: 'Create PPT',
-  quickPhrases: [],
+  inputPresets: [],
   team: makeTeam(),
+  targetPage: 'chat',
   ...overrides,
 })
 
@@ -94,6 +95,29 @@ describe('QuickLauncherCards', () => {
 
     expect(screen.getByTestId('quick-launch-system-grid')).toHaveClass('justify-start')
     expect(screen.queryByTestId('quick-launch-system-grid')).not.toHaveClass('justify-center')
+  })
+
+  test('renders launcher cards with title and description', () => {
+    render(
+      <QuickLauncherCards
+        systemLaunchers={[
+          makeLauncher({
+            key: 'system:video_summary',
+            title: 'Analyze Weibo video',
+            description: 'Analyze this Weibo video and summarize the author viewpoint',
+          }),
+        ]}
+        favoriteLaunchers={[]}
+        onSelectLauncher={jest.fn()}
+      />
+    )
+
+    const systemCard = screen.getByTestId('quick-launcher-system_function-system-video_summary')
+
+    expect(systemCard).toHaveTextContent('Analyze Weibo video')
+    expect(systemCard).toHaveTextContent(
+      'Analyze this Weibo video and summarize the author viewpoint'
+    )
   })
 
   test('supports horizontal scrolling for both launcher rows without inline arrow slots', () => {

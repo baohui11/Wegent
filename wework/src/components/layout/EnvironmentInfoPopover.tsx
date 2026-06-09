@@ -1,6 +1,5 @@
 import {
   CircleDot,
-  GitBranch,
   GitCommit,
   GitPullRequest,
   Info,
@@ -8,14 +7,19 @@ import {
   Settings,
 } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { BranchSelector } from '@/components/common/BranchSelector'
 import { useTranslation } from '@/hooks/useTranslation'
 import { cn } from '@/lib/utils'
 import type { EnvironmentInfo } from '@/types/environment'
+import { DESKTOP_TOP_BAR_BUTTON_CLASS } from './DesktopTopBar'
 
 interface EnvironmentInfoPopoverProps {
   info: EnvironmentInfo
   onRefresh?: () => Promise<void>
   onCommitChanges?: (message: string) => Promise<void>
+  onListBranches?: () => Promise<string[]>
+  onCheckoutBranch?: (branchName: string) => Promise<void>
+  onCreateBranch?: (branchName: string) => Promise<void>
 }
 
 interface InfoRowProps {
@@ -55,6 +59,9 @@ export function EnvironmentInfoPopover({
   info,
   onRefresh,
   onCommitChanges,
+  onListBranches,
+  onCheckoutBranch,
+  onCreateBranch,
 }: EnvironmentInfoPopoverProps) {
   const { t } = useTranslation('common')
   const [open, setOpen] = useState(false)
@@ -66,14 +73,13 @@ export function EnvironmentInfoPopover({
   const rootRef = useRef<HTMLDivElement>(null)
   const additions = info.additions || '+0'
   const deletions = info.deletions || '-0'
-  const branchName = info.branchName || t('workbench.environment_branch_empty', '暂无分支')
   const executionLabel =
     info.executionTarget === 'cloud'
       ? t('workbench.environment_cloud', '云端')
       : t('workbench.environment_local', '本地')
   const shortDeviceId = formatDeviceId(info.deviceId)
   const deviceTitle = info.deviceId ? `${executionLabel} · ${info.deviceId}` : executionLabel
-
+  const canShowBranchSelector = Boolean(info.branchName?.trim())
   function handleCreatePullRequest() {
     if (!info.createPullRequestUrl) {
       return
@@ -143,19 +149,19 @@ export function EnvironmentInfoPopover({
         data-testid="environment-info-button"
         onClick={handleToggleOpen}
         className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-hover hover:text-text-primary',
-          open && 'bg-popover text-text-primary shadow-sm',
+          DESKTOP_TOP_BAR_BUTTON_CLASS,
+          open && 'bg-muted text-text-primary',
         )}
         aria-expanded={open}
         aria-label={t('workbench.environment_info', '环境信息')}
       >
-        <Info className="h-[18px] w-[18px]" />
+        <Info />
       </button>
 
       {open && (
         <div
           data-testid="environment-info-popover"
-          className="fixed right-6 top-[76px] z-[1000] w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-popover px-5 py-5 text-text-primary shadow-[0_18px_44px_rgba(0,0,0,0.24)]"
+          className="fixed right-6 top-[76px] z-system w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-background px-5 py-5 text-text-primary shadow-[0_18px_44px_rgba(0,0,0,0.24)] backdrop-blur-3xl backdrop-saturate-150"
         >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[13px] font-medium text-text-primary">
@@ -208,11 +214,17 @@ export function EnvironmentInfoPopover({
                 </span>
               )}
             </button>
-            <InfoRow
-              testId="environment-branch-row"
-              icon={<GitBranch className="h-[18px] w-[18px]" />}
-              label={info.loading ? t('common.loading', '加载中...') : branchName}
-            />
+            {canShowBranchSelector && onListBranches && onCheckoutBranch && (
+              <BranchSelector
+                variant="environment"
+                currentBranch={info.branchName}
+                loading={info.loading}
+                onRefresh={onRefresh}
+                onListBranches={onListBranches}
+                onCheckoutBranch={onCheckoutBranch}
+                onCreateBranch={onCreateBranch}
+              />
+            )}
             <button
               type="button"
               data-testid="environment-commit-button"

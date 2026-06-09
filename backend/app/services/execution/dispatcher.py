@@ -166,6 +166,10 @@ def extract_completed_result(response_data: dict) -> dict:
         "blocks": response_data.get("blocks"),
         "silent_exit": response_data.get("silent_exit"),
         "silent_exit_reason": response_data.get("silent_exit_reason"),
+        "deferred_user_input": response_data.get("deferred_user_input"),
+        "deferred_user_input_tool_use_id": response_data.get(
+            "deferred_user_input_tool_use_id"
+        ),
         "loaded_skills": response_data.get("loaded_skills"),
         "stop_reason": response_data.get("stop_reason"),
         "messages_chain": response_data.get("messages_chain"),
@@ -257,6 +261,19 @@ class ResponsesAPIEventParser:
                 task_id=task_id,
                 subtask_id=subtask_id,
                 data={"block": block},
+                message_id=message_id,
+            )
+
+        elif event_type == ResponsesAPIStreamEvents.BLOCK_UPDATED.value:
+            block_id = data.get("block_id")
+            updates = data.get("updates")
+            if not block_id or not isinstance(updates, dict):
+                return None
+            return ExecutionEvent(
+                type=EventType.BLOCK_UPDATED,
+                task_id=task_id,
+                subtask_id=subtask_id,
+                data={"block_id": str(block_id), "updates": updates},
                 message_id=message_id,
             )
 

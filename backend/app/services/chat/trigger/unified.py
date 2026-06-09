@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from fastapi import HTTPException
 
-from app.core.config import settings
+from app.core.constants import CLIENT_ORIGIN_FRONTEND
 from app.db.session import SessionLocal
 from app.models.kind import Kind
 from app.models.subtask import Subtask
@@ -37,44 +37,18 @@ if TYPE_CHECKING:
     from shared.models.execution import ExecutionRequest
 
 logger = logging.getLogger(__name__)
-
-
-def apply_chat_web_search_defaults(
-    request: "ExecutionRequest",
-    *,
-    auto_enable: bool = True,
-    payload_search_engine: Optional[str] = None,
-) -> None:
-    """Resolve default search engine for Chat Shell when web search is configured.
-
-    Normal Chat tasks expose ``web_search`` / ``web_extract`` only when the
-    web-research skill is bound and loaded (skill-gated in chat_shell).
-
-    Callers that need unconditional tools (correction, OpenAPI) must set
-    ``enable_web_search=True`` explicitly on the execution request.
-    """
-    from app.services.search.factory import get_default_engine_name, get_search_service
-
-    shell_type = "Chat"
-    if request.bot:
-        shell_type = request.bot[0].get("shell_type", "Chat")
-
-    if shell_type != "Chat":
-        return
-
-    if not settings.WEB_SEARCH_ENABLED or not get_search_service():
-        return
-
-    if not auto_enable and not request.enable_web_search:
-        return
-
-    if payload_search_engine:
-        request.search_engine = payload_search_engine
-    elif not request.search_engine:
-        request.search_engine = get_default_engine_name()
-
-
 SELECTED_KB_PRELOAD_SKILL = "wegent-knowledge"
+SERVICE_TIER_ALIASES = {
+    "fast": "priority",
+    "priority": "priority",
+    "快速": "priority",
+    "运行快速": "priority",
+    "standard": "default",
+    "default": "default",
+    "普通": "default",
+    "标准": "default",
+    "运行标准": "default",
+}
 
 
 def _reasoning_from_model_options(payload: Any) -> Optional[Dict[str, Any]]:
@@ -101,6 +75,23 @@ def _reasoning_from_model_options(payload: Any) -> Optional[Dict[str, Any]]:
     if summary:
         result["summary"] = str(summary)
     return result or None
+
+
+def _service_tier_from_model_options(payload: Any) -> Optional[str]:
+    """Convert UI speed options into Codex service tier values."""
+    if payload is None:
+        return None
+    model_options = getattr(payload, "model_options", None)
+    if not isinstance(model_options, dict):
+        return None
+
+    speed = model_options.get("speed") or model_options.get("service_tier")
+    if isinstance(speed, dict):
+        speed = speed.get("value") or speed.get("speed") or speed.get("service_tier")
+    if not speed:
+        return None
+
+    return SERVICE_TIER_ALIASES.get(str(speed).strip().lower())
 
 
 def _build_executor_attachment_payload(context: Any) -> dict[str, Any]:
@@ -246,7 +237,6 @@ async def build_execution_request(
     enable_tools: bool = True,
     enable_deep_thinking: bool = True,
     enable_web_search: bool = False,
-    auto_enable_web_search: bool = True,
     enable_clarification: bool = False,
     preload_skills: Optional[list] = None,
     previous_bot_id: Optional[int] = None,
@@ -272,7 +262,6 @@ async def build_execution_request(
         enable_tools: Whether to enable tool usage (default: True)
         enable_deep_thinking: Whether to enable deep thinking mode (default: True)
         enable_web_search: Whether to enable web search (default: False)
-        auto_enable_web_search: Auto-enable for Chat Shell when WEB_SEARCH_ENABLED
         enable_clarification: Whether to enable clarification mode (default: False)
         preload_skills: Optional list of skills to preload
         knowledge_base_names: Optional list of KB names in {'namespace': str, 'name': str} format
@@ -296,17 +285,19 @@ async def build_execution_request(
         # Build unified execution request
         builder = TaskRequestBuilder(db)
 
-        payload_search_engine: Optional[str] = None
-
         # Extract feature flags from payload if provided
         if payload is not None:
+            enable_web_search = getattr(payload, "enable_web_search", enable_web_search)
             enable_clarification = getattr(
                 payload, "enable_clarification", enable_clarification
             )
-            payload_search_engine = getattr(payload, "search_engine", None)
             additional_skills = getattr(payload, "additional_skills", None)
             if additional_skills:
                 preload_skills = list(preload_skills or []) + list(additional_skills)
+        web_runtime_guidance = (
+            payload is not None
+            and getattr(payload, "client_origin", None) == CLIENT_ORIGIN_FRONTEND
+        )
 
         # Extract model override from task metadata labels
         # This is where force_override_bot_model is stored when task is created
@@ -340,54 +331,39 @@ async def build_execution_request(
             override_model_name=override_model_name,
             force_override=force_override,
             previous_bot_id=previous_bot_id,
-        )
-
-        apply_chat_web_search_defaults(
-            request,
-            auto_enable=auto_enable_web_search,
-            payload_search_engine=payload_search_engine,
+            web_runtime_guidance=web_runtime_guidance,
         )
 
         # Merge reasoning config from API/model selection into model_config.
-        # Priority: dynamic thinking toggle > explicit API reasoning_config >
-        # UI model_options > model think_config.
-        think_config = request.model_config.get("think_config")
-        dynamic_thinking = bool(request.model_config.get("dynamic_thinking", False))
+        # Priority: explicit API reasoning_config > UI model_options > model think_config.
         selected_reasoning_config = reasoning_config or _reasoning_from_model_options(
             payload
         )
-
-        if dynamic_thinking and payload is not None and think_config:
-            enable_reasoning = getattr(payload, "enable_reasoning", True)
-            from shared.utils.thinking_config import apply_thinking_toggle
-
-            updated_think_config = apply_thinking_toggle(
-                think_config, bool(enable_reasoning)
-            )
-            request.model_config["think_config"] = updated_think_config
-            request.model_config["reasoning"] = updated_think_config
-            request.reasoning_config = updated_think_config
-            logger.info(
-                "[build_execution_request] Applied dynamic thinking toggle: enabled=%s",
-                enable_reasoning,
-            )
-        elif selected_reasoning_config:
+        if selected_reasoning_config:
             request.model_config["reasoning"] = selected_reasoning_config
             logger.info(
                 "[build_execution_request] Applied selected reasoning config: %s",
                 selected_reasoning_config,
             )
-        elif think_config:
-            request.model_config["reasoning"] = think_config
+        elif request.model_config.get("think_config"):
+            # If no API reasoning_config but model has think_config, use it
+            request.model_config["reasoning"] = request.model_config["think_config"]
             logger.info(
                 "[build_execution_request] Applied reasoning config from model think_config: %s",
-                think_config,
+                request.model_config["think_config"],
             )
 
+        selected_service_tier = _service_tier_from_model_options(payload)
+        if selected_service_tier:
+            request.model_config["service_tier"] = selected_service_tier
+            logger.info(
+                "[build_execution_request] Applied selected service tier: %s",
+                selected_service_tier,
+            )
+
+        # Store reasoning_config in ExecutionRequest for downstream access
         request.reasoning_config = (
-            request.reasoning_config
-            or selected_reasoning_config
-            or request.model_config.get("reasoning")
+            selected_reasoning_config or request.model_config.get("reasoning")
         )
 
         if payload is not None:

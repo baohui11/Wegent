@@ -1,8 +1,8 @@
 'use client'
 
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Paperclip } from 'lucide-react'
 
-import type { QuickLauncher } from './types'
+import type { QuickInputPreset, QuickLauncher } from './types'
 
 const QUICK_PHRASE_STAGGER_MS = 35
 const QUICK_PHRASE_MAX_STAGGER_MS = 140
@@ -11,16 +11,16 @@ interface QuickPhraseListProps {
   launcher: QuickLauncher
   isExiting?: boolean
   onBack: () => void
-  onPhraseSelect: (phrase: string) => void
+  onPresetSelect: (preset: QuickInputPreset) => void
 }
 
 export function QuickPhraseList({
   launcher,
   isExiting = false,
   onBack,
-  onPhraseSelect,
+  onPresetSelect,
 }: QuickPhraseListProps) {
-  if (launcher.quickPhrases.length === 0) {
+  if (launcher.inputPresets.length === 0) {
     return null
   }
 
@@ -44,17 +44,18 @@ export function QuickPhraseList({
       </button>
 
       <div className="flex flex-col gap-2">
-        {launcher.quickPhrases.map((phrase, index) => {
+        {launcher.inputPresets.map((preset, index) => {
           const animationDelay = Math.min(
             index * QUICK_PHRASE_STAGGER_MS,
             QUICK_PHRASE_MAX_STAGGER_MS
           )
+          const hasAttachments = (preset.source_attachment_ids?.length ?? 0) > 0
 
           return (
             <button
-              key={`${phrase}-${index}`}
+              key={`${preset.id}-${index}`}
               type="button"
-              onClick={() => onPhraseSelect(phrase)}
+              onClick={() => onPresetSelect(preset)}
               className={`min-h-11 rounded-lg border border-border bg-base px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:border-primary/30 hover:bg-hover hover:text-text-primary ${
                 isExiting
                   ? ''
@@ -70,7 +71,17 @@ export function QuickPhraseList({
               }
               data-testid={`quick-phrase-${index}`}
             >
-              {phrase}
+              <span className="flex items-center gap-1.5">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                  {preset.title}
+                </span>
+                {hasAttachments && (
+                  <Paperclip
+                    className="h-3.5 w-3.5 flex-shrink-0 text-text-muted"
+                    data-testid={`quick-phrase-attachment-icon-${index}`}
+                  />
+                )}
+              </span>
             </button>
           )
         })}

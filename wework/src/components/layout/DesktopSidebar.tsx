@@ -1,11 +1,10 @@
 import {
   Archive,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
-  Clock,
   Edit3,
   Folder,
+  FolderGit2,
   FolderPlus,
   Loader2,
   MessageSquarePlus,
@@ -13,24 +12,39 @@ import {
   Search,
   Settings,
   Sparkles,
-  Workflow,
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { ActionMenu } from '@/components/common/ActionMenu'
 import { TextInputDialog } from '@/components/common/TextInputDialog'
 import { ProjectCreateDialog } from '@/components/projects/ProjectCreateDialog'
+import { ProjectFolderIcon } from '@/components/projects/ProjectFolderIcon'
 import { useTranslation } from '@/hooks/useTranslation'
+import { getPreferredStandaloneDeviceId } from '@/lib/device-selection'
+import { cn } from '@/lib/utils'
+import { isTauriRuntime } from '@/lib/runtime-environment'
 import type {
+  CreateGitWorkspaceProjectRequest,
   CreateProjectRequest,
   DeviceInfo,
+  GitBranch,
+  GitRepoInfo,
   ProjectTask,
   ProjectWithTasks,
   Task,
+  TaskDetail,
+  TaskListResponse,
   User as UserProfile,
 } from '@/types/api'
+import type { DeviceUpgradeState } from '@/types/device-events'
 import { DesktopSettingsMenu } from './DesktopSettingsMenu'
+import { DesktopSearchDialog } from './DesktopSearchDialog'
+import { DesktopWindowControls } from './DesktopWindowControls'
+import {
+  DesktopTopBar,
+  MAC_NATIVE_TOP_BAR_ACTION_INSET,
+} from './DesktopTopBar'
 import { useResizableSidebar } from './useResizableSidebar'
 
 interface DesktopSidebarProps {
@@ -42,6 +56,7 @@ interface DesktopSidebarProps {
   currentProjectId?: number
   currentTaskId?: number
   preferredDeviceId?: string | null
+  upgradingDevices?: Record<string, DeviceUpgradeState>
   activeItem?: 'chat' | 'plugins' | 'automation'
   onCollapse: () => void
   onNewChat: () => void
@@ -49,10 +64,18 @@ interface DesktopSidebarProps {
   onSelectProject: (projectId: number) => void
   onStartNewProjectChat: (projectId: number) => void
   onOpenTask: (taskId: number, projectId?: number) => void
+  onSearchTasks?: (query: string) => Promise<TaskListResponse>
+  onSearchTaskDetail?: (taskId: number) => Promise<TaskDetail>
   onRememberExecutionDevice?: (deviceId: string) => void
   onOpenPlugins: () => void
   onRefreshDevices?: () => Promise<void>
+  onUpgradeDevice?: (deviceId: string) => Promise<void>
   onCreateProject: (data: CreateProjectRequest) => Promise<ProjectWithTasks>
+  onCreateGitWorkspaceProject: (
+    data: CreateGitWorkspaceProjectRequest,
+  ) => Promise<ProjectWithTasks>
+  onListGitRepositories: () => Promise<GitRepoInfo[]>
+  onListGitBranches: (repo: GitRepoInfo) => Promise<GitBranch[]>
   onUpdateProjectName: (projectId: number, name: string) => Promise<void>
   onRemoveProject: (projectId: number) => Promise<void>
   onArchiveAllChats: () => Promise<void>
@@ -63,11 +86,17 @@ interface DesktopSidebarProps {
   onGetDeviceHomeDirectory: (deviceId: string) => Promise<string>
   onGetProjectWorkspaceRoot: (deviceId: string) => Promise<string>
   onListDeviceDirectories: (deviceId: string, path: string) => Promise<string[]>
-  onOpenSettings: () => void
+  onCreateDeviceDirectory: (deviceId: string, path: string) => Promise<void>
+  onOpenSettings: (options?: { autoOpenAddCloudDeviceDialog?: boolean }) => void
   onLogout: () => void
 }
 
-type ProjectCreateMode = 'scratch' | 'existing'
+type ProjectCreateMode = 'scratch' | 'existing' | 'git'
+
+const SIDEBAR_ROW_METADATA_CLASS =
+  'flex items-center gap-1 text-xs text-[rgb(var(--color-sidebar-text-muted))] group-hover/task:invisible group-focus-within/task:invisible'
+const SIDEBAR_ROW_ACTIONS_CLASS =
+  'absolute inset-0 invisible flex items-center justify-end opacity-0 transition-opacity group-hover/task:visible group-hover/task:opacity-100 group-focus-within/task:visible group-focus-within/task:opacity-100'
 
 function SidebarButton({
   icon: Icon,
@@ -88,7 +117,7 @@ function SidebarButton({
       data-testid={testId}
       onClick={onClick}
       className={[
-        'flex h-8 w-full items-center gap-3 rounded-md px-3 text-left text-[13px] font-medium leading-[18px]',
+        'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] font-medium leading-[18px]',
         selected
           ? 'bg-[rgb(var(--color-sidebar-active))] text-text-primary'
           : 'text-[rgb(var(--color-sidebar-text-primary))] hover:bg-[rgb(var(--color-sidebar-hover))]',
@@ -101,6 +130,71 @@ function SidebarButton({
 }
 
 const INITIAL_PROJECT_CHAT_COUNT = 5
+const DESKTOP_SIDEBAR_STORAGE_PREFIX = 'wework.desktop.sidebar'
+
+function getDesktopSidebarStorageScope(user: UserProfile | null): string {
+  return user?.id ? String(user.id) : 'anonymous'
+}
+
+function getDesktopSidebarStorageKey(scope: string, key: string): string {
+  return `${DESKTOP_SIDEBAR_STORAGE_PREFIX}.${key}.${scope}`
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  try {
+    const value = window.localStorage.getItem(key)
+    if (value === null) return fallback
+    return value === 'true'
+  } catch {
+    return fallback
+  }
+}
+
+function writeStoredBoolean(key: string, value: boolean) {
+  try {
+    window.localStorage.setItem(key, value ? 'true' : 'false')
+  } catch {
+    // Keep the in-memory sidebar state when browser storage is unavailable.
+  }
+}
+
+function readStoredNumberSet(key: string): Set<number> {
+  try {
+    const value = window.localStorage.getItem(key)
+    if (!value) return new Set()
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(
+      parsed.filter((item): item is number => Number.isInteger(item) && item > 0),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
+function writeStoredNumberSet(key: string, values: Set<number>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...values].sort((a, b) => a - b)))
+  } catch {
+    // Keep the in-memory sidebar state when browser storage is unavailable.
+  }
+}
+
+function pruneProjectIdSet(values: Set<number>, projects: ProjectWithTasks[]): Set<number> {
+  if (projects.length === 0) return values
+  const projectIds = new Set(projects.map(project => project.id))
+  return new Set([...values].filter(projectId => projectIds.has(projectId)))
+}
+
+function handleSidebarRowKeyDown(
+  event: KeyboardEvent<HTMLDivElement>,
+  onOpen: () => void,
+) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+
+  event.preventDefault()
+  onOpen()
+}
 
 function SidebarSectionHeader({
   title,
@@ -121,7 +215,7 @@ function SidebarSectionHeader({
   const iconVisibilityClass = 'opacity-0 group-hover/section:opacity-100'
 
   return (
-    <div className="group/section mb-3 flex h-8 items-center justify-between px-3">
+    <div className="group/section mb-2 flex h-7 items-center justify-between px-2.5">
       <button
         type="button"
         data-testid={toggleTestId}
@@ -185,6 +279,149 @@ function sortTasksByTime(tasks: Task[] = []) {
   })
 }
 
+function isGitWorktreeSession(
+  task: Pick<ProjectTask | Task, 'execution_workspace_source'>,
+): boolean {
+  return task.execution_workspace_source === 'git_worktree'
+}
+
+function GitWorktreeSidebarIcon({
+  testId,
+  title,
+}: {
+  testId: string
+  title: string
+}) {
+  return (
+    <span
+      data-testid={testId}
+      title={title}
+      aria-label={title}
+      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-[rgb(var(--color-sidebar-text-secondary))] text-[rgb(var(--color-sidebar))]"
+    >
+      <svg
+        viewBox="0 0 18 18"
+        aria-hidden="true"
+        className="h-3.5 w-3.5"
+        fill="none"
+      >
+        <path
+          d="M3.6 6.5h5.5l4.4-4.4M10.1 2.1h3.4v3.4M3.6 11.5h5.5l4.4 4.4M10.1 15.9h3.4v-3.4"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.45"
+        />
+      </svg>
+    </span>
+  )
+}
+
+type SidebarDeviceStatus = DeviceInfo['status'] | 'unavailable'
+
+interface SidebarDeviceState {
+  deviceId: string
+  device?: DeviceInfo
+  status: SidebarDeviceStatus
+}
+
+function getProjectDeviceId(project: ProjectWithTasks): string | undefined {
+  return project.config?.execution?.deviceId ?? project.config?.device_id
+}
+
+function getSidebarDeviceState(
+  deviceId: string | null | undefined,
+  devices: DeviceInfo[],
+): SidebarDeviceState | null {
+  if (!deviceId) return null
+
+  const device = devices.find(item => item.device_id === deviceId)
+  return {
+    deviceId,
+    device,
+    status: device?.status ?? 'unavailable',
+  }
+}
+
+function isSidebarDeviceOnline(deviceState: SidebarDeviceState | null): boolean {
+  return !deviceState || deviceState.status === 'online'
+}
+
+function getSidebarDeviceName(deviceState: SidebarDeviceState): string {
+  return deviceState.device?.name || deviceState.deviceId
+}
+
+function getSidebarDeviceStatusLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  status: SidebarDeviceStatus,
+) {
+  if (status === 'online') {
+    return t('workbench.project_device_status_online', '在线')
+  }
+  if (status === 'busy') {
+    return t('workbench.project_device_status_busy', '忙碌')
+  }
+  if (status === 'offline') {
+    return t('workbench.project_device_status_offline', '离线')
+  }
+  return t('workbench.project_device_status_unavailable', '不可用')
+}
+
+function formatSidebarTemplate(template: string, values: Record<string, string>) {
+  return Object.entries(values).reduce(
+    (result, [key, value]) => result.replaceAll(`{{${key}}}`, value),
+    template,
+  )
+}
+
+function SidebarDeviceStatusIndicator({
+  deviceState,
+  testId,
+  className,
+}: {
+  deviceState: SidebarDeviceState
+  testId: string
+  className?: string
+}) {
+  const { t } = useTranslation('common')
+  if (deviceState.status === 'online') return null
+
+  const label = getSidebarDeviceStatusLabel(t, deviceState.status)
+  const deviceName = getSidebarDeviceName(deviceState)
+  const title = formatSidebarTemplate(
+    t('workbench.project_device_status_title', '{{device}} · {{status}}'),
+    { device: deviceName, status: label },
+  )
+
+  return (
+    <span
+      data-testid={testId}
+      title={title}
+      aria-label={title}
+      className={cn(
+        'inline-flex h-5 shrink-0 items-center rounded-full text-[11px] leading-4 text-[rgb(var(--color-sidebar-text-muted))]',
+        className,
+      )}
+    >
+      <span className="shrink-0">{label}</span>
+    </span>
+  )
+}
+
+function getDeviceUnavailableActionTitle(
+  t: ReturnType<typeof useTranslation>['t'],
+  deviceState: SidebarDeviceState,
+) {
+  const status = getSidebarDeviceStatusLabel(t, deviceState.status)
+  return formatSidebarTemplate(
+    t(
+      'workbench.project_chat_device_unavailable',
+      '设备{{status}}，无法新建项目对话：{{device}}',
+    ),
+    { status, device: getSidebarDeviceName(deviceState) },
+  )
+}
+
 function ProjectTaskRow({
   task,
   selected,
@@ -204,25 +441,30 @@ function ProjectTaskRow({
 }) {
   const { t } = useTranslation('common')
   const title = getProjectTaskTitle(task)
+  const handleOpen = () => onOpenTask(task.task_id, projectId)
+  const gitWorktreeSession = isGitWorktreeSession(task)
+  const gitWorktreeTitle = t('workbench.git_worktree_session', 'Git worktree')
   return (
     <div
       data-testid={`project-chat-row-${task.task_id}`}
+      role="button"
+      tabIndex={0}
+      onClick={handleOpen}
+      onKeyDown={(event) => handleSidebarRowKeyDown(event, handleOpen)}
       className={[
-        'group/task flex h-8 items-center rounded-md pl-8 pr-1 text-[13px] leading-[18px]',
+        'group/task flex h-8 cursor-default items-center rounded-md pl-9 pr-1 text-[13px] leading-[18px]',
         selected
           ? 'bg-[rgb(var(--color-sidebar-active))] text-text-primary'
-          : 'text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))]',
+          : 'text-[rgb(var(--color-sidebar-text-primary))] hover:bg-[rgb(var(--color-sidebar-hover))]',
       ].join(' ')}
     >
-      <button
-        type="button"
+      <span
         data-testid="project-chat-button"
-        onClick={() => onOpenTask(task.task_id, projectId)}
-        className="min-w-0 flex-1 truncate text-left"
+        className="min-w-0 flex-1 truncate"
       >
         {title}
-      </button>
-      <div className="relative ml-2 flex h-7 w-7 shrink-0 items-center justify-center">
+      </span>
+      <div className="relative ml-2 flex h-7 w-12 shrink-0 items-center justify-end">
         {running ? (
           <Loader2
             data-testid={`project-chat-spinner-${task.task_id}`}
@@ -231,19 +473,31 @@ function ProjectTaskRow({
         ) : (
           <span
             data-testid={`project-chat-time-${task.task_id}`}
-            className="text-xs text-[rgb(var(--color-sidebar-text-muted))] transition-opacity group-hover/task:opacity-0 focus-within:opacity-0"
+            className={SIDEBAR_ROW_METADATA_CLASS}
           >
-            {formatRelativeSidebarTime(getProjectTaskTime(task))}
+            {gitWorktreeSession && (
+              <GitWorktreeSidebarIcon
+                testId={`project-chat-git-worktree-icon-${task.task_id}`}
+                title={gitWorktreeTitle}
+              />
+            )}
+            <span
+              data-testid={`project-chat-time-value-${task.task_id}`}
+              className="flex h-7 w-7 items-center justify-center"
+            >
+              {formatRelativeSidebarTime(getProjectTaskTime(task))}
+            </span>
           </span>
         )}
         <div
           data-testid={`project-chat-actions-${task.task_id}`}
-          className="absolute inset-0 opacity-0 transition-opacity group-hover/task:opacity-100 focus-within:opacity-100"
+          className={SIDEBAR_ROW_ACTIONS_CLASS}
         >
           <ActionMenu
             ariaLabel={t('workbench.chat_actions', '会话操作')}
             testId={`project-chat-menu-${task.task_id}`}
             variant="vertical"
+            triggerClassName="flex h-7 w-7 items-center justify-center text-text-secondary hover:text-text-primary"
             items={[
               {
                 label: t('workbench.archive_chat', '归档会话'),
@@ -273,6 +527,7 @@ function ProjectItem({
   runningTaskIds,
   onToggleProject,
   onToggleTaskLimit,
+  devices,
   onStartNewProjectChat,
   onArchiveProjectChats,
   onRemoveProject,
@@ -288,6 +543,7 @@ function ProjectItem({
   runningTaskIds: Set<number>
   onToggleProject: (projectId: number) => void
   onToggleTaskLimit: (projectId: number) => void
+  devices: DeviceInfo[]
   onStartNewProjectChat: (projectId: number) => void
   onArchiveProjectChats: (projectId: number) => Promise<void>
   onRemoveProject: (projectId: number) => Promise<void>
@@ -301,22 +557,37 @@ function ProjectItem({
   const hasMoreTasks = tasks.length > INITIAL_PROJECT_CHAT_COUNT
   const visibleTasks = showAllTasks ? tasks : tasks.slice(0, INITIAL_PROJECT_CHAT_COUNT)
   const projectRunning = tasks.some(task => runningTaskIds.has(task.task_id))
+  const projectDeviceState = getSidebarDeviceState(getProjectDeviceId(project), devices)
+  const canStartProjectChat = isSidebarDeviceOnline(projectDeviceState)
+  const newProjectChatTitle = projectDeviceState && !canStartProjectChat
+    ? getDeviceUnavailableActionTitle(t, projectDeviceState)
+    : t('workbench.new_project_chat', '新建项目对话')
 
   return (
     <div data-testid="project-item" className="space-y-0.5">
       <div
         data-testid={`project-row-${project.id}`}
-        className="group/project flex h-8 items-center gap-1 rounded-md pl-3 pr-1 text-[13px] leading-[18px] text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))]"
+        className="group/project relative flex h-8 items-center gap-1 rounded-md pl-2.5 pr-1 text-[13px] leading-[18px] text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))]"
       >
         <button
           type="button"
           data-testid="project-item-button"
           onClick={() => onToggleProject(project.id)}
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <Folder className="h-4 w-4 shrink-0" />
-          <span className="truncate">{project.name}</span>
+          <ProjectFolderIcon
+            project={project}
+            className="h-3.5 w-3.5 shrink-0 text-[rgb(var(--color-sidebar-text-secondary))]"
+          />
+          <span className="min-w-0 flex-1 truncate">{project.name}</span>
+          {projectDeviceState && (
+            <SidebarDeviceStatusIndicator
+              deviceState={projectDeviceState}
+              testId={`project-device-status-${project.id}`}
+              className="ml-auto justify-end text-right group-hover/project:invisible group-focus-within/project:invisible"
+            />
+          )}
         </button>
         {!expanded && projectRunning && (
           <Loader2
@@ -324,7 +595,7 @@ function ProjectItem({
             className="h-3.5 w-3.5 shrink-0 animate-spin text-primary"
           />
         )}
-        <div className="flex shrink-0 items-center opacity-0 transition-opacity group-hover/project:opacity-100 focus-within:opacity-100">
+        <div className="absolute right-1 invisible flex shrink-0 items-center opacity-0 transition-opacity group-hover/project:visible group-hover/project:opacity-100 focus-within:visible focus-within:opacity-100">
           <ActionMenu
             ariaLabel={t('workbench.project_actions', '项目操作')}
             testId={`project-menu-${project.id}`}
@@ -353,12 +624,15 @@ function ProjectItem({
           <button
             type="button"
             data-testid="project-new-conversation-button"
+            disabled={!canStartProjectChat}
             onClick={event => {
               event.stopPropagation()
+              if (!canStartProjectChat) return
               onStartNewProjectChat(project.id)
             }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))]"
-            aria-label={t('workbench.new_project_chat', '新建项目对话')}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--color-sidebar-text-secondary))]"
+            title={newProjectChatTitle}
+            aria-label={newProjectChatTitle}
           >
             <MessageSquarePlus className="h-4 w-4" />
           </button>
@@ -367,7 +641,7 @@ function ProjectItem({
       {expanded && (
         <div className="space-y-0.5">
           {tasks.length === 0 ? (
-            <div className="ml-5 rounded-md px-3 py-1.5 text-xs text-[rgb(var(--color-sidebar-text-muted))]">
+            <div className="ml-6 rounded-md px-3 py-1.5 text-xs text-[rgb(var(--color-sidebar-text-muted))]">
               {t('workbench.no_chats', '暂无会话')}
             </div>
           ) : (
@@ -389,7 +663,7 @@ function ProjectItem({
               type="button"
               data-testid={`project-task-limit-toggle-${project.id}`}
               onClick={() => onToggleTaskLimit(project.id)}
-              className="ml-5 h-8 rounded-md px-3 text-left text-xs font-medium text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))]"
+              className="ml-6 h-8 rounded-md px-3 text-left text-xs font-medium text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))]"
             >
               {showAllTasks
                 ? t('workbench.show_less', '收起')
@@ -406,6 +680,7 @@ function RecentTaskRow({
   task,
   selected,
   running,
+  devices,
   onOpenTask,
   onArchiveTask,
   onRenameTask,
@@ -413,31 +688,43 @@ function RecentTaskRow({
   task: Task
   selected: boolean
   running: boolean
+  devices: DeviceInfo[]
   onOpenTask: (taskId: number, projectId?: number) => void
   onArchiveTask: (taskId: number) => Promise<void>
   onRenameTask: (task: Task) => void
 }) {
   const { t } = useTranslation('common')
+  const handleOpen = () => onOpenTask(task.id, task.project_id ?? 0)
+  const gitWorktreeSession = isGitWorktreeSession(task)
+  const gitWorktreeTitle = t('workbench.git_worktree_session', 'Git worktree')
+  const deviceState = getSidebarDeviceState(task.device_id, devices)
+  const visibleDeviceState = deviceState?.status === 'online' ? null : deviceState
   return (
     <div
       data-testid={`history-task-row-${task.id}`}
+      role="button"
+      tabIndex={0}
+      onClick={handleOpen}
+      onKeyDown={(event) => handleSidebarRowKeyDown(event, handleOpen)}
       className={[
-        'group/task flex h-8 items-center gap-2 rounded-md pl-3 pr-1 text-[13px] leading-[18px]',
+        'group/task flex h-8 cursor-default items-center rounded-md pl-3 pr-0.5 text-[13px] leading-[18px]',
         selected
           ? 'bg-[rgb(var(--color-sidebar-active))] text-text-primary'
-          : 'text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))]',
+          : 'text-[rgb(var(--color-sidebar-text-primary))] hover:bg-[rgb(var(--color-sidebar-hover))]',
       ].join(' ')}
     >
-      <Clock className="h-4 w-4 shrink-0" />
-      <button
-        type="button"
+      <span
         data-testid="history-task-button"
-        onClick={() => onOpenTask(task.id, task.project_id ?? 0)}
-        className="min-w-0 flex-1 truncate text-left"
+        className="min-w-0 flex-1 truncate"
       >
         {task.title}
-      </button>
-      <div className="relative flex h-7 w-7 shrink-0 items-center justify-center">
+      </span>
+      <div
+        className={[
+          'relative ml-2 flex h-7 shrink-0 items-center justify-end',
+          visibleDeviceState ? 'w-20' : 'w-12',
+        ].join(' ')}
+      >
         {running ? (
           <Loader2
             data-testid={`history-task-spinner-${task.id}`}
@@ -446,19 +733,37 @@ function RecentTaskRow({
         ) : (
           <span
             data-testid={`history-task-time-${task.id}`}
-            className="text-xs text-[rgb(var(--color-sidebar-text-muted))] transition-opacity group-hover/task:opacity-0 focus-within:opacity-0"
+            className={SIDEBAR_ROW_METADATA_CLASS}
           >
-            {formatRelativeSidebarTime(task.updated_at || task.created_at)}
+            {gitWorktreeSession && (
+              <GitWorktreeSidebarIcon
+                testId={`history-task-git-worktree-icon-${task.id}`}
+                title={gitWorktreeTitle}
+              />
+            )}
+            {visibleDeviceState && (
+              <SidebarDeviceStatusIndicator
+                deviceState={visibleDeviceState}
+                testId={`history-task-device-status-${task.id}`}
+              />
+            )}
+            <span
+              data-testid={`history-task-time-value-${task.id}`}
+              className="flex h-7 w-7 items-center justify-center"
+            >
+              {formatRelativeSidebarTime(task.updated_at || task.created_at)}
+            </span>
           </span>
         )}
         <div
           data-testid={`history-task-actions-${task.id}`}
-          className="absolute inset-0 opacity-0 transition-opacity group-hover/task:opacity-100 focus-within:opacity-100"
+          className={SIDEBAR_ROW_ACTIONS_CLASS}
         >
           <ActionMenu
             ariaLabel={t('workbench.chat_actions', '会话操作')}
             testId={`history-task-menu-${task.id}`}
             variant="vertical"
+            triggerClassName="flex h-7 w-7 items-center justify-center text-text-secondary hover:text-text-primary"
             items={[
               {
                 label: t('workbench.archive_chat', '归档会话'),
@@ -489,17 +794,23 @@ export function DesktopSidebar({
   currentProjectId,
   currentTaskId,
   preferredDeviceId,
+  upgradingDevices = {},
   activeItem = 'chat',
   onCollapse,
   onNewChat,
   onStartStandaloneChat,
-  onSelectProject,
   onStartNewProjectChat,
   onOpenTask,
+  onSearchTasks,
+  onSearchTaskDetail,
   onRememberExecutionDevice,
   onOpenPlugins,
   onRefreshDevices,
+  onUpgradeDevice,
   onCreateProject,
+  onCreateGitWorkspaceProject,
+  onListGitRepositories,
+  onListGitBranches,
   onUpdateProjectName,
   onRemoveProject,
   onArchiveAllChats,
@@ -510,27 +821,89 @@ export function DesktopSidebar({
   onGetDeviceHomeDirectory,
   onGetProjectWorkspaceRoot,
   onListDeviceDirectories,
+  onCreateDeviceDirectory,
   onOpenSettings,
   onLogout,
 }: DesktopSidebarProps) {
   const { t } = useTranslation('common')
   const { sidebarWidth, handleResizeStart } = useResizableSidebar()
+  const reserveMacWindowControls = isTauriRuntime()
+  const storageScope = getDesktopSidebarStorageScope(user)
+  const projectsExpandedStorageKey = getDesktopSidebarStorageKey(
+    storageScope,
+    'projectsExpanded',
+  )
+  const chatsExpandedStorageKey = getDesktopSidebarStorageKey(
+    storageScope,
+    'chatsExpanded',
+  )
+  const expandedProjectIdsStorageKey = getDesktopSidebarStorageKey(
+    storageScope,
+    'expandedProjectIds',
+  )
+  const expandedTaskListIdsStorageKey = getDesktopSidebarStorageKey(
+    storageScope,
+    'expandedTaskListIds',
+  )
+  const storageScopeRef = useRef(storageScope)
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false)
   const settingsMenuRef = useRef<HTMLDivElement>(null)
   const [projectCreateMode, setProjectCreateMode] = useState<ProjectCreateMode | null>(null)
   const [renamingProject, setRenamingProject] = useState<ProjectWithTasks | null>(null)
   const [renamingTask, setRenamingTask] = useState<{ id: number; title: string } | null>(null)
-  const [projectsExpanded, setProjectsExpanded] = useState(true)
-  const [chatsExpanded, setChatsExpanded] = useState(true)
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set())
-  const [expandedTaskListIds, setExpandedTaskListIds] = useState<Set<number>>(new Set())
+  const [projectsExpanded, setProjectsExpanded] = useState(() =>
+    readStoredBoolean(projectsExpandedStorageKey, true),
+  )
+  const [chatsExpanded, setChatsExpanded] = useState(() =>
+    readStoredBoolean(chatsExpandedStorageKey, true),
+  )
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false)
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(() =>
+    readStoredNumberSet(expandedProjectIdsStorageKey),
+  )
+  const [expandedTaskListIds, setExpandedTaskListIds] = useState<Set<number>>(() =>
+    readStoredNumberSet(expandedTaskListIdsStorageKey),
+  )
+  const visibleExpandedProjectIds = useMemo(
+    () => pruneProjectIdSet(expandedProjectIds, projects),
+    [expandedProjectIds, projects],
+  )
+  const visibleExpandedTaskListIds = useMemo(
+    () => pruneProjectIdSet(expandedTaskListIds, projects),
+    [expandedTaskListIds, projects],
+  )
   const sortedRecentTasks = useMemo(
     () => sortTasksByTime(recentTasks).filter(task => !task.project_id),
     [recentTasks]
   )
+  const currentProjectWithTask = useMemo(
+    () =>
+      currentTaskId
+        ? projects.find(project =>
+            project.tasks?.some(task => task.task_id === currentTaskId),
+          )
+        : undefined,
+    [currentTaskId, projects],
+  )
+  const currentProjectTaskIndex = useMemo(() => {
+    if (!currentProjectWithTask || !currentTaskId) return -1
+    return sortProjectTasks(currentProjectWithTask.tasks).findIndex(
+      task => task.task_id === currentTaskId,
+    )
+  }, [currentProjectWithTask, currentTaskId])
+  const preferredStandaloneDeviceId = useMemo(
+    () => getPreferredStandaloneDeviceId(devices, preferredDeviceId),
+    [devices, preferredDeviceId],
+  )
+  const canStartStandaloneChat = Boolean(preferredStandaloneDeviceId)
+  const standaloneChatTitle = canStartStandaloneChat
+    ? t('workbench.new_chat', '新对话')
+    : t(
+        'workbench.standalone_chat_device_unavailable',
+        '暂无在线设备，无法新建对话',
+      )
 
   const handleToggleProject = (projectId: number) => {
-    const shouldExpand = !expandedProjectIds.has(projectId)
     setExpandedProjectIds(previous => {
       const next = new Set(previous)
       if (next.has(projectId)) {
@@ -540,9 +913,6 @@ export function DesktopSidebar({
       }
       return next
     })
-    if (shouldExpand) {
-      onSelectProject(projectId)
-    }
   }
 
   const handleToggleProjectTaskLimit = (projectId: number) => {
@@ -557,13 +927,46 @@ export function DesktopSidebar({
     })
   }
 
-  const openProjectCreateDialog = async (mode: ProjectCreateMode) => {
-    try {
-      await onRefreshDevices?.()
-    } finally {
-      setProjectCreateMode(mode)
-    }
+  const openProjectCreateDialog = (mode: ProjectCreateMode) => {
+    setProjectCreateMode(mode)
+    void onRefreshDevices?.().catch(() => undefined)
   }
+
+  useEffect(() => {
+    if (storageScopeRef.current !== storageScope) return
+    writeStoredBoolean(projectsExpandedStorageKey, projectsExpanded)
+  }, [projectsExpanded, projectsExpandedStorageKey, storageScope])
+
+  useEffect(() => {
+    if (storageScopeRef.current !== storageScope) return
+    writeStoredBoolean(chatsExpandedStorageKey, chatsExpanded)
+  }, [chatsExpanded, chatsExpandedStorageKey, storageScope])
+
+  useEffect(() => {
+    if (storageScopeRef.current !== storageScope) return
+    writeStoredNumberSet(expandedProjectIdsStorageKey, expandedProjectIds)
+  }, [expandedProjectIds, expandedProjectIdsStorageKey, storageScope])
+
+  useEffect(() => {
+    if (storageScopeRef.current !== storageScope) return
+    writeStoredNumberSet(expandedTaskListIdsStorageKey, expandedTaskListIds)
+  }, [expandedTaskListIds, expandedTaskListIdsStorageKey, storageScope])
+
+  useEffect(() => {
+    if (storageScopeRef.current === storageScope) return
+
+    storageScopeRef.current = storageScope
+    setProjectsExpanded(readStoredBoolean(projectsExpandedStorageKey, true))
+    setChatsExpanded(readStoredBoolean(chatsExpandedStorageKey, true))
+    setExpandedProjectIds(readStoredNumberSet(expandedProjectIdsStorageKey))
+    setExpandedTaskListIds(readStoredNumberSet(expandedTaskListIdsStorageKey))
+  }, [
+    chatsExpandedStorageKey,
+    expandedProjectIdsStorageKey,
+    expandedTaskListIdsStorageKey,
+    projectsExpandedStorageKey,
+    storageScope,
+  ])
 
   useEffect(() => {
     if (!settingsMenuOpen) {
@@ -585,22 +988,77 @@ export function DesktopSidebar({
     }
   }, [settingsMenuOpen])
 
+  useEffect(() => {
+    if (!currentTaskId) return
+
+    const timer = window.setTimeout(() => {
+      if (currentProjectWithTask) {
+        setProjectsExpanded(true)
+        setExpandedProjectIds(previous => {
+          if (previous.has(currentProjectWithTask.id)) return previous
+          return new Set([...previous, currentProjectWithTask.id])
+        })
+        if (currentProjectTaskIndex >= INITIAL_PROJECT_CHAT_COUNT) {
+          setExpandedTaskListIds(previous => {
+            if (previous.has(currentProjectWithTask.id)) return previous
+            return new Set([...previous, currentProjectWithTask.id])
+          })
+        }
+        return
+      }
+
+      if (sortedRecentTasks.some(task => task.id === currentTaskId)) {
+        setChatsExpanded(true)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    currentProjectTaskIndex,
+    currentProjectWithTask,
+    currentTaskId,
+    sortedRecentTasks,
+  ])
+
+  useEffect(() => {
+    if (!currentTaskId) return
+
+    const taskRow =
+      document.querySelector(`[data-testid="project-chat-row-${currentTaskId}"]`) ??
+      document.querySelector(`[data-testid="history-task-row-${currentTaskId}"]`)
+
+    taskRow?.scrollIntoView({ block: 'nearest' })
+  }, [
+    chatsExpanded,
+    currentTaskId,
+    expandedProjectIds,
+    expandedTaskListIds,
+    projectsExpanded,
+  ])
+
   return (
     <aside
-      className="relative flex shrink-0 flex-col border-r border-border/70 bg-[rgb(var(--color-sidebar))] px-4 py-4 shadow-[inset_-1px_0_0_rgb(var(--color-border))] backdrop-blur-xl backdrop-saturate-150"
+      className="relative flex shrink-0 flex-col border-r border-border/70 bg-[rgb(var(--color-sidebar))] px-1.5 pb-4 shadow-[inset_-1px_0_0_rgb(var(--color-border))] backdrop-blur-xl backdrop-saturate-150"
       style={{ width: sidebarWidth }}
     >
-      <div className="-mt-3 mb-1 flex justify-end">
-        <button
-          type="button"
-          data-testid="collapse-sidebar-button"
-          onClick={onCollapse}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))]"
-          aria-label={t('workbench.collapse_sidebar', '收起侧边栏')}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-      </div>
+      <DesktopTopBar
+        testId="desktop-sidebar-topbar"
+        className={cn(
+          '-mx-1.5 mb-2 w-[calc(100%+0.75rem)] bg-transparent pr-2',
+          reserveMacWindowControls ? undefined : 'pl-2',
+        )}
+        style={
+          reserveMacWindowControls
+            ? { paddingLeft: MAC_NATIVE_TOP_BAR_ACTION_INSET }
+            : undefined
+        }
+        left={(
+          <DesktopWindowControls
+            sidebarCollapsed={false}
+            onToggleSidebar={onCollapse}
+          />
+        )}
+      />
 
       <nav className="space-y-0.5">
         <SidebarButton
@@ -613,7 +1071,7 @@ export function DesktopSidebar({
           icon={Search}
           label={t('workbench.search', '搜索')}
           testId="search-button"
-          onClick={() => {}}
+          onClick={() => setSearchDialogOpen(true)}
         />
         <SidebarButton
           icon={Sparkles}
@@ -621,13 +1079,6 @@ export function DesktopSidebar({
           testId="plugins-button"
           selected={activeItem === 'plugins'}
           onClick={onOpenPlugins}
-        />
-        <SidebarButton
-          icon={Workflow}
-          label={t('workbench.automation', '自动化')}
-          testId="automation-button"
-          selected={activeItem === 'automation'}
-          onClick={() => {}}
         />
       </nav>
 
@@ -663,7 +1114,7 @@ export function DesktopSidebar({
               icon={FolderPlus}
               items={[
                 {
-                  label: t('workbench.start_from_scratch', '从头开始'),
+                  label: t('workbench.start_from_scratch', '新建空白项目'),
                   icon: FolderPlus,
                   testId: 'project-start-from-scratch-button',
                   onSelect: () => openProjectCreateDialog('scratch'),
@@ -674,6 +1125,12 @@ export function DesktopSidebar({
                   testId: 'project-existing-folder-button',
                   onSelect: () => openProjectCreateDialog('existing'),
                 },
+                {
+                  label: t('workbench.clone_from_git', '从 Git 克隆'),
+                  icon: FolderGit2,
+                  testId: 'project-clone-from-git-button',
+                  onSelect: () => openProjectCreateDialog('git'),
+                },
               ]}
             />
           </SidebarSectionHeader>
@@ -683,10 +1140,11 @@ export function DesktopSidebar({
                 <ProjectItem
                   key={project.id}
                   project={project}
-                  expanded={expandedProjectIds.has(project.id)}
-                  showAllTasks={expandedTaskListIds.has(project.id)}
+                  expanded={visibleExpandedProjectIds.has(project.id)}
+                  showAllTasks={visibleExpandedTaskListIds.has(project.id)}
                   activeTaskId={currentTaskId}
                   runningTaskIds={runningTaskIds}
+                  devices={devices}
                   onToggleProject={handleToggleProject}
                   onToggleTaskLimit={handleToggleProjectTaskLimit}
                   onStartNewProjectChat={onStartNewProjectChat}
@@ -729,9 +1187,14 @@ export function DesktopSidebar({
             <button
               type="button"
               data-testid="chats-new-conversation-button"
-              onClick={onStartStandaloneChat}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))]"
-              aria-label={t('workbench.new_chat', '新对话')}
+              disabled={!canStartStandaloneChat}
+              onClick={() => {
+                if (!canStartStandaloneChat) return
+                onStartStandaloneChat()
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[rgb(var(--color-sidebar-text-secondary))] hover:bg-[rgb(var(--color-sidebar-hover))] hover:text-[rgb(var(--color-sidebar-text-primary))] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-[rgb(var(--color-sidebar-text-secondary))]"
+              title={standaloneChatTitle}
+              aria-label={standaloneChatTitle}
             >
               <MessageSquarePlus className="h-4 w-4" />
             </button>
@@ -744,6 +1207,7 @@ export function DesktopSidebar({
                   task={task}
                   selected={currentTaskId === task.id && currentProjectId === undefined}
                   running={runningTaskIds.has(task.id)}
+                  devices={devices}
                   onOpenTask={onOpenTask}
                   onArchiveTask={onArchiveTask}
                   onRenameTask={item => setRenamingTask({ id: item.id, title: item.title })}
@@ -759,7 +1223,7 @@ export function DesktopSidebar({
           type="button"
           data-testid="settings-button"
           onClick={() => setSettingsMenuOpen(open => !open)}
-          className="flex h-9 shrink-0 items-center gap-3 rounded-md px-3 text-[13px] font-medium leading-[18px] text-[rgb(var(--color-sidebar-text-primary))] hover:bg-[rgb(var(--color-sidebar-hover))]"
+          className="flex h-9 w-full shrink-0 items-center gap-2 rounded-md px-2 text-left text-[13px] font-medium leading-[18px] text-[rgb(var(--color-sidebar-text-primary))] hover:bg-[rgb(var(--color-sidebar-hover))]"
           aria-expanded={settingsMenuOpen}
         >
           <Settings className="h-4 w-4" />
@@ -785,17 +1249,37 @@ export function DesktopSidebar({
         aria-label={t('workbench.resize_sidebar', '调整侧边栏宽度')}
       />
 
+      <DesktopSearchDialog
+        open={searchDialogOpen}
+        projects={projects}
+        recentTasks={recentTasks}
+        onOpenChange={setSearchDialogOpen}
+        onOpenTask={onOpenTask}
+        onSearchTasks={onSearchTasks}
+        onSearchTaskDetail={onSearchTaskDetail}
+      />
+
       <ProjectCreateDialog
         open={projectCreateMode !== null}
         mode={projectCreateMode ?? 'scratch'}
         devices={devices}
         onClose={() => setProjectCreateMode(null)}
+        onOpenCloudDeviceSettings={() => {
+          setProjectCreateMode(null)
+          onOpenSettings({ autoOpenAddCloudDeviceDialog: true })
+        }}
         onCreateProject={onCreateProject}
+        onCreateGitWorkspaceProject={onCreateGitWorkspaceProject}
         preferredDeviceId={preferredDeviceId}
         onSelectDevicePreference={onRememberExecutionDevice}
+        upgradingDevices={upgradingDevices}
+        onUpgradeDevice={onUpgradeDevice}
         onGetDeviceHomeDirectory={onGetDeviceHomeDirectory}
         onGetProjectWorkspaceRoot={onGetProjectWorkspaceRoot}
         onListDeviceDirectories={onListDeviceDirectories}
+        onCreateDeviceDirectory={onCreateDeviceDirectory}
+        onListGitRepositories={onListGitRepositories}
+        onListGitBranches={onListGitBranches}
       />
       <TextInputDialog
         open={renamingProject !== null}

@@ -168,7 +168,7 @@ export interface MessageBubbleProps {
   ) => void
   /** Callback when user submits an ask_user_question form - sends the pre-formatted answer as a new conversation message */
   onAskUserSubmit?: (
-    askId: string,
+    toolUseId: string,
     formattedMessage: string,
     answer: InteractiveFormAnswerPayload
   ) => void
@@ -1380,7 +1380,7 @@ const MessageBubble = memo(
                   )}
                 </div>
               )}
-              {/* Show reasoning display for DeepSeek R1 and similar models (legacy fallback) */}
+              {/* Show reasoning display for DeepSeek R1 and similar models */}
               {!isUserTypeMessage &&
                 !hasInlineThinkingBlocks &&
                 (msg.reasoningContent || msg.result?.reasoning_content) && (

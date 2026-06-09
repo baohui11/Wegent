@@ -54,6 +54,11 @@
     "discard_changes": "放弃更改",
     "reset_to_default": "恢复默认"
   },
+  "resourceGuide": {
+    "title": "智能体管理已移到资源库",
+    "description": "智能体、模型、执行器、技能和检索器现在在资源库管理。",
+    "action": "前往资源库"
+  },
   "navigation": {
     "team": "智能体",
     "models": "模型",
@@ -218,7 +223,7 @@
       },
       "execution": {
         "bind_mode_description": "决定这个智能体可以在哪些入口和任务类型中使用。",
-        "requires_workspace_description": "开启后，Agent 模式任务必须先选择仓库。",
+        "requires_workspace_description": "开启后，编码任务必须先选择仓库。",
         "executor_description": "决定智能体处理任务时使用的运行环境。"
       },
       "bind_mode": {
@@ -227,7 +232,7 @@
           "description": "用于普通问答、资料讨论和持续对话。"
         },
         "code": {
-          "title": "Agent",
+          "title": "编码",
           "description": "用于代码仓库内的开发、修复和审查任务。"
         },
         "task": {
@@ -238,8 +243,8 @@
       "executor": {
         "title": "执行器",
         "required": "请选择一个可用执行器",
-        "requires_complex_hint": "Agent 和设备模式需要 Claude Code 能力，已优先使用复杂执行器。",
-        "custom_shell_placeholder": "选择自定义 Shell",
+        "requires_complex_hint": "编码和设备模式需要 Claude Code 能力，已优先使用复杂执行器。",
+        "custom_shell_placeholder": "选择自定义执行器",
         "no_custom_shells": "暂无自定义执行器",
         "manage_custom_shells_hint": "可前往资源库 - 执行器管理自定义执行器。",
         "simple": {

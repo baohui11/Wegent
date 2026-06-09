@@ -27,6 +27,7 @@ import {
   getAllowedModelsFromConfig,
 } from '@/features/settings/services/bots'
 import { getCompatibleProviderFromAgentType } from '@/utils/modelCompatibility'
+import type { CompatibleProvider } from '@/utils/modelCompatibility'
 import {
   saveGlobalModelPreference,
   getGlobalModelPreference,
@@ -104,7 +105,7 @@ export interface UseModelSelectionReturn {
   showDefaultOption: boolean
   isModelRequired: boolean
   isMixedTeam: boolean
-  compatibleProvider: string | null
+  compatibleProvider: CompatibleProvider[] | null
   hasAdvancedModels: boolean
   boundDefaultModel: Model | null
 
@@ -223,7 +224,7 @@ export function useModelSelection({
   }, [selectedTeam])
 
   /** Get compatible provider based on team agent_type */
-  const compatibleProvider = useMemo((): string | null => {
+  const compatibleProvider = useMemo((): CompatibleProvider[] | null => {
     return getCompatibleProviderFromAgentType(selectedTeam?.agent_type)
   }, [selectedTeam?.agent_type])
 
@@ -263,8 +264,10 @@ export function useModelSelection({
   /** Check if there are any advanced models (after provider filtering) */
   const hasAdvancedModels = useMemo(() => {
     let result = models
-    if (compatibleProvider) {
-      result = result.filter(model => model.provider === compatibleProvider)
+    if (compatibleProvider && compatibleProvider.length > 0) {
+      result = result.filter(model =>
+        compatibleProvider.includes(model.provider as CompatibleProvider)
+      )
     }
     return result.some(model => model.isAdvanced === true)
   }, [models, compatibleProvider])
@@ -272,8 +275,10 @@ export function useModelSelection({
   /** Filter models by compatible provider, advanced flag, allowed_models whitelist, and sort by display name */
   const filteredModels = useMemo(() => {
     let result = models
-    if (compatibleProvider) {
-      result = result.filter(model => model.provider === compatibleProvider)
+    if (compatibleProvider && compatibleProvider.length > 0) {
+      result = result.filter(model =>
+        compatibleProvider.includes(model.provider as CompatibleProvider)
+      )
     }
     if (!showAdvancedModels) {
       result = result.filter(model => !model.isAdvanced)

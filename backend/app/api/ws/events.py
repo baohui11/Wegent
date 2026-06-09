@@ -135,6 +135,22 @@ class GenerateParams(BaseModel):
     duration: Optional[int] = Field(None, description="Duration in seconds")
 
 
+class ChatExecutionWorkspacePayload(BaseModel):
+    """Workspace execution intent for chat:send."""
+
+    source: Literal["git_worktree"] = Field(
+        ..., description="Execution workspace source"
+    )
+
+
+class ChatExecutionPayload(BaseModel):
+    """Execution options for chat:send."""
+
+    workspace: Optional[ChatExecutionWorkspacePayload] = Field(
+        None, description="Workspace execution options"
+    )
+
+
 class InteractiveFormAnswerPayload(BaseModel):
     """Structured answer for a deferred interactive_form_question tool call."""
 
@@ -142,10 +158,9 @@ class InteractiveFormAnswerPayload(BaseModel):
         "interactive_form_question",
         description="Interactive form answer type",
     )
-    ask_id: str = Field(..., description="Rendered form ask ID")
-    tool_use_id: Optional[str] = Field(
-        None,
-        description="Deferred tool_use_id returned by Claude Code",
+    tool_use_id: str = Field(
+        ...,
+        description="Deferred tool call ID for the rendered form",
     )
     task_id: Optional[int] = Field(None, description="Task ID for the rendered form")
     subtask_id: Optional[int] = Field(
@@ -190,10 +205,6 @@ class ChatSendPayload(BaseModel):
     enable_deep_thinking: bool = Field(
         True, description="Enable deep thinking mode (enables tool usage)"
     )
-    enable_reasoning: Optional[bool] = Field(
-        None,
-        description="Enable model reasoning for this message (only when model spec dynamic_thinking is true)",
-    )
     enable_web_search: bool = Field(False, description="Enable web search")
     search_engine: Optional[str] = Field(None, description="Search engine to use")
     enable_clarification: bool = Field(
@@ -205,7 +216,7 @@ class ChatSendPayload(BaseModel):
     force_override_bot_model_type: Optional[str] = Field(
         None, description="Override model type"
     )
-    model_options: Optional[Dict[str, str]] = Field(
+    model_options: Optional[Dict[str, Any]] = Field(
         None,
         description="Model selection options, such as reasoning or speed.",
     )
@@ -255,6 +266,10 @@ class ChatSendPayload(BaseModel):
     interactive_form_answer: Optional[InteractiveFormAnswerPayload] = Field(
         None,
         description="Answer payload for a deferred interactive_form_question tool call",
+    )
+    execution: Optional[ChatExecutionPayload] = Field(
+        None,
+        description="Execution options for new tasks",
     )
 
 

@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
+import { SettingsResourceGuide } from '@/features/settings/components/SettingsResourceGuide'
 import { useTranslation } from '@/hooks/useTranslation'
 
 export type SettingsTabId = 'general' | 'integrations' | 'api-keys' | 'group-manager' | 'pet'
@@ -61,6 +62,9 @@ export function SettingsTabNav({ activeTab, onTabChange }: SettingsTabNavProps) 
             </SelectGroup>
           </SelectContent>
         </Select>
+        <div className="mt-2">
+          <SettingsResourceGuide />
+        </div>
       </div>
     )
   }
@@ -87,6 +91,9 @@ export function SettingsTabNav({ activeTab, onTabChange }: SettingsTabNavProps) 
             </button>
           )
         })}
+      </div>
+      <div className="px-4 pb-3">
+        <SettingsResourceGuide />
       </div>
     </div>
   )

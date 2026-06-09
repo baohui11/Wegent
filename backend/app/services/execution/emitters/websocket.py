@@ -15,6 +15,9 @@ import logging
 from typing import Any, Optional
 
 from app.services.chat.webpage_ws_chat_emitter import WebPageSocketEmitter
+from app.services.execution.interactive_form_render import (
+    build_interactive_form_render_payload,
+)
 from shared.models import EventType, ExecutionEvent
 from shared.models.blocks import BlockStatus, create_tool_block
 
@@ -127,6 +130,9 @@ class WebSocketResultEmitter(BaseResultEmitter):
 
         elif event.type == EventType.BLOCK_CREATED.value:
             await self._emit_direct_block_created(event, webpage_ws_emitter)
+
+        elif event.type == EventType.BLOCK_UPDATED.value:
+            await self._emit_direct_block_updated(event, webpage_ws_emitter)
 
         elif event.type == EventType.THINKING.value:
             await self._emit_thinking_block(event, webpage_ws_emitter)
@@ -326,6 +332,42 @@ class WebSocketResultEmitter(BaseResultEmitter):
 
         await chat_storage.session_manager.add_block(event.subtask_id, block)
 
+    async def _emit_direct_block_updated(
+        self, event: ExecutionEvent, ws_emitter
+    ) -> None:
+        """Emit chat:block_updated from an ExecutionEvent block update payload."""
+        block_id = event.data.get("block_id") if event.data else None
+        updates = event.data.get("updates") if event.data else None
+        if not block_id or not isinstance(updates, dict):
+            return
+
+        update_kwargs = {
+            "task_id": event.task_id,
+            "subtask_id": event.subtask_id,
+            "block_id": str(block_id),
+        }
+        for source_key, target_key in (
+            ("content", "content"),
+            ("tool_input", "tool_input"),
+            ("tool_output", "tool_output"),
+            ("status", "status"),
+        ):
+            if source_key in updates:
+                update_kwargs[target_key] = updates[source_key]
+        await ws_emitter.emit_block_updated(**update_kwargs)
+
+        import app.services.chat.storage as chat_storage
+
+        blocks = await chat_storage.session_manager.get_blocks(event.subtask_id)
+        existing_block = next(
+            (block for block in blocks if block.get("id") == str(block_id)),
+            None,
+        )
+        if existing_block is None:
+            return
+        existing_block.update(updates)
+        await chat_storage.session_manager.add_block(event.subtask_id, existing_block)
+
     async def _emit_result_guidance_blocks(
         self, event: ExecutionEvent, ws_emitter
     ) -> None:
@@ -355,14 +397,19 @@ class WebSocketResultEmitter(BaseResultEmitter):
         if event.data and event.data.get("status") in ("error", "failed"):
             status = BlockStatus.ERROR
 
-        await ws_emitter.emit_block_updated(
-            task_id=event.task_id,
-            subtask_id=event.subtask_id,
-            block_id=event.tool_use_id or "",
-            tool_output=event.tool_output,
-            tool_input=event.tool_input,
-            status=status.value,
-        )
+        update_kwargs = {
+            "task_id": event.task_id,
+            "subtask_id": event.subtask_id,
+            "block_id": event.tool_use_id or "",
+            "tool_output": event.tool_output,
+            "tool_input": event.tool_input,
+            "status": status.value,
+        }
+        render_payload = build_interactive_form_render_payload(event)
+        if render_payload is not None:
+            update_kwargs["render_payload"] = render_payload
+
+        await ws_emitter.emit_block_updated(**update_kwargs)
         logger.debug(
             f"[WebSocketResultEmitter] chat:block_updated emitted: "
             f"task_id={event.task_id}, tool_use_id={event.tool_use_id}, status={status.value}"

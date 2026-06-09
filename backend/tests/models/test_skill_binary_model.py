@@ -16,4 +16,5 @@ pytestmark = pytest.mark.unit
 def test_skill_binary_uses_mediumblob_on_mysql() -> None:
     statement = str(CreateTable(SkillBinary.__table__).compile(dialect=mysql.dialect()))
 
-    assert "binary_data MEDIUMBLOB NOT NULL" in statement
+    assert "binary_data MEDIUMBLOB" in statement
+    assert "storage_key VARCHAR(512)" in statement

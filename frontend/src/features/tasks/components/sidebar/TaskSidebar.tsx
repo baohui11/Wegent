@@ -171,6 +171,13 @@ export default function TaskSidebar({
 
   const navigationButtons: NavigationButton[] = [
     {
+      label: t('common:navigation.flow'),
+      icon: Workflow,
+      path: paths.feed.getHref(),
+      isActive: pageType === 'flow',
+      buttonPageType: 'flow',
+    },
+    {
       label: t('common:navigation.code'),
       icon: Code,
       path: paths.code.getHref(),
@@ -184,13 +191,6 @@ export default function TaskSidebar({
       path: paths.wiki.getHref(),
       isActive: pageType === 'knowledge',
       buttonPageType: 'knowledge',
-    },
-    {
-      label: t('common:navigation.flow'),
-      icon: Workflow,
-      path: paths.feed.getHref(),
-      isActive: pageType === 'flow',
-      buttonPageType: 'flow',
     },
     {
       label: t('resource-library:title'),
@@ -292,15 +292,15 @@ export default function TaskSidebar({
 
   const fixedNavigationButtons = navigationButtons.filter(
     btn =>
+      btn.buttonPageType === 'flow' ||
       btn.buttonPageType === 'code' ||
-      btn.buttonPageType === 'knowledge' ||
-      btn.buttonPageType === 'flow'
+      btn.buttonPageType === 'knowledge'
   )
   const moreNavigationButtons = navigationButtons.filter(
     btn =>
+      btn.buttonPageType !== 'flow' &&
       btn.buttonPageType !== 'code' &&
-      btn.buttonPageType !== 'knowledge' &&
-      btn.buttonPageType !== 'flow'
+      btn.buttonPageType !== 'knowledge'
   )
   const fixedSecondaryNavigationButtons = SIDEBAR_NAV_CONFIG.keepSecondaryNavFixed
     ? moreNavigationButtons
@@ -535,14 +535,14 @@ export default function TaskSidebar({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Image
-                      src="/mp-logo.png"
-                      alt="中大 Agent Logo"
+                      src="/weibo-logo.png"
+                      alt="Weibo Logo"
                       width={36}
                       height={35}
                       className="object-contain"
                       priority
                     />
-                    <span className="text-base font-semibold text-text-primary">中大 Agent</span>
+                    <span className="text-base font-semibold text-text-primary">Wegent</span>
                   </div>
                   {onToggleCollapsed && (
                     <TooltipProvider>

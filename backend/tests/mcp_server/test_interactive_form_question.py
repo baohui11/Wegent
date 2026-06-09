@@ -5,6 +5,7 @@
 """Tests for interactive_form_question MCP tool."""
 
 import inspect
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,25 +14,9 @@ from app.mcp_server.auth import TaskTokenInfo
 from app.mcp_server.tools.interactive_form_question import (
     _build_deferred_tool_result,
     _build_form_render_payload,
-    _generate_ask_id,
     _notify_frontend,
     interactive_form_question,
 )
-
-
-class TestGenerateAskId:
-    """Tests for _generate_ask_id helper."""
-
-    def test_format(self):
-        assert _generate_ask_id(456) == "ask_456"
-
-    def test_deterministic(self):
-        ids = [_generate_ask_id(42) for _ in range(10)]
-        assert len(set(ids)) == 1
-
-    def test_unique_per_subtask(self):
-        ids = [_generate_ask_id(i) for i in range(100)]
-        assert len(set(ids)) == 100
 
 
 class TestInteractiveFormTool:
@@ -129,7 +114,7 @@ class TestInteractiveFormTool:
 
         assert result["success"] is True
         assert result["status"] == "waiting_for_user_response"
-        assert result["ask_id"] == "ask_20"
+        assert "ask_id" not in result
         assert result["__deferred_user_input__"] is True
         assert "form" not in result
         assert "questions" not in result
@@ -207,6 +192,156 @@ class TestInteractiveFormTool:
 
         assert captured["questions"][0]["input_type"] == "choice"
         assert captured["questions"][0]["multi_select"] is True
+
+    @pytest.mark.asyncio
+    async def test_recovers_question_text_embedded_in_input_type(self) -> None:
+        """Malformed model output can put question(...) inside input_type."""
+        token = self._make_token()
+        captured: dict[str, Any] = {}
+
+        async def capture(
+            task_id: int,
+            subtask_id: int,
+            question_data: dict[str, Any],
+        ) -> None:
+            captured.update(question_data)
+
+        with patch(
+            "app.mcp_server.tools.interactive_form_question._notify_frontend",
+            side_effect=capture,
+        ):
+            result = await interactive_form_question(
+                token_info=token,
+                questions=[
+                    {
+                        "id": "confirm_logic",
+                        "input_type": "single_choice(question(确认需求逻辑是否正确?))",
+                        "multiSelect": False,
+                        "options": [
+                            {"label": "确认以上逻辑正确", "value": "yes"},
+                            {"label": "需要调整", "value": "adjust"},
+                        ],
+                    }
+                ],
+            )
+
+        assert result["__deferred_user_input__"] is True
+        assert captured["questions"][0]["question"] == "确认需求逻辑是否正确?"
+        assert captured["questions"][0]["input_type"] == "choice"
+        assert captured["questions"][0]["multi_select"] is False
+
+    @pytest.mark.asyncio
+    async def test_preserves_trailing_parentheses_in_embedded_question(self) -> None:
+        """Recovering embedded question text preserves legitimate trailing parens."""
+        token = self._make_token()
+        captured: dict[str, Any] = {}
+
+        async def capture(
+            task_id: int,
+            subtask_id: int,
+            question_data: dict[str, Any],
+        ) -> None:
+            captured.update(question_data)
+
+        with patch(
+            "app.mcp_server.tools.interactive_form_question._notify_frontend",
+            side_effect=capture,
+        ):
+            await interactive_form_question(
+                token_info=token,
+                questions=[
+                    {
+                        "id": "confirm_logic",
+                        "input_type": "single_choice(question(Use option A (recommended)))",
+                        "options": [
+                            {"label": "Confirm", "value": "confirm"},
+                            {"label": "Adjust", "value": "adjust"},
+                        ],
+                    }
+                ],
+            )
+
+        assert captured["questions"][0]["question"] == "Use option A (recommended)"
+        assert captured["questions"][0]["input_type"] == "choice"
+
+    @pytest.mark.asyncio
+    async def test_accepts_camel_case_multi_select_alias(self) -> None:
+        """Claude-style tool calls may use multiSelect instead of multi_select."""
+        token = self._make_token()
+        captured: dict[str, Any] = {}
+
+        async def capture(
+            task_id: int,
+            subtask_id: int,
+            question_data: dict[str, Any],
+        ) -> None:
+            captured.update(question_data)
+
+        with patch(
+            "app.mcp_server.tools.interactive_form_question._notify_frontend",
+            side_effect=capture,
+        ):
+            await interactive_form_question(
+                token_info=token,
+                questions=[
+                    {
+                        "id": "features",
+                        "question": "Pick features",
+                        "input_type": "choice",
+                        "multiSelect": True,
+                        "options": [
+                            {"label": "A", "value": "a"},
+                            {"label": "B", "value": "b"},
+                        ],
+                    }
+                ],
+            )
+
+        assert captured["questions"][0]["input_type"] == "choice"
+        assert captured["questions"][0]["multi_select"] is True
+
+    @pytest.mark.asyncio
+    async def test_accepts_common_aliases_and_string_options(self) -> None:
+        """Common model form aliases are normalized before rendering."""
+        token = self._make_token()
+        captured: dict[str, Any] = {}
+
+        async def capture(
+            task_id: int,
+            subtask_id: int,
+            question_data: dict[str, Any],
+        ) -> None:
+            captured.update(question_data)
+
+        with patch(
+            "app.mcp_server.tools.interactive_form_question._notify_frontend",
+            side_effect=capture,
+        ):
+            await interactive_form_question(
+                token_info=token,
+                questions=[
+                    {
+                        "id": "confirm",
+                        "question": "Confirm?",
+                        "inputType": "single_choice",
+                        "options": ["Yes", "No"],
+                    },
+                    {
+                        "id": "note",
+                        "title": "Anything else?",
+                        "input_type": "text_input",
+                        "required": False,
+                    },
+                ],
+            )
+
+        assert captured["questions"][0]["input_type"] == "choice"
+        assert captured["questions"][0]["options"] == [
+            {"label": "Yes", "value": "Yes", "recommended": False},
+            {"label": "No", "value": "No", "recommended": False},
+        ]
+        assert captured["questions"][1]["question"] == "Anything else?"
+        assert captured["questions"][1]["input_type"] == "text"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -431,8 +566,8 @@ class TestInteractiveFormTool:
         )
 
     @pytest.mark.asyncio
-    async def test_ask_id_in_question_data(self):
-        """question_data contains correct ask_id derived from subtask_id."""
+    async def test_question_data_has_no_generated_form_id(self):
+        """The rendered form uses the tool call ID, not a separate ask_id."""
         token = self._make_token(subtask_id=99)
         captured = {}
 
@@ -448,7 +583,7 @@ class TestInteractiveFormTool:
                 questions=[{"id": "q1", "question": "Q?"}],
             )
 
-        assert captured["ask_id"] == "ask_99"
+        assert "ask_id" not in captured
 
     @pytest.mark.asyncio
     async def test_requires_at_least_one_question(self):
@@ -474,7 +609,6 @@ class TestInteractiveFormTool:
                     "tool_input": {"questions": [{"id": "q1", "question": "Raw?"}]},
                     "render_payload": {
                         "type": "interactive_form_question",
-                        "ask_id": "ask_2",
                         "task_id": 1,
                         "subtask_id": 2,
                         "questions": [
@@ -597,7 +731,6 @@ class TestFormRenderPayloadSchema:
             _build_form_render_payload(
                 {
                     "type": "interactive_form_question",
-                    "ask_id": "ask_1",
                     "task_id": 1,
                     "subtask_id": 2,
                     "questions": [
@@ -621,7 +754,6 @@ class TestFormRenderPayloadSchema:
             _build_form_render_payload(
                 {
                     "type": "interactive_form_question",
-                    "ask_id": "ask_1",
                     "task_id": 1,
                     "subtask_id": 2,
                     "questions": [
@@ -640,11 +772,11 @@ class TestFormRenderPayloadSchema:
             )
 
 
-class TestNotifyFrontendFallback:
-    """Tests for synthetic block fallback when tool block is missing."""
+class TestNotifyFrontend:
+    """Tests for attaching rendered forms to existing tool blocks."""
 
     @pytest.mark.asyncio
-    async def test_creates_synthetic_block_when_tool_block_missing(self):
+    async def test_does_not_create_synthetic_block_when_tool_block_missing(self):
         mock_session_manager = MagicMock()
         mock_session_manager.get_blocks = AsyncMock(return_value=[])
         mock_session_manager.add_tool_block = AsyncMock()
@@ -655,7 +787,6 @@ class TestNotifyFrontendFallback:
 
         question_data = {
             "type": "interactive_form_question",
-            "ask_id": "ask_123",
             "task_id": 1,
             "subtask_id": 2,
             "questions": [
@@ -684,23 +815,9 @@ class TestNotifyFrontendFallback:
         ):
             await _notify_frontend(task_id=1, subtask_id=2, question_data=question_data)
 
-        mock_session_manager.add_tool_block.assert_awaited_once_with(
-            subtask_id=2,
-            tool_use_id="ask_123",
-            tool_name="interactive_form_question",
-            tool_input={},
-            display_name="interactive_form_question",
-        )
-        mock_session_manager.update_tool_block_status.assert_awaited_once_with(
-            subtask_id=2,
-            tool_use_id="ask_123",
-            tool_output=_build_deferred_tool_result("ask_123"),
-            render_payload=question_data,
-        )
-        mock_ws_emitter.emit_block_created.assert_awaited_once()
-        created_block = mock_ws_emitter.emit_block_created.await_args.kwargs["block"]
-        assert created_block["tool_output"] == _build_deferred_tool_result("ask_123")
-        assert created_block["render_payload"] == question_data
+        mock_session_manager.add_tool_block.assert_not_awaited()
+        mock_session_manager.update_tool_block_status.assert_not_awaited()
+        mock_ws_emitter.emit_block_created.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_updates_existing_block_with_form_payload(self):
@@ -722,7 +839,6 @@ class TestNotifyFrontendFallback:
 
         question_data = {
             "type": "interactive_form_question",
-            "ask_id": "ask_123",
             "task_id": 1,
             "subtask_id": 2,
             "questions": [
@@ -754,14 +870,14 @@ class TestNotifyFrontendFallback:
         mock_session_manager.update_tool_block_status.assert_awaited_once_with(
             subtask_id=2,
             tool_use_id="tool-123",
-            tool_output=_build_deferred_tool_result("ask_123"),
+            tool_output=_build_deferred_tool_result(),
             render_payload=question_data,
         )
         mock_ws_emitter.emit_block_updated.assert_awaited_once_with(
             task_id=1,
             subtask_id=2,
             block_id="tool-123",
-            tool_output=_build_deferred_tool_result("ask_123"),
+            tool_output=_build_deferred_tool_result(),
             render_payload=question_data,
             status="pending",
         )

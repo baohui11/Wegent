@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   ModelCascadeContent,
   type ModelCascadeLabels,
@@ -23,6 +23,8 @@ const labels: ModelCascadeLabels = {
   searchResults: 'Search Results',
   noModels: 'No models available',
   noMatch: 'No matching models',
+  primaryGroups: 'Primary Groups',
+  secondaryGroups: 'Secondary Groups',
 }
 
 const models: GroupableModel[] = [
@@ -31,46 +33,33 @@ const models: GroupableModel[] = [
     displayName: 'Model A',
     provider: 'provider-one',
     modelId: 'provider-one-model-a',
-    modelGroup: 'Anthropic',
-    modelSubGroup: 'Claude 3',
+    modelGroup: 'Primary One',
+    modelSubGroup: 'Secondary One',
   },
   {
     name: 'model-b',
     displayName: 'Model B',
     provider: 'provider-two',
     modelId: 'provider-two-model-b',
-    modelGroup: 'Anthropic',
-    modelSubGroup: 'Claude 4',
+    modelGroup: 'Primary One',
+    modelSubGroup: 'Secondary Two',
   },
   {
     name: 'model-c',
     displayName: 'Model C',
     provider: 'provider-three',
     modelId: 'provider-three-model-c',
-    modelGroup: 'OpenAI',
+    modelGroup: 'Primary Two',
+    modelSubGroup: 'Secondary Three',
   },
 ]
 
 describe('ModelCascadeContent', () => {
-  it('shows expandable single-level groups with models inside', () => {
-    render(
-      <ModelCascadeContent
-        models={models}
-        labels={labels}
-        searchValue=""
-        onSearchValueChange={jest.fn()}
-        onSelectModel={jest.fn()}
-      />
-    )
-
-    expect(screen.getByText('Anthropic')).toBeInTheDocument()
-    expect(screen.getByText('OpenAI')).toBeInTheDocument()
-    expect(screen.getByText('Model A')).toBeInTheDocument()
-    expect(screen.getByText('Model C')).toBeInTheDocument()
-    expect(screen.queryByText('Primary Groups')).not.toBeInTheDocument()
+  afterEach(() => {
+    jest.restoreAllMocks()
   })
 
-  it('collapses and expands groups', () => {
+  it('shows primary and secondary groups before choosing a model', () => {
     render(
       <ModelCascadeContent
         models={models}
@@ -81,14 +70,11 @@ describe('ModelCascadeContent', () => {
       />
     )
 
-    const anthropicGroup = screen.getByTestId('model-tree-group-Anthropic')
-    expect(screen.getByText('Model A')).toBeVisible()
-
-    fireEvent.click(anthropicGroup)
-    expect(screen.getByText('Model A')).not.toBeVisible()
-
-    fireEvent.click(anthropicGroup)
-    expect(screen.getByText('Model A')).toBeVisible()
+    expect(screen.getByText('Primary One')).toBeInTheDocument()
+    expect(screen.getByText('Primary Two')).toBeInTheDocument()
+    expect(screen.getByText('Secondary One')).toBeInTheDocument()
+    expect(screen.getByText('Secondary Two')).toBeInTheDocument()
+    expect(screen.getByText('Model A')).toBeInTheDocument()
   })
 
   it('switches to flat searchable results including group text', () => {
@@ -105,15 +91,15 @@ describe('ModelCascadeContent', () => {
     )
 
     fireEvent.change(screen.getByTestId('model-cascade-search-input'), {
-      target: { value: 'OpenAI' },
+      target: { value: 'Secondary Three' },
     })
-    expect(onSearchValueChange).toHaveBeenCalledWith('OpenAI')
+    expect(onSearchValueChange).toHaveBeenCalledWith('Secondary Three')
 
     rerender(
       <ModelCascadeContent
         models={models}
         labels={labels}
-        searchValue="OpenAI"
+        searchValue="Secondary Three"
         onSearchValueChange={onSearchValueChange}
         onSelectModel={jest.fn()}
       />
@@ -124,7 +110,7 @@ describe('ModelCascadeContent', () => {
     expect(screen.queryByText('Model A')).not.toBeInTheDocument()
   })
 
-  it('constrains the tree list so long model lists do not push the footer out', () => {
+  it('constrains the cascade columns so long model lists do not push the footer out', () => {
     render(
       <ModelCascadeContent
         models={models}
@@ -136,11 +122,11 @@ describe('ModelCascadeContent', () => {
       />
     )
 
-    const tree = screen.getByTestId('model-cascade-tree')
+    const grid = screen.getByTestId('model-cascade-grid')
     const footer = screen.getByTestId('model-cascade-footer')
 
-    expect(tree).toHaveClass('min-h-0')
-    expect(tree.className).toContain('h-[clamp(')
+    expect(grid).toHaveClass('min-h-0')
+    expect(grid.className).toContain('h-[clamp(')
     expect(footer).toHaveClass('shrink-0')
   })
 
@@ -162,5 +148,38 @@ describe('ModelCascadeContent', () => {
     expect(results).toHaveClass('min-h-0')
     expect(results.className).toContain('h-[clamp(')
     expect(footer).toHaveClass('shrink-0')
+  })
+
+  it('scrolls the selected model into view when the active subgroup contains many models', async () => {
+    const scrollIntoView = jest.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    })
+
+    const longModelList = Array.from({ length: 32 }, (_, index) => ({
+      name: `model-${String(index).padStart(2, '0')}`,
+      displayName: `Model ${String(index).padStart(2, '0')}`,
+      provider: 'provider-one',
+      modelId: `provider-one-model-${index}`,
+      modelGroup: 'Primary One',
+      modelSubGroup: 'Secondary One',
+    }))
+    const selectedModel = longModelList[31]
+
+    render(
+      <ModelCascadeContent
+        models={longModelList}
+        selectedModel={selectedModel}
+        labels={labels}
+        searchValue=""
+        onSearchValueChange={jest.fn()}
+        onSelectModel={jest.fn()}
+      />
+    )
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    })
   })
 })

@@ -20,14 +20,15 @@ Async-first design:
 
 WebSocket notification design:
 - The MCP tool directly sends a WebSocket event to the frontend to render the
-  interactive form card.
-- This avoids the need for a TOOL_INPUT event in the dispatcher/emitter pipeline.
-- The tool_use_id (block_id) is passed via TaskTokenInfo so the frontend can
-  associate the form with the correct tool block.
+  interactive form card when the real tool block is already available.
+- The execution event pipeline remains authoritative: it attaches the
+  render_payload to the real tool_use_id block on TOOL_RESULT for both Chat
+  Shell and Claude Code.
 """
 
 import json
 import logging
+import re
 from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -44,6 +45,7 @@ FORM_RENDERED_REASON = (
 
 TEXT_INPUT_TYPE_ALIASES = {
     "text",
+    "text_input",
     "textarea",
     "long_text",
     "short_text",
@@ -53,6 +55,7 @@ TEXT_INPUT_TYPE_ALIASES = {
 }
 SINGLE_CHOICE_INPUT_TYPE_ALIASES = {
     "choice",
+    "single_choice",
     "single_select",
     "select",
     "dropdown",
@@ -61,6 +64,13 @@ SINGLE_CHOICE_INPUT_TYPE_ALIASES = {
     "enum",
     "option",
 }
+QUESTION_TEXT_KEYS = ("question", "title", "prompt", "label", "text")
+INPUT_TYPE_KEYS = ("input_type", "inputType", "question_type", "questionType")
+MULTI_SELECT_KEYS = ("multi_select", "multiSelect", "multiple", "multi")
+EMBEDDED_QUESTION_PATTERN = re.compile(
+    r"(?P<input_type>[a-zA-Z0-9_\-\s]+)\s*\(\s*question\s*\(",
+    re.IGNORECASE,
+)
 MULTI_CHOICE_INPUT_TYPE_ALIASES = {
     "multi_select",
     "multiple_select",
@@ -161,19 +171,9 @@ class RenderedInteractiveForm(BaseModel):
     """Strict frontend-renderable form schema emitted in render_payload."""
 
     type: Literal["interactive_form_question"]
-    ask_id: str
     task_id: int
     subtask_id: int
     questions: List[RenderedInteractiveFormQuestion] = Field(min_length=1)
-
-    @field_validator("ask_id")
-    @classmethod
-    def validate_non_empty_ask_id(cls, value: str) -> str:
-        """Rendered forms must have a stable ask_id for answer submission."""
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("ask_id must not be empty")
-        return normalized
 
 
 def _normalize_input_type(
@@ -207,6 +207,96 @@ def _normalize_default(default: List[str] | str | None) -> List[str] | None:
     return [default]
 
 
+def _extract_input_type_and_embedded_question(
+    input_type: str,
+) -> tuple[str, str | None]:
+    """Recover question text from malformed values like choice(question(...))."""
+    match = EMBEDDED_QUESTION_PATTERN.search(input_type)
+    if not match:
+        return input_type, None
+
+    embedded_question = input_type[match.end() :].strip()
+    wrapper_closers = 2
+    while wrapper_closers > 0 and embedded_question.endswith(")"):
+        embedded_question = embedded_question[:-1].strip()
+        wrapper_closers -= 1
+
+    return match.group("input_type").strip(), embedded_question or None
+
+
+def _normalize_option_payload(option: Any) -> Any:
+    """Normalize common option shorthand into the strict option schema."""
+    if isinstance(option, str):
+        normalized = option.strip()
+        return {"label": normalized, "value": normalized}
+
+    if not isinstance(option, dict):
+        return option
+
+    normalized_option = dict(option)
+    if "label" not in normalized_option:
+        for key in ("name", "text", "title"):
+            value = normalized_option.get(key)
+            if isinstance(value, str) and value.strip():
+                normalized_option["label"] = value
+                break
+
+    if "value" not in normalized_option:
+        value = normalized_option.get("label")
+        if isinstance(value, str) and value.strip():
+            normalized_option["value"] = value
+
+    return normalized_option
+
+
+def _normalize_question_payload(raw_question: Any) -> Any:
+    """Normalize tolerant model-provided fields before Pydantic validation."""
+    if isinstance(raw_question, InteractiveFormQuestionItem):
+        return raw_question
+    if not isinstance(raw_question, dict):
+        return raw_question
+
+    normalized = dict(raw_question)
+
+    if not normalized.get("question"):
+        for key in QUESTION_TEXT_KEYS:
+            value = normalized.get(key)
+            if isinstance(value, str) and value.strip():
+                normalized["question"] = value
+                break
+
+    if not normalized.get("input_type"):
+        for key in INPUT_TYPE_KEYS:
+            value = normalized.get(key)
+            if isinstance(value, str) and value.strip():
+                normalized["input_type"] = value
+                break
+
+    input_type = normalized.get("input_type")
+    if isinstance(input_type, str):
+        clean_input_type, embedded_question = _extract_input_type_and_embedded_question(
+            input_type
+        )
+        normalized["input_type"] = clean_input_type
+        if embedded_question and not normalized.get("question"):
+            normalized["question"] = embedded_question
+
+    if "multi_select" not in normalized:
+        for key in MULTI_SELECT_KEYS:
+            value = normalized.get(key)
+            if value is not None:
+                normalized["multi_select"] = value
+                break
+
+    options = normalized.get("options")
+    if isinstance(options, list):
+        normalized["options"] = [
+            _normalize_option_payload(option) for option in options
+        ]
+
+    return normalized
+
+
 def _parse_record(value: Any) -> Dict[str, Any] | None:
     """Parse a dict-like value from raw tool output shapes."""
     if isinstance(value, dict):
@@ -227,7 +317,63 @@ def _build_form_render_payload(form_data: Dict[str, Any]) -> Dict[str, Any]:
     return RenderedInteractiveForm.model_validate(form_data).model_dump()
 
 
-def _build_deferred_tool_result(ask_id: str) -> Dict[str, Any]:
+def build_render_payload_from_tool_input(
+    *,
+    task_id: int,
+    subtask_id: int,
+    tool_input: Dict[str, Any] | None,
+) -> Dict[str, Any] | None:
+    """Build a frontend render payload from raw tool call arguments."""
+    if not isinstance(tool_input, dict):
+        return None
+
+    questions = tool_input.get("questions")
+    if not isinstance(questions, list) or not questions:
+        return None
+
+    normalized_questions = []
+    for raw_question in questions:
+        parsed_question = (
+            raw_question
+            if isinstance(raw_question, InteractiveFormQuestionItem)
+            else InteractiveFormQuestionItem.model_validate(
+                _normalize_question_payload(raw_question)
+            )
+        )
+        has_options = bool(parsed_question.options)
+        input_type, multi_select = _normalize_input_type(
+            parsed_question.input_type,
+            has_options,
+            parsed_question.multi_select,
+        )
+        normalized_questions.append(
+            {
+                "id": parsed_question.id,
+                "question": parsed_question.question,
+                "input_type": input_type if has_options else "text",
+                "options": (
+                    [option.model_dump() for option in parsed_question.options]
+                    if parsed_question.options
+                    else None
+                ),
+                "multi_select": multi_select if has_options else False,
+                "required": parsed_question.required,
+                "default": _normalize_default(parsed_question.default),
+                "placeholder": parsed_question.placeholder,
+            }
+        )
+
+    return _build_form_render_payload(
+        {
+            "type": "interactive_form_question",
+            "task_id": task_id,
+            "subtask_id": subtask_id,
+            "questions": normalized_questions,
+        }
+    )
+
+
+def _build_deferred_tool_result() -> Dict[str, Any]:
     """Build the minimal model-visible tool result for deferred user input."""
     return {
         "__silent_exit__": True,
@@ -235,7 +381,6 @@ def _build_deferred_tool_result(ask_id: str) -> Dict[str, Any]:
         "reason": FORM_RENDERED_REASON,
         "success": True,
         "status": "waiting_for_user_response",
-        "ask_id": ask_id,
     }
 
 
@@ -279,18 +424,6 @@ async def _has_existing_interactive_form(subtask_id: int) -> bool:
     return any(_has_interactive_form_payload(block) for block in form_blocks)
 
 
-def _generate_ask_id(subtask_id: int) -> str:
-    """Generate a unique ID for the interactive_form_question request.
-
-    The ask_id is deterministically derived from subtask_id so the frontend
-    can directly locate the pending question using only the subtask_id,
-    without complex multi-step lookups.
-
-    Format: ask_{subtask_id}
-    """
-    return f"ask_{subtask_id}"
-
-
 async def _notify_frontend(
     task_id: int,
     subtask_id: int,
@@ -307,7 +440,7 @@ async def _notify_frontend(
         question_data: The question data to send to frontend
     """
     render_payload = _build_form_render_payload(question_data)
-    tool_result = _build_deferred_tool_result(render_payload["ask_id"])
+    tool_result = _build_deferred_tool_result()
 
     try:
         from app.services.chat.storage.session import session_manager
@@ -327,50 +460,10 @@ async def _notify_frontend(
                 break
 
         if not tool_use_id:
-            synthetic_tool_use_id = question_data.get("ask_id") or (
-                f"interactive_form_question_{subtask_id}"
-            )
             logger.warning(
                 f"[InteractiveForm] No interactive_form_question tool block found in session for subtask {subtask_id}. "
-                f"Creating synthetic tool block with tool_use_id={synthetic_tool_use_id}"
-            )
-
-            await session_manager.add_tool_block(
-                subtask_id=subtask_id,
-                tool_use_id=synthetic_tool_use_id,
-                tool_name="interactive_form_question",
-                tool_input={},
-                display_name="interactive_form_question",
-            )
-            await session_manager.update_tool_block_status(
-                subtask_id=subtask_id,
-                tool_use_id=synthetic_tool_use_id,
-                tool_output=tool_result,
-                render_payload=render_payload,
-            )
-
-            ws_emitter = get_webpage_ws_emitter()
-            if not ws_emitter:
-                logger.warning(
-                    "[InteractiveForm] WebSocket emitter not available after synthetic block creation"
-                )
-                return
-
-            synthetic_block = {
-                "id": synthetic_tool_use_id,
-                "type": "tool",
-                "tool_use_id": synthetic_tool_use_id,
-                "tool_name": "interactive_form_question",
-                "tool_input": {},
-                "tool_output": tool_result,
-                "render_payload": render_payload,
-                "display_name": "interactive_form_question",
-                "status": BlockStatus.PENDING.value,
-            }
-            await ws_emitter.emit_block_created(
-                task_id=task_id,
-                subtask_id=subtask_id,
-                block=synthetic_block,
+                "Skipping direct WebSocket form update; the execution event pipeline "
+                "will attach the render payload to the real tool_use_id block."
             )
             return
 
@@ -475,44 +568,13 @@ async def interactive_form_question(
             f"interactive_form_question already displayed for subtask {token_info.subtask_id}"
         )
 
-    ask_id = _generate_ask_id(token_info.subtask_id)
-    normalized_questions = []
-    for raw_question in questions:
-        parsed_question = (
-            raw_question
-            if isinstance(raw_question, InteractiveFormQuestionItem)
-            else InteractiveFormQuestionItem.model_validate(raw_question)
-        )
-        has_options = bool(parsed_question.options)
-        input_type, multi_select = _normalize_input_type(
-            parsed_question.input_type,
-            has_options,
-            parsed_question.multi_select,
-        )
-        normalized_questions.append(
-            {
-                "id": parsed_question.id,
-                "question": parsed_question.question,
-                "input_type": input_type if has_options else "text",
-                "options": (
-                    [option.model_dump() for option in parsed_question.options]
-                    if parsed_question.options
-                    else None
-                ),
-                "multi_select": multi_select if has_options else False,
-                "required": parsed_question.required,
-                "default": _normalize_default(parsed_question.default),
-                "placeholder": parsed_question.placeholder,
-            }
-        )
-
-    question_data = {
-        "type": "interactive_form_question",
-        "ask_id": ask_id,
-        "task_id": token_info.task_id,
-        "subtask_id": token_info.subtask_id,
-        "questions": normalized_questions,
-    }
+    question_data = build_render_payload_from_tool_input(
+        task_id=token_info.task_id,
+        subtask_id=token_info.subtask_id,
+        tool_input={"questions": questions},
+    )
+    if not question_data:
+        raise ValueError("questions must contain at least one item")
 
     # Notify frontend directly via WebSocket to render the form card
     await _notify_frontend(
@@ -521,4 +583,4 @@ async def interactive_form_question(
         question_data=question_data,
     )
 
-    return _build_deferred_tool_result(ask_id)
+    return _build_deferred_tool_result()
