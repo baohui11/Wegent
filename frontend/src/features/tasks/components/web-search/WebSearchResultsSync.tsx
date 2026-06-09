@@ -6,7 +6,6 @@
 
 import { useEffect, useMemo } from 'react'
 import { useTaskSession } from '@/features/tasks/session/TaskSession'
-import { useTaskStateMachine } from '@/features/tasks/hooks/useTaskStateMachine'
 import { extractWebSearchSessions } from '@/features/tasks/components/web-search/extractWebSearchSessions'
 import { useWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
 
@@ -15,12 +14,18 @@ interface WebSearchResultsSyncProps {
 }
 
 export function WebSearchResultsSync({ taskId: taskIdProp }: WebSearchResultsSyncProps) {
-  const { selectedTask, selectedTaskDetail } = useTaskSession()
+  const { selectedTask, selectedTaskDetail, messages, currentTaskId } = useTaskSession()
   const taskId = taskIdProp ?? selectedTask?.id ?? selectedTaskDetail?.id
-  const { messages } = useTaskStateMachine(taskId)
   const { syncSessions } = useWebSearchResults()
 
-  const sessions = useMemo(() => extractWebSearchSessions(messages), [messages])
+  const activeMessages = useMemo(() => {
+    if (taskId == null || currentTaskId !== taskId) {
+      return undefined
+    }
+    return messages
+  }, [taskId, currentTaskId, messages])
+
+  const sessions = useMemo(() => extractWebSearchSessions(activeMessages), [activeMessages])
 
   useEffect(() => {
     syncSessions(sessions)

@@ -8,7 +8,6 @@ import React from 'react'
 import { CircleStop } from 'lucide-react'
 import ModelSelector, { Model } from '../selector/ModelSelector'
 import UnifiedRepositorySelector from '../selector/UnifiedRepositorySelector'
-import SearchEngineSelector from '../selector/SearchEngineSelector'
 import DeepThinkingToggle from './DeepThinkingToggle'
 import ChatContextInput from '../chat/ChatContextInput'
 import AttachmentButton from '../AttachmentButton'
@@ -26,7 +25,6 @@ import type {
 } from '@/types/api'
 import type { ContextItem } from '@/types/context'
 import type { UnifiedSkill } from '@/apis/skills'
-import type { SearchEngine } from '@/apis/chat'
 import {
   canSwitchModelAfterMessages,
   canUseChatContexts,
@@ -90,14 +88,6 @@ export interface ChatInputControlsProps {
   setEnableReasoning: (value: boolean) => void
   enableClarification: boolean
   setEnableClarification: (value: boolean) => void
-
-  // Web search
-  enableWebSearch: boolean
-  setEnableWebSearch: (value: boolean) => void
-  selectedSearchEngine: string | null
-  setSelectedSearchEngine: (engine: string) => void
-  searchEngines: SearchEngine[]
-  isWebSearchAvailable: boolean
 
   // Correction mode
   enableCorrectionMode?: boolean
@@ -221,12 +211,6 @@ export function ChatInputControls({
   setEnableReasoning,
   enableClarification,
   setEnableClarification,
-  enableWebSearch,
-  setEnableWebSearch,
-  selectedSearchEngine,
-  setSelectedSearchEngine,
-  searchEngines,
-  isWebSearchAvailable,
   enableCorrectionMode = false,
   correctionModelName,
   onCorrectionModeToggle,
@@ -414,12 +398,6 @@ export function ChatInputControls({
         setEnableClarification={setEnableClarification}
         enableReasoning={enableReasoning}
         setEnableReasoning={setEnableReasoning}
-        enableWebSearch={enableWebSearch}
-        setEnableWebSearch={setEnableWebSearch}
-        selectedSearchEngine={selectedSearchEngine}
-        setSelectedSearchEngine={setSelectedSearchEngine}
-        searchEngines={searchEngines}
-        isWebSearchAvailable={isWebSearchAvailable}
         enableCorrectionMode={enableCorrectionMode}
         correctionModelName={correctionModelName}
         onCorrectionModeToggle={onCorrectionModeToggle}
@@ -582,19 +560,6 @@ export function ChatInputControls({
                 onContextsChange={setSelectedContexts}
                 excludeKnowledgeBaseId={knowledgeBaseId}
                 iconOnly
-              />
-            )}
-
-            {isChatShell(selectedTeam) && isWebSearchAvailable && (
-              <SearchEngineSelector
-                enabled={enableWebSearch}
-                onToggle={setEnableWebSearch}
-                selectedEngine={selectedSearchEngine}
-                onSelectEngine={setSelectedSearchEngine}
-                engines={searchEngines}
-                disabled={selectorsDisabled}
-                iconOnly
-                compact
               />
             )}
 

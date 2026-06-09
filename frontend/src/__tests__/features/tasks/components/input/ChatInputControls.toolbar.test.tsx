@@ -104,17 +104,6 @@ jest.mock('@/features/tasks/components/CorrectionModeToggle', () => ({
   default: () => <button type="button" data-testid="correction-toggle" />,
 }))
 
-jest.mock('@/features/tasks/components/selector/SearchEngineSelector', () => ({
-  __esModule: true,
-  default: ({ iconOnly }: { iconOnly?: boolean }) => (
-    <button
-      type="button"
-      data-testid="web-search-toggle"
-      data-icon-only={iconOnly ? 'true' : 'false'}
-    />
-  ),
-}))
-
 jest.mock('@/features/tasks/components/input/DeepThinkingToggle', () => ({
   __esModule: true,
   default: () => <button type="button" data-testid="dynamic-thinking-toggle" />,
@@ -182,12 +171,6 @@ function createProps(): ChatInputControlsProps {
     setEnableDeepThinking: jest.fn(),
     enableReasoning: false,
     setEnableReasoning: jest.fn(),
-    enableWebSearch: false,
-    setEnableWebSearch: jest.fn(),
-    selectedSearchEngine: null,
-    setSelectedSearchEngine: jest.fn(),
-    searchEngines: [{ name: 'bocha', display_name: 'Bocha' }],
-    isWebSearchAvailable: true,
     enableClarification: false,
     setEnableClarification: jest.fn(),
     enableCorrectionMode: false,
@@ -238,7 +221,7 @@ describe('ChatInputControls toolbar actions', () => {
     mockTeamSelectorButton.mockClear()
   })
 
-  it('keeps icon-only agent, knowledge, web search, deep thinking, and more actions on the left toolbar', () => {
+  it('keeps icon-only agent, knowledge, deep thinking, and more actions on the left toolbar', () => {
     render(<ChatInputControls {...createProps()} />)
 
     const leftActions = screen.getByTestId('input-left-actions')
@@ -246,19 +229,17 @@ describe('ChatInputControls toolbar actions', () => {
     const divider = screen.getByTestId('attachment-actions-divider')
     const agentButton = screen.getByTestId('agent-skill-selector-button')
     const knowledgeButton = screen.getByTestId('chat-context-input')
-    const webSearchButton = screen.getByTestId('web-search-toggle')
     const deepThinkingButton = screen.getByTestId('dynamic-thinking-toggle')
     const moreButton = screen.getByTestId('desktop-input-more-actions-button')
 
     expect(leftActions).toContainElement(agentButton)
     expect(leftActions).toContainElement(knowledgeButton)
-    expect(leftActions).toContainElement(webSearchButton)
     expect(leftActions).toContainElement(deepThinkingButton)
     expect(leftActions).toContainElement(moreButton)
     expect(
       Array.from(
         leftActions.querySelectorAll(
-          '[data-testid="attachment-button"], [data-testid="attachment-actions-divider"], [data-testid="agent-skill-selector-button"], [data-testid="chat-context-input"], [data-testid="web-search-toggle"], [data-testid="dynamic-thinking-toggle"], [data-testid="desktop-input-more-actions-button"]'
+          '[data-testid="attachment-button"], [data-testid="attachment-actions-divider"], [data-testid="agent-skill-selector-button"], [data-testid="chat-context-input"], [data-testid="dynamic-thinking-toggle"], [data-testid="desktop-input-more-actions-button"]'
         )
       ).map(element => element.getAttribute('data-testid'))
     ).toEqual([
@@ -266,7 +247,6 @@ describe('ChatInputControls toolbar actions', () => {
       'attachment-actions-divider',
       'agent-skill-selector-button',
       'chat-context-input',
-      'web-search-toggle',
       'dynamic-thinking-toggle',
       'desktop-input-more-actions-button',
     ])
@@ -275,10 +255,7 @@ describe('ChatInputControls toolbar actions', () => {
     expect(agentButton.compareDocumentPosition(knowledgeButton)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
-    expect(knowledgeButton.compareDocumentPosition(webSearchButton)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    )
-    expect(webSearchButton.compareDocumentPosition(deepThinkingButton)).toBe(
+    expect(knowledgeButton.compareDocumentPosition(deepThinkingButton)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     )
     expect(deepThinkingButton.compareDocumentPosition(moreButton)).toBe(

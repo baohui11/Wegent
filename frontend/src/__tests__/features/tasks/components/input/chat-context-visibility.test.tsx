@@ -119,12 +119,6 @@ function createProps(taskType: ChatInputControlsProps['taskType']): ChatInputCon
     setEnableClarification: jest.fn(),
     enableReasoning: false,
     setEnableReasoning: jest.fn(),
-    enableWebSearch: false,
-    setEnableWebSearch: jest.fn(),
-    selectedSearchEngine: null,
-    setSelectedSearchEngine: jest.fn(),
-    searchEngines: [],
-    isWebSearchAvailable: false,
     selectedContexts: [],
     setSelectedContexts: jest.fn(),
     attachmentState: {

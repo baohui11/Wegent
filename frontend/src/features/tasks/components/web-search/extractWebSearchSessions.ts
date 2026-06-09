@@ -6,7 +6,7 @@ import type { UnifiedMessage } from '@/features/tasks/state'
 import type { MessageBlock } from '@/features/tasks/components/message/thinking/types'
 import type { WebSearchSession, WebSearchSessionStatus } from './types'
 import { parseWebSearchOutput } from './parseWebSearchOutput'
-import { isWebSearchToolName } from './webSearchUtils'
+import { getWebSearchQueryFromInput, isWebSearchToolName } from './webSearchUtils'
 
 function mapBlockStatus(status: MessageBlock['status']): WebSearchSessionStatus {
   if (status === 'error' || status === 'failed') return 'error'
@@ -29,12 +29,7 @@ function sessionFromToolBlock(block: MessageBlock): WebSearchSession | null {
   const toolName = block.tool_name ?? ''
   if (!isWebSearchToolName(toolName)) return null
 
-  const query =
-    typeof block.tool_input?.query === 'string'
-      ? block.tool_input.query
-      : typeof block.tool_input?.q === 'string'
-        ? block.tool_input.q
-        : ''
+  const query = getWebSearchQueryFromInput(block.tool_input)
 
   const status = mapBlockStatus(block.status)
   const parsed =

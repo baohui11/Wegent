@@ -9,6 +9,7 @@
  */
 
 import type { ThinkingStep, ToolPair, ToolGroup, ToolStatus } from '../types'
+import { isWebSearchToolName } from '@/features/tasks/components/web-search/webSearchUtils'
 
 /**
  * Claude Code truncated content object.
@@ -155,6 +156,10 @@ export function normalizeToolName(toolName: string, _title?: string): string {
   ]
   if (englishTools.includes(toolName)) {
     return toolName
+  }
+
+  if (isWebSearchToolName(toolName)) {
+    return 'WebSearch'
   }
 
   // Try pattern matching for tool names

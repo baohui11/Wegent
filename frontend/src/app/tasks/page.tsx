@@ -21,6 +21,12 @@ import { UserProvider } from '@/features/common/UserContext'
 import { TaskSessionProvider } from '@/features/tasks/session/TaskSession'
 import { SocketProvider } from '@/contexts/SocketContext'
 import { DeviceProvider } from '@/contexts/DeviceContext'
+import { WebSearchResultsProvider } from '@/features/tasks/session/WebSearchResultsContext'
+import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
+import { WebSearchResultsPanel } from '@/features/tasks/components/web-search/WebSearchResultsPanel'
+import { useWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
+import WebSearchPanelToggle from '@/features/layout/WebSearchPanelToggle'
+import { useTaskSession } from '@/features/tasks/session/TaskSession'
 
 const ChatArea = dynamic(() => import('@/features/tasks/components/chat/ChatArea'), {
   ssr: false,
@@ -29,6 +35,16 @@ const ChatArea = dynamic(() => import('@/features/tasks/components/chat/ChatArea
 function TasksPageContent() {
   // Team state from service
   const { teams, isTeamsLoading, refreshTeams } = teamService.useTeams()
+  const { selectedTask, selectedTaskDetail } = useTaskSession()
+  const {
+    sessions: webSearchSessions,
+    activeSession,
+    hasSessions: hasWebSearchSessions,
+    isPanelOpen: isWebSearchPanelOpen,
+    openPanel: openWebSearchPanel,
+    closePanel: closeWebSearchPanel,
+    selectSession: selectWebSearchSession,
+  } = useWebSearchResults()
 
   // Mobile detection
   const isMobile = useIsMobile()
@@ -67,14 +83,39 @@ function TasksPageContent() {
             onMobileSidebarToggle={() => setIsMobileSidebarOpen(true)}
           >
             {isMobile && <ThemeToggle />}
+            {hasWebSearchSessions && (
+              <WebSearchPanelToggle
+                isOpen={isWebSearchPanelOpen}
+                onOpen={openWebSearchPanel}
+                onClose={closeWebSearchPanel}
+              />
+            )}
           </TopNavigation>
-          {/* Chat area */}
-          <ChatArea
-            teams={teams}
-            isTeamsLoading={isTeamsLoading}
-            selectedTeamForNewTask={null}
-            taskType="code"
-          />
+          <WebSearchResultsSync taskId={selectedTask?.id ?? selectedTaskDetail?.id ?? null} />
+          <div className="flex flex-1 min-h-0">
+            <div
+              className="flex flex-col min-h-0 transition-all duration-300 ease-in-out"
+              style={{
+                width: hasWebSearchSessions && isWebSearchPanelOpen ? '60%' : '100%',
+              }}
+            >
+              <ChatArea
+                teams={teams}
+                isTeamsLoading={isTeamsLoading}
+                selectedTeamForNewTask={null}
+                taskType="code"
+              />
+            </div>
+            {hasWebSearchSessions && (
+              <WebSearchResultsPanel
+                isOpen={isWebSearchPanelOpen}
+                onClose={closeWebSearchPanel}
+                session={activeSession}
+                sessions={webSearchSessions}
+                onSelectSession={selectWebSearchSession}
+              />
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -87,7 +128,9 @@ export default function TasksPage() {
       <SocketProvider>
         <DeviceProvider>
           <TaskSessionProvider>
-            <TasksPageContent />
+            <WebSearchResultsProvider>
+              <TasksPageContent />
+            </WebSearchResultsProvider>
           </TaskSessionProvider>
         </DeviceProvider>
       </SocketProvider>

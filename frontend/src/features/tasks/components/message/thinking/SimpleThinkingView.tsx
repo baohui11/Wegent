@@ -9,6 +9,11 @@ import { Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { ThinkingStep } from './types'
 import { extractToolCalls, isRunningStatus, isTerminalStatus } from './utils/thinkingUtils'
+import {
+  getWebSearchQueryFromInput,
+  isWebSearchToolName,
+} from '@/features/tasks/components/web-search/webSearchUtils'
+import { parseWebSearchOutput } from '@/features/tasks/components/web-search/parseWebSearchOutput'
 
 interface SimpleThinkingViewProps {
   thinking: ThinkingStep[] | null
@@ -60,8 +65,8 @@ const SimpleThinkingView = memo(function SimpleThinkingView({
           const runId = (step as { run_id?: string }).run_id || `${index}`
 
           let query: string = ''
-          if (toolName === 'web_search' && details.input) {
-            query = (details.input as { query?: string }).query || ''
+          if (isWebSearchToolName(toolName) && details.input) {
+            query = getWebSearchQueryFromInput(details.input as Record<string, unknown>)
           } else if (toolName === 'wegentFetch' && details.input) {
             query = (details.input as { url?: string }).url || ''
           } else {
@@ -94,21 +99,9 @@ const SimpleThinkingView = memo(function SimpleThinkingView({
           const startIdx = toolStartMap.get(runId)
 
           let resultCount: number | undefined
-          if (toolName === 'web_search') {
-            try {
-              const output = details.output || details.content
-              let outputData: { count?: number }
-
-              if (typeof output === 'string') {
-                outputData = JSON.parse(output)
-              } else {
-                outputData = output as { count?: number }
-              }
-
-              resultCount = outputData.count
-            } catch {
-              // Ignore parse errors
-            }
+          if (isWebSearchToolName(toolName)) {
+            const output = details.output || details.content
+            resultCount = parseWebSearchOutput(output).count
           }
 
           // Get completed title from backend (e.g., "渲染图表完成" or "任务失败: xxx")

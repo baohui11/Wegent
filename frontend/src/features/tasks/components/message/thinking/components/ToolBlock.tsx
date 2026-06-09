@@ -5,12 +5,23 @@
 'use client'
 
 import { memo, useState, useMemo } from 'react'
-import { ChevronDown, ChevronRight, Loader2, Pencil, FileText, AlertCircle, Globe } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Pencil,
+  FileText,
+  AlertCircle,
+  Globe,
+} from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { ToolBlockProps, ToolRendererProps } from '../types'
-import { useOptionalWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
+import { useOptionalWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
 import { parseWebSearchOutput } from '@/features/tasks/components/web-search/parseWebSearchOutput'
-import { isWebSearchToolName } from '@/features/tasks/components/web-search/webSearchUtils'
+import {
+  getWebSearchQueryFromInput,
+  isWebSearchToolName,
+} from '@/features/tasks/components/web-search/webSearchUtils'
 import { GenericToolRenderer } from './tools/GenericToolRenderer'
 import { BashToolRenderer } from './tools/BashToolRenderer'
 import { ReadToolRenderer } from './tools/ReadToolRenderer'
@@ -87,6 +98,14 @@ function getToolInputPreview(
       break
     }
     default: {
+      if (isWebSearchToolName(toolName)) {
+        const query = getWebSearchQueryFromInput(
+          typeof input === 'object' || typeof input === 'string' ? input : undefined
+        )
+        if (query) {
+          return truncateText(`"${query}"`, maxLength)
+        }
+      }
       // For generic tools, try to extract a meaningful preview
       if (typeof input === 'string') {
         return truncateText(input, maxLength)
@@ -138,6 +157,10 @@ function truncateText(text: string | undefined | null, maxLength: number): strin
  * Get tool icon component based on tool name
  */
 function getToolIcon(toolName: string) {
+  if (isWebSearchToolName(toolName)) {
+    return Globe
+  }
+
   switch (toolName) {
     case 'Edit':
     case 'Write':
@@ -409,6 +432,10 @@ export const ToolBlock = memo(function ToolBlock({
 function getToolDisplayName(tool: ToolRendererProps['tool'], t: (key: string) => string): string {
   const toolName = tool.toolName
 
+  if (isWebSearchToolName(toolName)) {
+    return t('thinking.tools.web_search') || 'Web Search'
+  }
+
   // Map tool names to friendly display names
   const displayNames: Record<string, string> = {
     Bash: t('thinking.tools.bash') || 'Execute Command',
@@ -421,6 +448,8 @@ function getToolDisplayName(tool: ToolRendererProps['tool'], t: (key: string) =>
     knowledge_base_search: t('thinking.tools.kb_search') || 'Search Knowledge Base',
     web_search: t('thinking.tools.web_search') || 'Web Search',
     WebSearch: t('thinking.tools.web_search') || 'Web Search',
+    web_extract: t('thinking.tools.web_extract') || 'Extract Web Page',
+    WebExtract: t('thinking.tools.web_extract') || 'Extract Web Page',
   }
 
   // Priority 1: If we have a known tool name, use it

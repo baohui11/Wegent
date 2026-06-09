@@ -31,7 +31,23 @@ import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspa
 import { Drawer, DrawerContent } from '@/components/ui/drawer'
 import { WebSearchResultsPanel } from '@/features/tasks/components/web-search/WebSearchResultsPanel'
 import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
-import { useWebSearchResults } from '@/features/tasks/contexts/WebSearchResultsContext'
+import { useWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
+
+const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
+  ssr: false,
+})
+
+const TeamEditDialog = dynamic(() => import('@/features/settings/components/TeamEditDialog'), {
+  ssr: false,
+})
+
+const CreateGroupChatDialog = dynamic(
+  () =>
+    import('@/features/tasks/components/group-chat/CreateGroupChatDialog').then(mod => ({
+      default: mod.CreateGroupChatDialog,
+    })),
+  { ssr: false }
+)
 
 const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
   ssr: false,

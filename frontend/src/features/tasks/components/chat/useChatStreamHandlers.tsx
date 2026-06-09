@@ -70,8 +70,6 @@ export interface UseChatStreamHandlersOptions {
   enableDeepThinking: boolean
   enableReasoning: boolean
   enableClarification: boolean
-  enableWebSearch: boolean
-  selectedSearchEngine: string | null
 
   // External API
   externalApiParams: Record<string, string>
@@ -220,8 +218,6 @@ export function useChatStreamHandlers({
   enableDeepThinking,
   enableReasoning,
   enableClarification,
-  enableWebSearch,
-  selectedSearchEngine,
   externalApiParams,
   attachments,
   resetAttachment,
@@ -604,8 +600,6 @@ export function useChatStreamHandlers({
         enable_deep_thinking: enableDeepThinking,
         enable_clarification: enableClarification,
         ...(selectedModel?.dynamicThinking && { enable_reasoning: enableReasoning }),
-        enable_web_search: enableWebSearch,
-        search_engine: enableWebSearch ? selectedSearchEngine || undefined : undefined,
         is_group_chat: selectedTaskDetail?.is_group_chat || false,
         git_url: showRepositorySelector ? effectiveRepo?.git_url : undefined,
         git_repo: showRepositorySelector ? effectiveRepo?.git_repo : undefined,
@@ -707,8 +701,6 @@ export function useChatStreamHandlers({
       enableReasoning,
       enableClarification,
       selectedModel?.dynamicThinking,
-      enableWebSearch,
-      selectedSearchEngine,
       showRepositorySelector,
       selectedBranch?.name,
       effectiveDeviceId,

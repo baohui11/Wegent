@@ -161,7 +161,8 @@
       "glob": "Find Files",
       "todo": "Update Tasks",
       "kb_search": "Search Knowledge Base",
-      "web_search": "Web Search"
+      "web_search": "Web Search",
+      "web_extract": "Extract Web Page"
     }
   },
   "shared_task": {
@@ -267,7 +268,8 @@
       "glob": "Find Files",
       "todo": "Update Tasks",
       "kb_search": "Search Knowledge Base",
-      "web_search": "Web Search"
+      "web_search": "Web Search",
+      "web_extract": "Extract Web Page"
     }
   },
   "send_button": {
