@@ -60,7 +60,7 @@
     "action": "Go to Resource Library"
   },
   "navigation": {
-    "team": "Team",
+    "team": "Agent",
     "models": "Models",
     "shells": "Shells",
     "skills": "Skills",
@@ -223,7 +223,7 @@
       },
       "execution": {
         "bind_mode_description": "Controls which entry points and task types can use this agent.",
-        "requires_workspace_description": "When enabled, code tasks must start with a repository.",
+        "requires_workspace_description": "When enabled, Agent mode tasks must start with a repository.",
         "executor_description": "Controls the runtime environment used to handle tasks."
       },
       "bind_mode": {
@@ -232,7 +232,7 @@
           "description": "Use for Q&A, document discussion, and ongoing conversation."
         },
         "code": {
-          "title": "Code",
+          "title": "Agent",
           "description": "Use for development, fixes, and reviews inside a code repository."
         },
         "task": {
@@ -243,7 +243,7 @@
       "executor": {
         "title": "Executor",
         "required": "Choose an available executor",
-        "requires_complex_hint": "Code and device modes need Claude Code capability, so the complex executor is preferred.",
+        "requires_complex_hint": "Agent and device modes need Claude Code capability, so the complex executor is preferred.",
         "custom_shell_placeholder": "Choose custom executor",
         "no_custom_shells": "No custom executors available",
         "manage_custom_shells_hint": "Manage custom executors in Resource Library - Executors.",

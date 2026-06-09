@@ -437,6 +437,7 @@ def _public_model_to_recommendation(model: dict) -> dict:
         "modelId": model.get("model_id"),
         "modelCategoryType": model.get("model_category_type", "llm"),
         "isAdvanced": model.get("is_advanced", False),
+        "dynamicThinking": model.get("dynamic_thinking", False),
     }
 
 

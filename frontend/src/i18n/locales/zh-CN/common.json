@@ -78,7 +78,7 @@
   "navigation": {
     "tasks": "任务",
     "chat": "聊天",
-    "code": "编码",
+    "code": "Agent",
     "wiki": "知识",
     "flow": "自动化",
     "inbox": "待办",
@@ -358,10 +358,10 @@
     "share_instructions_content2": "分享后，您仍然可以管理和编辑这个智能体，其他人可以应用最新的智能体配置但不能编辑智能体设置。",
     "filter_all": "全部",
     "filter_chat": "聊天",
-    "filter_code": "编码",
+    "filter_code": "Agent",
     "filter_mode": "模式",
     "go_to_chat": "去聊天",
-    "go_to_code": "去编码",
+    "go_to_code": "去 Agent",
     "system": "系统",
     "add_to_quick_access": "收藏",
     "remove_from_quick_access": "取消收藏",
@@ -473,17 +473,17 @@
     "recommended_mode": "推荐模式",
     "recommended_mode_both": "都可以",
     "recommended_mode_chat": "聊天",
-    "recommended_mode_code": "编码",
+    "recommended_mode_code": "Agent",
     "bind_mode": "绑定模式",
     "bind_mode_chat": "聊天",
-    "bind_mode_code": "编码",
+    "bind_mode_code": "Agent",
     "bind_mode_task": "设备",
     "bind_mode_video": "视频",
     "bind_mode_image": "图片",
     "bind_mode_required": "请至少选择一个绑定模式",
     "require_confirmation_tooltip": "启用后，该阶段完成时任务将暂停，等待用户确认后再继续执行下一阶段",
     "requires_workspace": "需要仓库",
-    "requires_workspace_hint": "启用后，该智能体在编码模式下必须选择代码仓库才能开始任务。关闭后，无需选择仓库即可开始。"
+    "requires_workspace_hint": "启用后，该智能体在 Agent 模式下必须选择代码仓库才能开始任务。关闭后，无需选择仓库即可开始。"
   },
   "team_model": {
     "solo": "独立",
@@ -572,7 +572,7 @@
     }
   },
   "auth": {
-    "login_title": "登录 Wegent AI",
+    "login_title": "登录 中大 Agent",
     "login_subtitle": "您的 AI 助手",
     "oidc_login_failed": "OIDC 登录失败：",
     "login_success": "登录成功",
@@ -800,7 +800,7 @@
   },
   "onboarding": {
     "step1_title": "快速切换模式",
-    "step1_description": "点击「新对话」可以快速开始与AI对话，编码模式用于代码开发，知识模式可以管理和查询知识",
+    "step1_description": "点击「新对话」可以快速开始与AI对话，Agent 模式用于代码开发，知识模式可以管理和查询知识",
     "step2_title": "快速切换智能体",
     "step2_description": "点击这些卡片可以快速切换不同的智能体，不同智能体可以帮你快速完成特定的任务",
     "step3_title": "输入你的任务",
@@ -1198,6 +1198,8 @@
     "max_output_tokens_hint": "模型每次响应可生成的最大 token 数。",
     "thinking_config": "思考配置",
     "thinking_config_hint": "供应商原生的思考/推理 JSON 配置，将原样传递给 LLM API。留空则不启用。",
+    "dynamic_thinking": "允许对话中动态切换思维",
+    "dynamic_thinking_hint": "开启后，用户可在对话输入栏按消息开关模型推理。需先配置上方的思考配置。",
     "fetch_models": "加载模型",
     "fetching_models": "加载中...",
     "fetch_success": "成功加载 {{count}} 个模型",
@@ -1333,7 +1335,7 @@
   },
   "quick_access": {
     "switch_mode_title": "切换模式",
-    "switch_to_code_message": "该智能体推荐在「编码模式」下使用，是否切换？",
+    "switch_to_code_message": "该智能体推荐在 Agent 模式下使用，是否切换？",
     "switch_to_chat_message": "该智能体推荐在「聊天模式」下使用，是否切换？",
     "switch_mode": "切换模式",
     "stay_current": "留在当前"

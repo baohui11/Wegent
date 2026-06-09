@@ -30,6 +30,7 @@ class ModelAdapter:
         config = {}
         display_name = None
         is_advanced = False
+        dynamic_thinking = False
         model_category_type = "llm"
         model_group = None
         model_sub_group = None
@@ -44,6 +45,9 @@ class ModelAdapter:
                         bool(model_crd.spec.isAdvanced)
                         if model_crd.spec.isAdvanced
                         else False
+                    )
+                    dynamic_thinking = bool(
+                        getattr(model_crd.spec, "dynamic_thinking", False) or False
                     )
                     if model_crd.spec.modelType:
                         model_category_type = model_crd.spec.modelType.value
@@ -94,6 +98,7 @@ class ModelAdapter:
             "model_id": model_id_value,
             "is_active": kind.is_active,
             "is_advanced": is_advanced,
+            "dynamic_thinking": dynamic_thinking,
             "modelGroup": model_group,
             "modelSubGroup": model_sub_group,
             "model_category_type": model_category_type,

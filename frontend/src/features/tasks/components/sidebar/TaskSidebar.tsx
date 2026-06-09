@@ -535,8 +535,8 @@ export default function TaskSidebar({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Image
-                      src="/weibo-logo.png"
-                      alt="Weibo Logo"
+                      src="/mp-logo.png"
+                      alt="Logo"
                       width={36}
                       height={35}
                       className="object-contain"

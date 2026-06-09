@@ -300,7 +300,7 @@
     "dialog_description": "Enter the content in both Chinese and English, and select the applicable mode",
     "mode": "Applicable Mode",
     "mode_chat": "Chat Mode",
-    "mode_code": "Code Mode",
+    "mode_code": "Agent Mode",
     "mode_both": "Both",
     "slogan_title": "Slogan Configuration",
     "add_slogan": "Add Slogan",

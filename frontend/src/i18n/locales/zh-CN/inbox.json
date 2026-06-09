@@ -72,7 +72,7 @@
     "process": "处理",
     "send_to_chat": "发送到聊天",
     "send_to_device": "发送到设备",
-    "send_to_code": "发送到编码",
+    "send_to_code": "发送到 Agent",
     "device_fallback_to_chat": "当前没有可用设备，已切换到聊天处理",
     "view_original": "查看原始对话",
     "view_result": "查看处理结果",

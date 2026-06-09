@@ -78,7 +78,7 @@
   "navigation": {
     "tasks": "Tasks",
     "chat": "Chat",
-    "code": "Code",
+    "code": "Agent",
     "wiki": "Knowledge",
     "flow": "Automation",
     "inbox": "Inbox",
@@ -358,10 +358,10 @@
     "share_instructions_content2": "After sharing, you can still manage and edit this agent. Others can apply the latest agent configuration but cannot edit agent settings.",
     "filter_all": "All",
     "filter_chat": "Chat",
-    "filter_code": "Code",
+    "filter_code": "Agent",
     "filter_mode": "Mode",
     "go_to_chat": "Go to Chat",
-    "go_to_code": "Go to Code",
+    "go_to_code": "Go to Agent",
     "system": "System",
     "add_to_quick_access": "Add to favorites",
     "remove_from_quick_access": "Remove from favorites",
@@ -473,17 +473,17 @@
     "recommended_mode": "Recommended Mode",
     "recommended_mode_both": "Both",
     "recommended_mode_chat": "Chat",
-    "recommended_mode_code": "Code",
+    "recommended_mode_code": "Agent",
     "bind_mode": "Bind Mode",
     "bind_mode_chat": "Chat",
-    "bind_mode_code": "Code",
+    "bind_mode_code": "Agent",
     "bind_mode_task": "Device",
     "bind_mode_video": "Video",
     "bind_mode_image": "Image",
     "bind_mode_required": "Please select at least one bind mode",
     "require_confirmation_tooltip": "When enabled, the task will pause after this stage completes, waiting for user confirmation before proceeding to the next stage",
     "requires_workspace": "Requires Repository",
-    "requires_workspace_hint": "When enabled, this agent requires a code repository to be selected in code mode before starting a task. When disabled, tasks can start without selecting a repository."
+    "requires_workspace_hint": "When enabled, this agent requires a code repository to be selected in Agent mode before starting a task. When disabled, tasks can start without selecting a repository."
   },
   "team_model": {
     "solo": "Solo",
@@ -572,7 +572,7 @@
     }
   },
   "auth": {
-    "login_title": "Login to WeCode AI",
+    "login_title": "Login to 中大 Agent",
     "login_subtitle": "your AI assistant for developers",
     "oidc_login_failed": "OIDC login failed:",
     "login_success": "Login success",
@@ -800,7 +800,7 @@
   },
   "onboarding": {
     "step1_title": "Quick Mode Switch",
-    "step1_description": "Code mode lets the AI dev team build features, fix bugs, and explore codebases. Wiki mode is for viewing code knowledge base. Click 'New Conversation' to start a new Chat anytime.",
+    "step1_description": "Agent mode lets the AI dev team build features, fix bugs, and explore codebases. Wiki mode is for viewing code knowledge base. Click 'New Conversation' to start a new Chat anytime.",
     "step2_title": "Quick Agent Switch",
     "step2_description": "Click these cards to quickly switch between different agents. Different agents can help you complete specific tasks faster.",
     "step3_title": "Enter Your Task",
@@ -1198,6 +1198,8 @@
     "max_output_tokens_hint": "Maximum output tokens the model can generate per response.",
     "thinking_config": "Thinking Config",
     "thinking_config_hint": "Provider-native thinking/reasoning JSON config. Passed through to the LLM API as-is. Leave empty to disable.",
+    "dynamic_thinking": "Allow dynamic thinking toggle in chat",
+    "dynamic_thinking_hint": "When enabled, users can turn model reasoning on or off per message in chat. Requires thinking config above.",
     "fetch_models": "Load Models",
     "fetching_models": "Loading...",
     "fetch_success": "Successfully loaded {{count}} models",
@@ -1339,7 +1341,7 @@
   },
   "quick_access": {
     "switch_mode_title": "Switch Mode",
-    "switch_to_code_message": "This agent is recommended for Code mode. Would you like to switch?",
+    "switch_to_code_message": "This agent is recommended for Agent mode. Would you like to switch?",
     "switch_to_chat_message": "This agent is recommended for Chat mode. Would you like to switch?",
     "switch_mode": "Switch Mode",
     "stay_current": "Stay Here"

@@ -13,6 +13,7 @@ import { TeamProvider } from '@/contexts/TeamContext'
 import { ProjectProvider } from '@/features/projects/contexts/projectContext'
 import { PetProvider } from '@/features/pet/contexts/PetContext'
 import { SetupWizardProvider } from '@/features/admin/contexts/SetupWizardContext'
+import { WebSearchResultsProvider } from '@/features/tasks/session/WebSearchResultsContext'
 
 const PetWidget = dynamic(
   () => import('@/features/pet/components/PetWidget').then(mod => ({ default: mod.PetWidget })),
@@ -55,10 +56,12 @@ export default function TasksLayout({ children }: { children: React.ReactNode })
               <PetProvider>
                 <SetupWizardProvider>
                   <TaskSessionProvider>
-                    {children}
-                    <PetStreamingBridge />
-                    <PetWidget />
-                    <GlobalAdminSetupWizard />
+                    <WebSearchResultsProvider>
+                      {children}
+                      <PetStreamingBridge />
+                      <PetWidget />
+                      <GlobalAdminSetupWizard />
+                    </WebSearchResultsProvider>
                   </TaskSessionProvider>
                 </SetupWizardProvider>
               </PetProvider>

@@ -85,6 +85,8 @@ class TaskCreationParams:
     device_id: Optional[str] = None
     # Project ID to associate task with
     project_id: Optional[int] = None
+    # Task-specific execution workspace metadata.
+    execution_workspace: Optional[Dict[str, str]] = None
     # Client surface that owns the task
     client_origin: str = CLIENT_ORIGIN_FRONTEND
     # Task source label (e.g. chat_shell, responses_api)
@@ -320,6 +322,7 @@ def create_new_task(
         team=team,
         knowledge_base_id=params.knowledge_base_id,
     )
+    task_execution = _build_task_execution(params.execution_workspace)
 
     task_json = {
         "kind": "Task",
@@ -339,6 +342,7 @@ def create_new_task(
                 if knowledge_base_refs
                 else {}
             ),
+            **({"execution": task_execution} if task_execution else {}),
         },
         "status": {
             "state": "Available",
@@ -432,6 +436,68 @@ def create_new_task(
         f"{task_json.get('spec', {}).get('is_group_chat', 'NOT_SET')}"
     )
 
+    return task
+
+
+def _build_task_execution(
+    execution_workspace: Optional[Dict[str, str]],
+) -> Optional[Dict[str, Dict[str, str]]]:
+    """Build Task spec.execution from validated creation metadata."""
+
+    if not execution_workspace:
+        return None
+
+    source = str(execution_workspace.get("source") or "").strip()
+    path = str(execution_workspace.get("path") or "").strip()
+    if not source:
+        return None
+
+    workspace = {"source": source}
+    if path:
+        workspace["path"] = path
+    return {"workspace": workspace}
+
+
+def _requires_git_worktree_preparation(
+    task_id: Optional[int],
+    params: TaskCreationParams,
+) -> bool:
+    """Return whether a new chat task needs a task-scoped Git worktree."""
+
+    if task_id is not None:
+        return False
+    workspace = params.execution_workspace or {}
+    return str(workspace.get("source") or "").strip() == "git_worktree"
+
+
+async def _create_task_and_prepare_git_worktree(
+    db: Session,
+    user: User,
+    team: Kind,
+    params: TaskCreationParams,
+) -> TaskResource:
+    """Create the Task first, then create its deterministic Git worktree."""
+
+    if not params.project_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Git worktree execution requires a project",
+        )
+
+    task = create_new_task(db, user, team, params)
+    try:
+        from app.services import project_service
+
+        await project_service.prepare_git_worktree_for_task(
+            db=db,
+            user_id=user.id,
+            project_id=params.project_id,
+            client_origin=params.client_origin,
+            task_id=task.id,
+        )
+    except Exception:
+        db.rollback()
+        raise
     return task
 
 
@@ -754,6 +820,15 @@ async def create_task_and_subtasks(
             f"[create_task_and_subtasks] Building video_config for task {task_id}: {video_config}"
         )
 
+    prepared_task = None
+    if _requires_git_worktree_preparation(task_id, params):
+        prepared_task = await _create_task_and_prepare_git_worktree(
+            db=db,
+            user=user,
+            team=team,
+            params=params,
+        )
+
     session = prepare_execution_session(
         db=db,
         user=user,
@@ -764,6 +839,7 @@ async def create_task_and_subtasks(
         should_trigger_ai=should_trigger_ai,
         bot_ids_override=bot_ids,
         video_config=video_config,
+        prepared_task=prepared_task,
     )
     task = session.task
     task_id = session.task_id

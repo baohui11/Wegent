@@ -354,7 +354,7 @@ describe('TaskSidebar scroll structure', () => {
     const logoSection = screen.getAllByTestId('task-sidebar-logo-section')[0]
     const logoImage = within(logoSection).getByRole('img', { name: 'Weibo Logo' })
 
-    expect(logoImage).toHaveAttribute('src', '/weibo-logo.png')
+    expect(logoImage).toHaveAttribute('src', '/mp-logo.png')
     expect(logoImage).toHaveAttribute('width', '36')
     expect(logoImage).toHaveAttribute('height', '35')
     expect(logoImage).toHaveClass('object-contain')

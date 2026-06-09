@@ -72,7 +72,7 @@
     "process": "Process",
     "send_to_chat": "Send to Chat",
     "send_to_device": "Send to Device",
-    "send_to_code": "Send to Code",
+    "send_to_code": "Send to Agent",
     "device_fallback_to_chat": "No active device is available. Switched to chat instead.",
     "view_original": "View original conversation",
     "view_result": "View result",
