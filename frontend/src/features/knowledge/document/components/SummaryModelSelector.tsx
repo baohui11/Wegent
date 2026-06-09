@@ -217,8 +217,6 @@ export function SummaryModelSelector({
         ? t('common:loading', 'Loading...')
         : t('common:models.no_models', 'No models available'),
       noMatch: t('common:models.no_match', 'No matching models'),
-      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
-      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [loading, t]
   )
@@ -240,11 +238,6 @@ export function SummaryModelSelector({
             {getTypeLabel(model.type)}
           </Badge>
         )}
-        renderModelMeta={model =>
-          model.modelId ? (
-            <span className="block truncate text-xs text-text-muted">{model.modelId}</span>
-          ) : null
-        }
       />
       {error && <span className="text-xs text-red-500">{error}</span>}
     </div>

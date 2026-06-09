@@ -5,18 +5,20 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, ChevronsUpDown, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import {
-  buildModelCascadeGroups,
+  buildModelTreeGroups,
   getModelDisplayName,
   matchesModelSearch,
   type GroupableModel,
 } from './model-grouping'
+import { ModelProviderIcon, SelectedModelProviderIcon } from './model-provider-icon'
 
 export interface ModelCascadeLabels {
   ungrouped: string
@@ -25,8 +27,6 @@ export interface ModelCascadeLabels {
   searchResults: string
   noModels: string
   noMatch: string
-  primaryGroups: string
-  secondaryGroups: string
 }
 
 export interface SpecialModelOption {
@@ -83,19 +83,14 @@ function getSpecialOptionSearchText(option: SpecialModelOption): string {
 function getModelGroupName(
   model: GroupableModel | null | undefined,
   labels: ModelCascadeLabels
-): string | null {
+): string {
   return model?.modelGroup?.trim() || labels.ungrouped
 }
 
-function getModelSubGroupName(
-  model: GroupableModel | null | undefined,
-  labels: ModelCascadeLabels
-): string | null {
-  return model?.modelSubGroup?.trim() || labels.uncategorized
-}
-
-function getGroupCountLabel(count: number): string {
-  return String(count)
+function getModelSubGroupLabel(model: GroupableModel, labels: ModelCascadeLabels): string | null {
+  const subGroup = model.modelSubGroup?.trim()
+  if (!subGroup || subGroup === labels.uncategorized) return null
+  return subGroup
 }
 
 export function ModelCascadeContent<T extends GroupableModel>({
@@ -116,41 +111,45 @@ export function ModelCascadeContent<T extends GroupableModel>({
 }: ModelCascadeContentProps<T>) {
   const groups = useMemo(
     () =>
-      buildModelCascadeGroups(models, {
+      buildModelTreeGroups(models, {
         ungroupedLabel: labels.ungrouped,
         uncategorizedLabel: labels.uncategorized,
       }),
     [models, labels.uncategorized, labels.ungrouped]
   )
-  const [activeGroupName, setActiveGroupName] = useState<string>('')
-  const [activeSubGroupName, setActiveSubGroupName] = useState<string>('')
+
+  const selectedGroupName = getModelGroupName(selectedModel, labels)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (groups.length === 0) {
-      setActiveGroupName('')
-      setActiveSubGroupName('')
+      setExpandedGroups({})
       return
     }
 
-    const selectedGroupName = getModelGroupName(selectedModel, labels)
-    const nextGroup =
-      groups.find(group => group.name === activeGroupName) ??
-      groups.find(group => group.name === selectedGroupName) ??
-      groups[0]
-    const selectedSubGroupName = getModelSubGroupName(selectedModel, labels)
-    const nextSubGroup =
-      nextGroup.subGroups.find(subGroup => subGroup.name === activeSubGroupName) ??
-      nextGroup.subGroups.find(subGroup => subGroup.name === selectedSubGroupName) ??
-      nextGroup.subGroups[0]
+    setExpandedGroups(current => {
+      const next = { ...current }
+      let changed = false
 
-    setActiveGroupName(nextGroup.name)
-    setActiveSubGroupName(nextSubGroup?.name ?? '')
-  }, [activeGroupName, activeSubGroupName, groups, labels, selectedModel])
+      for (const group of groups) {
+        if (next[group.name] === undefined) {
+          const shouldExpand =
+            group.name === selectedGroupName ||
+            (selectedGroupName === labels.ungrouped && group === groups[0])
+          next[group.name] = shouldExpand
+          changed = true
+        }
+      }
 
-  const activeGroup = groups.find(group => group.name === activeGroupName) ?? groups[0]
-  const activeSubGroup =
-    activeGroup?.subGroups.find(subGroup => subGroup.name === activeSubGroupName) ??
-    activeGroup?.subGroups[0]
+      if (selectedGroupName && !next[selectedGroupName]) {
+        next[selectedGroupName] = true
+        changed = true
+      }
+
+      return changed ? next : current
+    })
+  }, [groups, selectedGroupName])
+
   const normalizedSearchValue = searchValue.trim()
   const isSearching = normalizedSearchValue.length > 0
   const searchResults = useMemo(
@@ -162,6 +161,10 @@ export function ModelCascadeContent<T extends GroupableModel>({
     const query = normalizedSearchValue.toLowerCase()
     return specialOptions.filter(option => getSpecialOptionSearchText(option).includes(query))
   }, [normalizedSearchValue, specialOptions])
+
+  const toggleGroup = (groupName: string, open: boolean) => {
+    setExpandedGroups(current => ({ ...current, [groupName]: open }))
+  }
 
   const renderSpecialOption = (option: SpecialModelOption) => {
     const isSelected = selectedSpecialKey === option.key
@@ -191,11 +194,12 @@ export function ModelCascadeContent<T extends GroupableModel>({
     )
   }
 
-  const renderModelOption = (model: T, showPath: boolean) => {
+  const renderModelOption = (model: T, showGroupPath: boolean) => {
     const modelKey = getModelKey(model)
     const selectedModelKey = selectedModel ? getModelKey(selectedModel) : null
     const isSelected = selectedModelKey === modelKey
-    const groupPath = `${getModelGroupName(model, labels)} / ${getModelSubGroupName(model, labels)}`
+    const groupName = getModelGroupName(model, labels)
+    const subGroupLabel = getModelSubGroupLabel(model, labels)
 
     return (
       <button
@@ -205,13 +209,18 @@ export function ModelCascadeContent<T extends GroupableModel>({
         data-testid={`model-option-${sanitizeTestId(model.name)}`}
         onClick={() => onSelectModel(model)}
         className={cn(
-          'flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left',
+          'flex w-full items-start justify-between gap-3 py-2 pl-9 pr-3 text-left',
           'hover:bg-hover focus:bg-hover focus:outline-none',
           isSelected && 'bg-primary/10 text-primary'
         )}
       >
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
+            <ModelProviderIcon
+              groupName={groupName}
+              provider={model.provider}
+              className="h-4 w-4"
+            />
             <span
               className="truncate text-sm font-medium text-text-primary"
               title={getModelDisplayName(model)}
@@ -220,7 +229,12 @@ export function ModelCascadeContent<T extends GroupableModel>({
             </span>
             {renderModelBadges?.(model)}
           </span>
-          {showPath && <span className="block truncate text-xs text-text-muted">{groupPath}</span>}
+          {showGroupPath && (
+            <span className="block truncate pl-5 text-xs text-text-muted">{groupName}</span>
+          )}
+          {!showGroupPath && subGroupLabel && (
+            <span className="block truncate pl-5 text-xs text-text-muted">{subGroupLabel}</span>
+          )}
           {renderModelMeta?.(model)}
         </span>
         <Check
@@ -233,7 +247,7 @@ export function ModelCascadeContent<T extends GroupableModel>({
   return (
     <div
       className={cn(
-        'flex max-h-[min(520px,var(--radix-popover-content-available-height))] w-[min(760px,calc(100vw-32px))] flex-col overflow-hidden bg-base',
+        'flex max-h-[min(520px,var(--radix-popover-content-available-height))] w-[min(360px,calc(100vw-32px))] flex-col overflow-hidden bg-base',
         className
       )}
     >
@@ -269,80 +283,59 @@ export function ModelCascadeContent<T extends GroupableModel>({
           </div>
         </ScrollArea>
       ) : (
-        <div
-          data-testid="model-cascade-grid"
-          className="grid h-[clamp(120px,calc(var(--radix-popover-content-available-height,520px)-112px),360px)] min-h-0 grid-cols-[180px_200px_minmax(260px,1fr)] overflow-hidden"
+        <ScrollArea
+          data-testid="model-cascade-tree"
+          className="h-[clamp(120px,calc(var(--radix-popover-content-available-height,520px)-112px),360px)] min-h-0"
         >
-          <ScrollArea className="border-r border-border">
-            <div className="px-2 py-2">
-              <div className="px-2 pb-1 text-xs font-medium text-text-muted">
-                {labels.primaryGroups}
+          <div className="px-2 py-2">
+            {specialOptions.length > 0 && (
+              <div className="mb-1 border-b border-border pb-1">
+                {specialOptions.map(renderSpecialOption)}
               </div>
-              {specialOptions.map(renderSpecialOption)}
-              {groups.map(group => {
-                const isActive = group.name === activeGroup?.name
+            )}
 
-                return (
-                  <button
-                    key={group.name}
-                    type="button"
-                    data-testid={`model-primary-group-${sanitizeTestId(group.name)}`}
-                    onClick={() => {
-                      setActiveGroupName(group.name)
-                      setActiveSubGroupName(group.subGroups[0]?.name ?? '')
-                    }}
-                    className={cn(
-                      'flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left',
-                      'hover:bg-hover focus:bg-hover focus:outline-none',
-                      isActive && 'bg-primary/10 text-primary'
-                    )}
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium">{group.name}</span>
-                    <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs text-text-muted">
-                      {getGroupCountLabel(group.count)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </ScrollArea>
+            {groups.map(group => {
+              const isExpanded = expandedGroups[group.name] ?? false
 
-          <ScrollArea className="border-r border-border">
-            <div className="px-2 py-2">
-              <div className="px-2 pb-1 text-xs font-medium text-text-muted">
-                {labels.secondaryGroups}
-              </div>
-              {activeGroup?.subGroups.map(subGroup => {
-                const isActive = subGroup.name === activeSubGroup?.name
-
-                return (
-                  <button
-                    key={subGroup.name}
-                    type="button"
-                    data-testid={`model-secondary-group-${sanitizeTestId(subGroup.name)}`}
-                    onClick={() => setActiveSubGroupName(subGroup.name)}
-                    className={cn(
-                      'flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left',
-                      'hover:bg-hover focus:bg-hover focus:outline-none',
-                      isActive && 'bg-primary/10 text-primary'
-                    )}
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium">{subGroup.name}</span>
-                    <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs text-text-muted">
-                      {getGroupCountLabel(subGroup.count)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </ScrollArea>
-
-          <ScrollArea>
-            <div className="px-2 py-2">
-              {activeSubGroup?.models.map(model => renderModelOption(model, false))}
-            </div>
-          </ScrollArea>
-        </div>
+              return (
+                <Collapsible
+                  key={group.name}
+                  open={isExpanded}
+                  onOpenChange={open => toggleGroup(group.name, open)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid={`model-tree-group-${sanitizeTestId(group.name)}`}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left',
+                        'hover:bg-hover focus:bg-hover focus:outline-none'
+                      )}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" />
+                      )}
+                      <ModelProviderIcon groupName={group.name} className="h-4 w-4" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                        {group.name}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-xs text-text-muted">
+                        {group.count}
+                      </span>
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="pb-1">
+                      {group.models.map(model => renderModelOption(model, false))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )
+            })}
+          </div>
+        </ScrollArea>
       )}
 
       {footer && (
@@ -392,7 +385,8 @@ export function GroupedModelSelect<T extends GroupableModel>({
           data-testid={dataTestId}
           className={cn('h-10 w-full justify-between bg-base px-3 font-normal', triggerClassName)}
         >
-          <span className="min-w-0 truncate">
+          <span className="flex min-w-0 items-center gap-2 truncate">
+            <SelectedModelProviderIcon model={selectedModel} className="h-4 w-4 shrink-0" />
             {selectedModel ? getModelDisplayName(selectedModel) : placeholder}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-60" />

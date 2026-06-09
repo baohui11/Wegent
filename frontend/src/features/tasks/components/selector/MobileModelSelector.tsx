@@ -5,41 +5,40 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
-import { Check, ChevronLeft, ChevronRight, Search, Settings } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Search, Settings } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/hooks/useTranslation'
 import { cn } from '@/lib/utils'
 import { paths } from '@/config/paths'
 import { Tag } from '@/components/ui/tag'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer'
 import {
-  buildModelCascadeGroups,
+  buildModelTreeGroups,
   getModelDisplayName,
   matchesModelSearch,
 } from '@/components/model-select/model-grouping'
+import {
+  ModelProviderIcon,
+  SelectedModelProviderIcon,
+} from '@/components/model-select/model-provider-icon'
 import { useModelSelection } from '@/features/tasks/hooks/useModelSelection'
 import type { Team } from '@/types/api'
 import type { Model } from '@/features/tasks/hooks/useModelSelection'
 import { DEFAULT_MODEL_NAME } from '@/features/tasks/hooks/useModelSelection'
 
-/** Get display text for a model */
-function getModelDisplayText(model: Model): string {
-  return getModelDisplayName(model)
-}
-
-/** Get unique key for model */
 function getModelKey(model: Model): string {
   return `${model.name}:${model.type || ''}`
 }
-
-type MobileModelStep = 'primary' | 'secondary' | 'models'
 
 function getGroupName(model: Model, fallback: string): string {
   return model.modelGroup?.trim() || fallback
 }
 
-function getSubGroupName(model: Model, fallback: string): string {
-  return model.modelSubGroup?.trim() || fallback
+function getSubGroupLabel(model: Model, fallback: string): string | null {
+  const subGroup = model.modelSubGroup?.trim()
+  if (!subGroup || subGroup === fallback) return null
+  return subGroup
 }
 
 interface MobileModelSelectorProps {
@@ -55,10 +54,6 @@ interface MobileModelSelectorProps {
   taskModelId?: string | null
 }
 
-/**
- * Mobile Model Selector - iOS Style
- * Bottom sheet with native iOS design patterns
- */
 export default function MobileModelSelector({
   selectedModel: externalSelectedModel,
   setSelectedModel: externalSetSelectedModel,
@@ -82,7 +77,6 @@ export default function MobileModelSelector({
     disabled,
   })
 
-  // Sync external state with hook state
   useEffect(() => {
     if (modelSelection.selectedModel !== externalSelectedModel) {
       if (modelSelection.selectedModel) {
@@ -100,15 +94,12 @@ export default function MobileModelSelector({
   const [isOpen, setIsOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
-  const [step, setStep] = useState<MobileModelStep>('primary')
-  const [activeGroupName, setActiveGroupName] = useState('')
-  const [activeSubGroupName, setActiveSubGroupName] = useState('')
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!isOpen) {
       setSearchValue('')
       setIsSearchFocused(false)
-      setStep('primary')
     }
   }, [isOpen])
 
@@ -128,52 +119,46 @@ export default function MobileModelSelector({
     [t]
   )
 
-  const cascadeGroups = useMemo(
+  const treeGroups = useMemo(
     () =>
-      buildModelCascadeGroups(modelSelection.filteredModels, {
+      buildModelTreeGroups(modelSelection.filteredModels, {
         ungroupedLabel: groupLabels.ungrouped,
         uncategorizedLabel: groupLabels.uncategorized,
       }),
     [groupLabels.uncategorized, groupLabels.ungrouped, modelSelection.filteredModels]
   )
 
+  const selectedGroupName =
+    modelSelection.selectedModel && modelSelection.selectedModel.name !== DEFAULT_MODEL_NAME
+      ? getGroupName(modelSelection.selectedModel, groupLabels.ungrouped)
+      : ''
+
   useEffect(() => {
-    if (!isOpen || cascadeGroups.length === 0) return
+    if (!isOpen || treeGroups.length === 0) return
 
-    const selectedGroupName =
-      modelSelection.selectedModel && modelSelection.selectedModel.name !== DEFAULT_MODEL_NAME
-        ? getGroupName(modelSelection.selectedModel, groupLabels.ungrouped)
-        : ''
-    const nextGroup =
-      cascadeGroups.find(group => group.name === activeGroupName) ??
-      cascadeGroups.find(group => group.name === selectedGroupName) ??
-      cascadeGroups[0]
-    const selectedSubGroupName =
-      modelSelection.selectedModel && modelSelection.selectedModel.name !== DEFAULT_MODEL_NAME
-        ? getSubGroupName(modelSelection.selectedModel, groupLabels.uncategorized)
-        : ''
-    const nextSubGroup =
-      nextGroup.subGroups.find(subGroup => subGroup.name === activeSubGroupName) ??
-      nextGroup.subGroups.find(subGroup => subGroup.name === selectedSubGroupName) ??
-      nextGroup.subGroups[0]
+    setExpandedGroups(current => {
+      const next = { ...current }
+      let changed = false
 
-    setActiveGroupName(nextGroup.name)
-    setActiveSubGroupName(nextSubGroup?.name ?? '')
-  }, [
-    activeGroupName,
-    activeSubGroupName,
-    cascadeGroups,
-    groupLabels.uncategorized,
-    groupLabels.ungrouped,
-    isOpen,
-    modelSelection.selectedModel,
-  ])
+      for (const group of treeGroups) {
+        if (next[group.name] === undefined) {
+          const shouldExpand =
+            group.name === selectedGroupName ||
+            (selectedGroupName === groupLabels.ungrouped && group === treeGroups[0])
+          next[group.name] = shouldExpand
+          changed = true
+        }
+      }
 
-  const activeGroup =
-    cascadeGroups.find(group => group.name === activeGroupName) ?? cascadeGroups[0]
-  const activeSubGroup =
-    activeGroup?.subGroups.find(subGroup => subGroup.name === activeSubGroupName) ??
-    activeGroup?.subGroups[0]
+      if (selectedGroupName && !next[selectedGroupName]) {
+        next[selectedGroupName] = true
+        changed = true
+      }
+
+      return changed ? next : current
+    })
+  }, [isOpen, selectedGroupName, treeGroups])
+
   const normalizedSearchValue = searchValue.trim()
   const isSearching = normalizedSearchValue.length > 0
   const searchResults = modelSelection.filteredModels.filter(model =>
@@ -222,10 +207,8 @@ export default function MobileModelSelector({
     const isSelected =
       modelSelection.selectedModel?.name === model.name &&
       modelSelection.selectedModel?.type === model.type
-    const path = `${getGroupName(model, groupLabels.ungrouped)} / ${getSubGroupName(
-      model,
-      groupLabels.uncategorized
-    )}`
+    const groupName = getGroupName(model, groupLabels.ungrouped)
+    const subGroupLabel = getSubGroupLabel(model, groupLabels.uncategorized)
 
     return (
       <button
@@ -240,9 +223,14 @@ export default function MobileModelSelector({
         )}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
+            <ModelProviderIcon
+              groupName={groupName}
+              provider={model.provider}
+              className="h-4 w-4"
+            />
             <span className="truncate text-[15px] text-text-primary">
-              {getModelDisplayText(model)}
+              {getModelDisplayName(model)}
             </span>
             {model.type === 'user' && (
               <Tag variant="info" className="flex-shrink-0 whitespace-nowrap text-[10px]">
@@ -251,10 +239,10 @@ export default function MobileModelSelector({
             )}
           </div>
           {showPath ? (
-            <div className="mt-0.5 truncate text-[13px] text-[#8e8e93]">{path}</div>
+            <div className="mt-0.5 truncate pl-6 text-[13px] text-[#8e8e93]">{groupName}</div>
           ) : (
-            model.modelId && (
-              <div className="mt-0.5 truncate text-[13px] text-[#8e8e93]">{model.modelId}</div>
+            subGroupLabel && (
+              <div className="mt-0.5 truncate pl-6 text-[13px] text-[#8e8e93]">{subGroupLabel}</div>
             )
           )}
         </div>
@@ -263,75 +251,51 @@ export default function MobileModelSelector({
     )
   }
 
-  const renderPrimaryGroups = () => (
+  const renderTreeGroups = () => (
     <div className="overflow-hidden rounded-xl bg-white dark:bg-[#2c2c2e]">
-      {modelSelection.showDefaultOption && renderDefaultRow(cascadeGroups.length > 0)}
-      {cascadeGroups.map((group, index) => {
-        const isLast = index === cascadeGroups.length - 1
+      {modelSelection.showDefaultOption && renderDefaultRow(treeGroups.length > 0)}
+      {treeGroups.map((group, groupIndex) => {
+        const isExpanded = expandedGroups[group.name] ?? false
+        const isLastGroup = groupIndex === treeGroups.length - 1
 
         return (
-          <button
+          <Collapsible
             key={group.name}
-            type="button"
-            data-testid={`mobile-model-primary-group-${group.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-            onClick={() => {
-              setActiveGroupName(group.name)
-              setActiveSubGroupName(group.subGroups[0]?.name ?? '')
-              setStep('secondary')
-            }}
-            className={cn(
-              'flex min-h-[44px] w-full items-center justify-between px-4 py-3 text-left',
-              'active:bg-[#d1d1d6] dark:active:bg-[#3a3a3c]',
-              !isLast && 'border-b border-[#c6c6c8] dark:border-[#38383a]'
-            )}
+            open={isExpanded}
+            onOpenChange={open =>
+              setExpandedGroups(current => ({ ...current, [group.name]: open }))
+            }
           >
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] text-text-primary">{group.name}</div>
-              <div className="mt-0.5 text-[13px] text-[#8e8e93]">{group.count}</div>
-            </div>
-            <ChevronRight className="ml-3 h-5 w-5 flex-shrink-0 text-[#8e8e93]" />
-          </button>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                data-testid={`mobile-model-tree-group-${group.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                className={cn(
+                  'flex min-h-[44px] w-full items-center gap-2 px-4 py-3 text-left',
+                  'active:bg-[#d1d1d6] dark:active:bg-[#3a3a3c]',
+                  !isLastGroup && !isExpanded && 'border-b border-[#c6c6c8] dark:border-[#38383a]'
+                )}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-[#8e8e93]" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[#8e8e93]" />
+                )}
+                <ModelProviderIcon groupName={group.name} className="h-4 w-4" />
+                <span className="min-w-0 flex-1 truncate text-[15px] text-text-primary">
+                  {group.name}
+                </span>
+                <span className="text-[13px] text-[#8e8e93]">{group.count}</span>
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {group.models.map((model, index) =>
+                renderModelRow(model, false, !(isLastGroup && index === group.models.length - 1))
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         )
       })}
-    </div>
-  )
-
-  const renderSecondaryGroups = () => (
-    <div className="overflow-hidden rounded-xl bg-white dark:bg-[#2c2c2e]">
-      {activeGroup?.subGroups.map((subGroup, index) => {
-        const isLast = index === activeGroup.subGroups.length - 1
-
-        return (
-          <button
-            key={subGroup.name}
-            type="button"
-            data-testid={`mobile-model-secondary-group-${subGroup.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-            onClick={() => {
-              setActiveSubGroupName(subGroup.name)
-              setStep('models')
-            }}
-            className={cn(
-              'flex min-h-[44px] w-full items-center justify-between px-4 py-3 text-left',
-              'active:bg-[#d1d1d6] dark:active:bg-[#3a3a3c]',
-              !isLast && 'border-b border-[#c6c6c8] dark:border-[#38383a]'
-            )}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] text-text-primary">{subGroup.name}</div>
-              <div className="mt-0.5 text-[13px] text-[#8e8e93]">{subGroup.count}</div>
-            </div>
-            <ChevronRight className="ml-3 h-5 w-5 flex-shrink-0 text-[#8e8e93]" />
-          </button>
-        )
-      })}
-    </div>
-  )
-
-  const renderModels = () => (
-    <div className="overflow-hidden rounded-xl bg-white dark:bg-[#2c2c2e]">
-      {activeSubGroup?.models.map((model, index) =>
-        renderModelRow(model, false, index !== activeSubGroup.models.length - 1)
-      )}
     </div>
   )
 
@@ -351,7 +315,7 @@ export default function MobileModelSelector({
           type="button"
           disabled={isDisabled}
           className={cn(
-            'flex w-full items-center min-w-0 max-w-full rounded-full px-3 py-2 h-9',
+            'flex w-full items-center gap-1.5 min-w-0 max-w-full rounded-full px-3 py-2 h-9',
             'border transition-colors overflow-hidden',
             modelSelection.isModelRequired
               ? 'border-error text-error bg-error/5'
@@ -362,33 +326,22 @@ export default function MobileModelSelector({
             'disabled:cursor-not-allowed disabled:opacity-50'
           )}
         >
+          <SelectedModelProviderIcon
+            model={modelSelection.selectedModel}
+            fallbackModel={modelSelection.boundDefaultModel}
+            defaultModelKey={DEFAULT_MODEL_NAME}
+            className="h-4 w-4 flex-shrink-0"
+          />
           <span className="flex-1 truncate text-xs min-w-0">{modelSelection.getDisplayText()}</span>
         </button>
       </DrawerTrigger>
 
       <DrawerContent className="max-h-[85vh] bg-[#f2f2f7] dark:bg-[#1c1c1e]" showHandle={false}>
-        {/* iOS-style drag handle */}
         <div className="flex justify-center pt-2 pb-3">
           <div className="w-9 h-1 rounded-full bg-[#3c3c43]/30 dark:bg-[#5c5c5e]" />
         </div>
 
-        {/* Search bar - iOS style */}
         <div className="px-4 pb-3">
-          {!isSearching && step !== 'primary' && (
-            <button
-              type="button"
-              data-testid="mobile-model-back-button"
-              onClick={() => setStep(step === 'models' ? 'secondary' : 'primary')}
-              className="mb-2 flex min-h-[44px] items-center gap-1 text-[#007aff] active:opacity-70"
-            >
-              <ChevronLeft className="h-5 w-5" />
-              <span className="text-[15px]">
-                {step === 'models'
-                  ? activeGroup?.name
-                  : t('common:models.primary_groups', 'Primary groups')}
-              </span>
-            </button>
-          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8e8e93]" />
             <input
@@ -409,7 +362,6 @@ export default function MobileModelSelector({
           </div>
         </div>
 
-        {/* Model list - iOS grouped style */}
         <div
           className={cn(
             'flex-1 overflow-y-auto px-4 pb-4',
@@ -428,26 +380,20 @@ export default function MobileModelSelector({
             <div className="rounded-xl bg-white dark:bg-[#2c2c2e] p-4 text-center text-sm text-[#8e8e93]">
               {t('common:models.no_match', 'No matching models')}
             </div>
-          ) : !isSearching && cascadeGroups.length === 0 && !modelSelection.showDefaultOption ? (
+          ) : !isSearching && treeGroups.length === 0 && !modelSelection.showDefaultOption ? (
             <div className="rounded-xl bg-white dark:bg-[#2c2c2e] p-4 text-center text-sm text-[#8e8e93]">
               {t('common:models.no_models', '暂无模型')}
             </div>
           ) : isSearching ? (
             renderSearchResults()
-          ) : step === 'secondary' ? (
-            renderSecondaryGroups()
-          ) : step === 'models' ? (
-            renderModels()
           ) : (
-            renderPrimaryGroups()
+            renderTreeGroups()
           )}
         </div>
 
-        {/* Footer - compact single row */}
         {!isSearchFocused && (
           <div className="px-4 pb-4 pt-2">
             <div className="flex items-center justify-end">
-              {/* Settings link */}
               <button
                 type="button"
                 onClick={() => {

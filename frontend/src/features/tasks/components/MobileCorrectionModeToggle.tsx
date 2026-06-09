@@ -135,8 +135,6 @@ export default function MobileCorrectionModeToggle({
       searchResults: t('common:models.search_results', 'Search results'),
       noModels: t('chat:correction.no_models'),
       noMatch: t('common:models.no_match', 'No matching models'),
-      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
-      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [t]
   )
@@ -208,11 +206,6 @@ export default function MobileCorrectionModeToggle({
                     : t('chat:correction.user_model')}
                 </span>
               )}
-              renderModelMeta={model =>
-                model.modelId ? (
-                  <span className="block truncate text-xs text-text-muted">{model.modelId}</span>
-                ) : null
-              }
             />
           )}
         </DialogContent>

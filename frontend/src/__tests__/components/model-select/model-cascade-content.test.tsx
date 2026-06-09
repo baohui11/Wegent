@@ -23,8 +23,6 @@ const labels: ModelCascadeLabels = {
   searchResults: 'Search Results',
   noModels: 'No models available',
   noMatch: 'No matching models',
-  primaryGroups: 'Primary Groups',
-  secondaryGroups: 'Secondary Groups',
 }
 
 const models: GroupableModel[] = [
@@ -33,29 +31,28 @@ const models: GroupableModel[] = [
     displayName: 'Model A',
     provider: 'provider-one',
     modelId: 'provider-one-model-a',
-    modelGroup: 'Primary One',
-    modelSubGroup: 'Secondary One',
+    modelGroup: 'Anthropic',
+    modelSubGroup: 'Claude 3',
   },
   {
     name: 'model-b',
     displayName: 'Model B',
     provider: 'provider-two',
     modelId: 'provider-two-model-b',
-    modelGroup: 'Primary One',
-    modelSubGroup: 'Secondary Two',
+    modelGroup: 'Anthropic',
+    modelSubGroup: 'Claude 4',
   },
   {
     name: 'model-c',
     displayName: 'Model C',
     provider: 'provider-three',
     modelId: 'provider-three-model-c',
-    modelGroup: 'Primary Two',
-    modelSubGroup: 'Secondary Three',
+    modelGroup: 'OpenAI',
   },
 ]
 
 describe('ModelCascadeContent', () => {
-  it('shows primary and secondary groups before choosing a model', () => {
+  it('shows expandable single-level groups with models inside', () => {
     render(
       <ModelCascadeContent
         models={models}
@@ -66,11 +63,32 @@ describe('ModelCascadeContent', () => {
       />
     )
 
-    expect(screen.getByText('Primary One')).toBeInTheDocument()
-    expect(screen.getByText('Primary Two')).toBeInTheDocument()
-    expect(screen.getByText('Secondary One')).toBeInTheDocument()
-    expect(screen.getByText('Secondary Two')).toBeInTheDocument()
+    expect(screen.getByText('Anthropic')).toBeInTheDocument()
+    expect(screen.getByText('OpenAI')).toBeInTheDocument()
     expect(screen.getByText('Model A')).toBeInTheDocument()
+    expect(screen.getByText('Model C')).toBeInTheDocument()
+    expect(screen.queryByText('Primary Groups')).not.toBeInTheDocument()
+  })
+
+  it('collapses and expands groups', () => {
+    render(
+      <ModelCascadeContent
+        models={models}
+        labels={labels}
+        searchValue=""
+        onSearchValueChange={jest.fn()}
+        onSelectModel={jest.fn()}
+      />
+    )
+
+    const anthropicGroup = screen.getByTestId('model-tree-group-Anthropic')
+    expect(screen.getByText('Model A')).toBeVisible()
+
+    fireEvent.click(anthropicGroup)
+    expect(screen.getByText('Model A')).not.toBeVisible()
+
+    fireEvent.click(anthropicGroup)
+    expect(screen.getByText('Model A')).toBeVisible()
   })
 
   it('switches to flat searchable results including group text', () => {
@@ -87,15 +105,15 @@ describe('ModelCascadeContent', () => {
     )
 
     fireEvent.change(screen.getByTestId('model-cascade-search-input'), {
-      target: { value: 'Secondary Three' },
+      target: { value: 'OpenAI' },
     })
-    expect(onSearchValueChange).toHaveBeenCalledWith('Secondary Three')
+    expect(onSearchValueChange).toHaveBeenCalledWith('OpenAI')
 
     rerender(
       <ModelCascadeContent
         models={models}
         labels={labels}
-        searchValue="Secondary Three"
+        searchValue="OpenAI"
         onSearchValueChange={onSearchValueChange}
         onSelectModel={jest.fn()}
       />
@@ -106,7 +124,7 @@ describe('ModelCascadeContent', () => {
     expect(screen.queryByText('Model A')).not.toBeInTheDocument()
   })
 
-  it('constrains the cascade columns so long model lists do not push the footer out', () => {
+  it('constrains the tree list so long model lists do not push the footer out', () => {
     render(
       <ModelCascadeContent
         models={models}
@@ -118,11 +136,11 @@ describe('ModelCascadeContent', () => {
       />
     )
 
-    const grid = screen.getByTestId('model-cascade-grid')
+    const tree = screen.getByTestId('model-cascade-tree')
     const footer = screen.getByTestId('model-cascade-footer')
 
-    expect(grid).toHaveClass('min-h-0')
-    expect(grid.className).toContain('h-[clamp(')
+    expect(tree).toHaveClass('min-h-0')
+    expect(tree.className).toContain('h-[clamp(')
     expect(footer).toHaveClass('shrink-0')
   })
 

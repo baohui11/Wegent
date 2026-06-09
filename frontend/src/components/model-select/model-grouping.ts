@@ -13,17 +13,14 @@ export interface GroupableModel {
   modelSubGroup?: string | null
 }
 
-export interface ModelSubGroup<T extends GroupableModel = GroupableModel> {
+export interface ModelTreeGroup<T extends GroupableModel = GroupableModel> {
   name: string
   count: number
   models: T[]
 }
 
-export interface ModelCascadeGroup<T extends GroupableModel = GroupableModel> {
-  name: string
-  count: number
-  subGroups: ModelSubGroup<T>[]
-}
+/** @deprecated Use ModelTreeGroup — kept for transitional imports */
+export type ModelCascadeGroup<T extends GroupableModel = GroupableModel> = ModelTreeGroup<T>
 
 interface GroupingLabels {
   ungroupedLabel: string
@@ -67,44 +64,38 @@ export function matchesModelSearch(model: GroupableModel, query: string): boolea
   return getModelSearchText(model).includes(normalizedQuery)
 }
 
-export function buildModelCascadeGroups<T extends GroupableModel>(
+export function buildModelTreeGroups<T extends GroupableModel>(
   models: T[],
   labels: GroupingLabels
-): ModelCascadeGroup<T>[] {
-  const primaryGroups = new Map<string, Map<string, T[]>>()
+): ModelTreeGroup<T>[] {
+  const groups = new Map<string, T[]>()
 
   for (const model of models) {
-    const primaryName = normalizeGroupValue(model.modelGroup, labels.ungroupedLabel)
-    const secondaryName = normalizeGroupValue(model.modelSubGroup, labels.uncategorizedLabel)
-    const secondaryGroups = primaryGroups.get(primaryName) ?? new Map<string, T[]>()
-    const groupModels = secondaryGroups.get(secondaryName) ?? []
-
+    const groupName = normalizeGroupValue(model.modelGroup, labels.ungroupedLabel)
+    const groupModels = groups.get(groupName) ?? []
     groupModels.push(model)
-    secondaryGroups.set(secondaryName, groupModels)
-    primaryGroups.set(primaryName, secondaryGroups)
+    groups.set(groupName, groupModels)
   }
 
-  return Array.from(primaryGroups.entries())
+  return Array.from(groups.entries())
     .sort(([a], [b]) => compareGroupName(a, b, labels.ungroupedLabel))
-    .map(([name, secondaryGroups]) => {
-      const subGroups = Array.from(secondaryGroups.entries())
-        .sort(([a], [b]) => compareGroupName(a, b, labels.uncategorizedLabel))
-        .map(([subGroupName, groupModels]) => {
-          const sortedModels = groupModels.slice().sort((a, b) => {
-            return getModelDisplayName(a).localeCompare(getModelDisplayName(b))
-          })
-
-          return {
-            name: subGroupName,
-            count: sortedModels.length,
-            models: sortedModels,
-          }
-        })
+    .map(([name, groupModels]) => {
+      const sortedModels = groupModels.slice().sort((a, b) => {
+        return getModelDisplayName(a).localeCompare(getModelDisplayName(b))
+      })
 
       return {
         name,
-        count: subGroups.reduce((total, subGroup) => total + subGroup.count, 0),
-        subGroups,
+        count: sortedModels.length,
+        models: sortedModels,
       }
     })
+}
+
+/** @deprecated Use buildModelTreeGroups */
+export function buildModelCascadeGroups<T extends GroupableModel>(
+  models: T[],
+  labels: GroupingLabels
+): ModelTreeGroup<T>[] {
+  return buildModelTreeGroups(models, labels)
 }

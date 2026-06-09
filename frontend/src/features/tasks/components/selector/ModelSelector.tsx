@@ -20,9 +20,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { Cog6ToothIcon } from '@heroicons/react/24/outline'
-import { ChevronDown, Video, ImageIcon } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { ModelIcon } from '@/components/icons/ModelIcon'
+import { SelectedModelProviderIcon } from '@/components/model-select/model-provider-icon'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -147,18 +147,6 @@ export default function ModelSelector({
     showAdvancedModels,
     setShowAdvancedModels,
   } = modelSelection
-
-  // Get icon based on model category type
-  const IconComponent = useMemo(() => {
-    switch (modelCategoryType) {
-      case 'video':
-        return Video
-      case 'image':
-        return ImageIcon
-      default:
-        return ModelIcon
-    }
-  }, [modelCategoryType])
 
   const internalModelKey = getModelSyncKey(internalSelectedModel)
 
@@ -289,8 +277,6 @@ export default function ModelSelector({
       searchResults: t('common:models.search_results', 'Search results'),
       noModels: t('common:models.no_models', 'No models available'),
       noMatch: t('common:models.no_match', 'No matching models'),
-      primaryGroups: t('common:models.primary_groups', 'Primary groups'),
-      secondaryGroups: t('common:models.secondary_groups', 'Secondary groups'),
     }),
     [t]
   )
@@ -340,7 +326,19 @@ export default function ModelSelector({
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
                 >
-                  <IconComponent className="h-4 w-4 flex-shrink-0" />
+                  <SelectedModelProviderIcon
+                    model={modelSelection.selectedModel}
+                    fallbackModel={modelSelection.boundDefaultModel}
+                    defaultModelKey={DEFAULT_MODEL_NAME}
+                    categoryType={
+                      modelCategoryType === 'video'
+                        ? 'video'
+                        : modelCategoryType === 'image'
+                          ? 'image'
+                          : 'llm'
+                    }
+                    className="h-4 w-4 flex-shrink-0"
+                  />
                   {!compact && (
                     <span className="truncate text-xs min-w-0">
                       {modelSelection.getDisplayText()}
@@ -407,13 +405,6 @@ export default function ModelSelector({
                   )}
                 </>
               )}
-              renderModelMeta={model =>
-                model.modelId ? (
-                  <span className="block truncate text-xs text-text-muted" title={model.modelId}>
-                    {model.modelId}
-                  </span>
-                ) : null
-              }
               footer={
                 <div
                   data-testid="model-selector-footer"
