@@ -49,22 +49,6 @@ const CreateGroupChatDialog = dynamic(
   { ssr: false }
 )
 
-const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
-  ssr: false,
-})
-
-const TeamEditDialog = dynamic(() => import('@/features/settings/components/TeamEditDialog'), {
-  ssr: false,
-})
-
-const CreateGroupChatDialog = dynamic(
-  () =>
-    import('@/features/tasks/components/group-chat/CreateGroupChatDialog').then(mod => ({
-      default: mod.CreateGroupChatDialog,
-    })),
-  { ssr: false }
-)
-
 /**
  * Mobile-specific implementation of Chat Page
  *
