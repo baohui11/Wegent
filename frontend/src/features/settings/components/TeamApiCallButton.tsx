@@ -20,6 +20,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from '@/hooks/useTranslation'
+import { useUser } from '@/features/common/UserContext'
 import { getPublicApiBaseUrl as getConfiguredPublicApiBaseUrl } from '@/lib/runtime-config'
 import type { Team } from '@/types/api'
 
@@ -314,6 +315,8 @@ export function TeamApiCallButton({ team }: TeamApiCallButtonProps) {
   const { t, i18n } = useTranslation('common')
   const { toast } = useToast()
   const router = useRouter()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
   const [open, setOpen] = useState(false)
   const [activeSampleLanguage, setActiveSampleLanguage] =
     useState<TeamApiCodeSampleLanguage>('curl')
@@ -447,15 +450,17 @@ export function TeamApiCallButton({ team }: TeamApiCallButtonProps) {
               <ExternalLink className="h-4 w-4" />
               {t('teams.api_call.view_docs')}
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleManageApiKeys}
-              className="gap-2"
-              data-testid={`team-api-keys-button-${team.id}`}
-            >
-              <KeyRound className="h-4 w-4" />
-              {t('teams.api_call.manage_api_keys')}
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={handleManageApiKeys}
+                className="gap-2"
+                data-testid={`team-api-keys-button-${team.id}`}
+              >
+                <KeyRound className="h-4 w-4" />
+                {t('teams.api_call.manage_api_keys')}
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={handleCopySample}

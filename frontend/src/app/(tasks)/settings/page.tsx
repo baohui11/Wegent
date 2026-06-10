@@ -18,6 +18,7 @@ import NotificationSettings from '@/features/settings/components/NotificationSet
 import { GroupManager } from '@/features/settings/components/groups/GroupManager'
 import ApiKeyList from '@/features/settings/components/ApiKeyList'
 import { PetSettings } from '@/features/pet/components/PetSettings'
+import { useUser } from '@/features/common/UserContext'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
@@ -33,7 +34,10 @@ const settingsTabs = new Set<SettingsTabId>([
   'pet',
 ])
 
-function normalizeSettingsTab(tab: string | null): SettingsTabId {
+function normalizeSettingsTab(tab: string | null, isAdmin: boolean): SettingsTabId {
+  if (tab === 'api-keys' && !isAdmin) {
+    return 'general'
+  }
   if (tab && settingsTabs.has(tab as SettingsTabId)) {
     return tab as SettingsTabId
   }
@@ -45,21 +49,31 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const { t } = useTranslation()
   const isMobile = useIsMobile()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
 
   // Get initial tab from URL with backward compatibility
   const getInitialTab = (): SettingsTabId => {
-    return normalizeSettingsTab(searchParams.get('tab'))
+    return normalizeSettingsTab(searchParams.get('tab'), isAdmin)
   }
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>(getInitialTab)
 
   // Sync state with URL parameters.
   useEffect(() => {
-    const mappedTab = normalizeSettingsTab(searchParams.get('tab'))
+    const mappedTab = normalizeSettingsTab(searchParams.get('tab'), isAdmin)
     if (mappedTab !== activeTab) {
       setActiveTab(mappedTab)
     }
-  }, [activeTab, searchParams])
+  }, [activeTab, isAdmin, searchParams])
+
+  // Redirect non-admins away from the API Keys tab if accessed directly via URL
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'api-keys') {
+      setActiveTab('general')
+      router.replace('?tab=general')
+    }
+  }, [activeTab, isAdmin, router])
 
   // Mobile sidebar state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
@@ -104,13 +118,13 @@ function SettingsContent() {
       case 'general':
         return <NotificationSettings />
       case 'api-keys':
-        return <ApiKeyList />
+        return isAdmin ? <ApiKeyList /> : <NotificationSettings />
       case 'pet':
         return <PetSettings />
       default:
         return <NotificationSettings />
     }
-  }, [activeTab])
+  }, [activeTab, isAdmin])
   return (
     <div className="flex smart-h-screen bg-base text-text-primary box-border">
       {/* Collapsed sidebar floating buttons */}
@@ -143,7 +157,11 @@ function SettingsContent() {
         </TopNavigation>
 
         {/* Tab navigation */}
-        <SettingsTabNav activeTab={activeTab} onTabChange={handleTabChange} />
+        <SettingsTabNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          showApiKeysTab={isAdmin}
+        />
 
         {/* Settings content area */}
         <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6">{currentComponent}</div>

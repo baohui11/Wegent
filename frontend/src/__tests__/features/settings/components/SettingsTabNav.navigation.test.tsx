@@ -26,7 +26,7 @@ jest.mock('@/hooks/useTranslation', () => ({
 
 describe('SettingsTabNav', () => {
   it('shows only settings-related navigation after resource managers move out', () => {
-    render(<SettingsTabNav activeTab="general" onTabChange={jest.fn()} />)
+    render(<SettingsTabNav activeTab="general" onTabChange={jest.fn()} showApiKeysTab />)
 
     expect(screen.getByRole('button', { name: 'General' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Integrations' })).toBeInTheDocument()
@@ -37,5 +37,12 @@ describe('SettingsTabNav', () => {
     expect(screen.queryByRole('button', { name: 'Models' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Shells' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Skills' })).not.toBeInTheDocument()
+  })
+
+  it('hides API Keys tab for non-admin users', () => {
+    render(<SettingsTabNav activeTab="general" onTabChange={jest.fn()} showApiKeysTab={false} />)
+
+    expect(screen.queryByRole('button', { name: 'API Keys' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'General' })).toBeInTheDocument()
   })
 })

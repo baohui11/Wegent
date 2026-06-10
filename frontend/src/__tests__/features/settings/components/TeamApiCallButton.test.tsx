@@ -66,6 +66,12 @@ jest.mock('@/lib/runtime-config', () => ({
   getPublicApiBaseUrl: jest.fn(() => 'http://1.1.1.1:8000/api'),
 }))
 
+const mockUser = { id: 1, role: 'admin' as const }
+
+jest.mock('@/features/common/UserContext', () => ({
+  useUser: () => ({ user: mockUser }),
+}))
+
 jest.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
     open ? <div>{children}</div> : null,
@@ -228,12 +234,22 @@ describe('TeamApiCallButton', () => {
     expect(mockToast).toHaveBeenCalledWith({ title: 'Code copied' })
   })
 
-  it('routes to API Key settings from the dialog', () => {
+  it('routes to API Key settings from the dialog for admins', () => {
+    mockUser.role = 'admin'
     render(<TeamApiCallButton team={makeTeam()} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'API Call' }))
     fireEvent.click(screen.getByRole('button', { name: 'Manage API Keys' }))
 
     expect(mockPush).toHaveBeenCalledWith('/settings?section=api-keys&tab=api-keys')
+  })
+
+  it('hides Manage API Keys for non-admin users', () => {
+    mockUser.role = 'user'
+    render(<TeamApiCallButton team={makeTeam()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'API Call' }))
+
+    expect(screen.queryByRole('button', { name: 'Manage API Keys' })).not.toBeInTheDocument()
   })
 })

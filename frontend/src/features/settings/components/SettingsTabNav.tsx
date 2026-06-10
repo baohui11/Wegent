@@ -22,6 +22,8 @@ export type SettingsTabId = 'general' | 'integrations' | 'api-keys' | 'group-man
 interface SettingsTabNavProps {
   activeTab: SettingsTabId
   onTabChange: (tab: SettingsTabId) => void
+  /** When false, hides the API Keys tab (admin-only). Defaults to true. */
+  showApiKeysTab?: boolean
 }
 
 interface TabItem {
@@ -29,20 +31,24 @@ interface TabItem {
   label: string
 }
 
-export function SettingsTabNav({ activeTab, onTabChange }: SettingsTabNavProps) {
+export function SettingsTabNav({
+  activeTab,
+  onTabChange,
+  showApiKeysTab = true,
+}: SettingsTabNavProps) {
   const { t } = useTranslation('settings')
   const isMobile = useIsMobile()
 
-  const tabs: TabItem[] = useMemo(
-    () => [
+  const tabs: TabItem[] = useMemo(() => {
+    const allTabs: TabItem[] = [
       { id: 'general', label: t('sections.general') },
       { id: 'integrations', label: t('navigation.integrations') },
       { id: 'api-keys', label: t('navigation.apiKeys') },
       { id: 'group-manager', label: t('navigation.groupManager') },
       { id: 'pet', label: t('pet:title') },
-    ],
-    [t]
-  )
+    ]
+    return showApiKeysTab ? allTabs : allTabs.filter(tab => tab.id !== 'api-keys')
+  }, [showApiKeysTab, t])
 
   if (isMobile) {
     return (
