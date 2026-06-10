@@ -314,11 +314,15 @@ services:
       - sh
       - -c
       - |
-        echo "=== Pulling executor image: $${EXECUTOR_IMAGE} ===" >&2
-        if docker pull $${EXECUTOR_IMAGE} 2>&1; then
-          echo "=== Successfully pulled executor image ===" >&2
+        if docker image inspect $${EXECUTOR_IMAGE} >/dev/null 2>&1; then
+          echo "=== Using local executor image: $${EXECUTOR_IMAGE} ===" >&2
         else
-          echo "=== Failed to pull executor image, will use cached version ===" >&2
+          echo "=== Local executor image not found, pulling: $${EXECUTOR_IMAGE} ===" >&2
+          if ! docker pull $${EXECUTOR_IMAGE} 2>&1; then
+            echo "=== ERROR: Failed to pull executor image: $${EXECUTOR_IMAGE} ===" >&2
+            exit 1
+          fi
+          echo "=== Successfully pulled executor image ===" >&2
         fi
         echo "=== Starting executor manager ===" >&2
         exec uvicorn main:app --host 0.0.0.0 --port 8001
