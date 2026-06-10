@@ -27,6 +27,7 @@ import { Progress } from '@/components/ui/progress'
 import { Loader2 } from 'lucide-react'
 import { BeakerIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import {
   shellApis,
   UnifiedShell,
@@ -554,6 +555,7 @@ const ShellEditDialog: React.FC<ShellEditDialogProps> = ({
 
           {/* Requires Workspace Toggle - only show for local_engine shells */}
           {baseShellRef &&
+            isGitFeaturesEnabled() &&
             (() => {
               const selectedShell = baseShells.find(s => s.name === baseShellRef)
               // Only show for local_engine shells (ClaudeCode, Agno)

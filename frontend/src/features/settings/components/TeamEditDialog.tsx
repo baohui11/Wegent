@@ -26,10 +26,12 @@ import { TeamMode, getFilteredBotsForMode, AgentType, getActualShellType } from 
 import { createTeam, updateTeam } from '../services/teams'
 import TeamEditDrawer from './TeamEditDrawer'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { shellApis, UnifiedShell } from '@/apis/shells'
 import { BotEditRef } from './BotEdit'
 import { useTeamContext } from '@/contexts/TeamContext'
 import { filterVisibleSkills } from '@/utils/skillVisibility'
+import { filterSkillsByShellType, resolveShellTypeFromShell } from '@/utils/skillShellCompatibility'
 
 // Import sub-components
 import TeamBasicInfoForm from './team-edit/TeamBasicInfoForm'
@@ -74,6 +76,19 @@ const SIMPLE_BIND_MODES = new Set<TaskType>(['chat', 'code', 'task'])
 
 function getQuickPhrasePayload(phrases: string[]): string[] {
   return phrases.map(phrase => phrase.trim()).filter(Boolean)
+}
+
+function resolveTeamBindModeForSave(bindMode: TaskType[]): TaskType[] {
+  return bindMode
+}
+
+function resolveTeamRequiresWorkspaceForSave(
+  requiresWorkspace: boolean | null
+): boolean | undefined {
+  if (!isGitFeaturesEnabled()) {
+    return false
+  }
+  return requiresWorkspace ?? undefined
 }
 
 function normalizeSimpleBindMode(team: Team): TaskType[] {
@@ -270,6 +285,10 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
     () => resolveShellForExecutor(shells, simpleExecutorMode, simpleCustomShellName),
     [shells, simpleCustomShellName, simpleExecutorMode]
   )
+  const simpleShellType = useMemo(
+    () => resolveShellTypeFromShell(selectedSimpleShell),
+    [selectedSimpleShell]
+  )
 
   const simpleMcpAgentType = useMemo<McpAgentType | undefined>(() => {
     const shellType = selectedSimpleShell?.shellType || selectedSimpleShell?.name
@@ -335,8 +354,8 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
       })
       setRequireConfirmationMap(confirmMap)
       // Initialize requiresWorkspace from existing team data
-      // Default to true for legacy data that doesn't have this field
-      setRequiresWorkspace(formTeam.requires_workspace ?? true)
+      // Default to true for legacy data that doesn't have this field (when Git features enabled)
+      setRequiresWorkspace(formTeam.requires_workspace ?? (isGitFeaturesEnabled() ? true : false))
     } else {
       setName('')
       setDisplayName('')
@@ -361,8 +380,8 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
       setSimplePreloadSkills([])
       setSimpleDefaultKnowledgeBaseRefs([])
       setSimpleMcpConfig('')
-      // Default to true for new teams (requires workspace by default)
-      setRequiresWorkspace(true)
+      // Default: no repository required when Git features are disabled
+      setRequiresWorkspace(isGitFeaturesEnabled() ? true : false)
     }
     setUnsavedPrompts({})
   }, [bots, formTeam, open])
@@ -403,7 +422,9 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
     try {
       const skills = await fetchUnifiedSkillsList({ scope, groupName })
       setSimpleAllSkills(skills)
-      setSimpleAvailableSkills(filterVisibleSkills(skills))
+      setSimpleAvailableSkills(
+        filterSkillsByShellType(filterVisibleSkills(skills), simpleShellType)
+      )
     } catch {
       toast({
         variant: 'destructive',
@@ -412,7 +433,14 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
     } finally {
       setSimpleLoadingSkills(false)
     }
-  }, [groupName, scope, skillLoadingFailedTitle, toast, useSimpleEditor])
+  }, [groupName, scope, simpleShellType, skillLoadingFailedTitle, toast, useSimpleEditor])
+
+  useEffect(() => {
+    if (!useSimpleEditor) return
+    setSimpleAvailableSkills(
+      filterSkillsByShellType(filterVisibleSkills(simpleAllSkills), simpleShellType)
+    )
+  }, [simpleAllSkills, simpleShellType, useSimpleEditor])
 
   useEffect(() => {
     if (!open || !useSimpleEditor) return
@@ -762,12 +790,12 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
               displayName: displayNamePayload,
               description: description.trim() || undefined,
               workflow,
-              bind_mode: bindMode,
+              bind_mode: resolveTeamBindModeForSave(bindMode),
               bots: botsData,
               quick_phrases: quickPhrasePayload,
               namespace: scope === 'group' && groupName ? groupName : undefined,
               icon: icon || undefined,
-              requires_workspace: requiresWorkspace ?? undefined,
+              requires_workspace: resolveTeamRequiresWorkspaceForSave(requiresWorkspace),
             })
             setTeams(prev => prev.map(team => (team.id === updated.id ? updated : team)))
           } else {
@@ -776,12 +804,12 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
               displayName: displayNamePayload,
               description: description.trim() || undefined,
               workflow,
-              bind_mode: bindMode,
+              bind_mode: resolveTeamBindModeForSave(bindMode),
               bots: botsData,
               quick_phrases: quickPhrasePayload,
               namespace: scope === 'group' && groupName ? groupName : undefined,
               icon: icon || undefined,
-              requires_workspace: requiresWorkspace ?? undefined,
+              requires_workspace: resolveTeamRequiresWorkspaceForSave(requiresWorkspace),
             })
             setTeams(prev => [created, ...prev])
           }
@@ -852,12 +880,12 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
           displayName: displayNamePayload,
           description: description.trim() || undefined,
           workflow,
-          bind_mode: bindMode,
+          bind_mode: resolveTeamBindModeForSave(bindMode),
           bots: botsData,
           quick_phrases: quickPhrasePayload,
           namespace: scope === 'group' && groupName ? groupName : undefined,
           icon: icon || undefined,
-          requires_workspace: requiresWorkspace ?? undefined,
+          requires_workspace: resolveTeamRequiresWorkspaceForSave(requiresWorkspace),
         })
         setTeams(prev => prev.map(team => (team.id === updated.id ? updated : team)))
       } else {
@@ -866,12 +894,12 @@ export default function TeamEditDialog(props: TeamEditDialogProps) {
           displayName: displayNamePayload,
           description: description.trim() || undefined,
           workflow,
-          bind_mode: bindMode,
+          bind_mode: resolveTeamBindModeForSave(bindMode),
           bots: botsData,
           quick_phrases: quickPhrasePayload,
           namespace: scope === 'group' && groupName ? groupName : undefined,
           icon: icon || undefined,
-          requires_workspace: requiresWorkspace ?? undefined,
+          requires_workspace: resolveTeamRequiresWorkspaceForSave(requiresWorkspace),
         })
         setTeams(prev => [created, ...prev])
       }

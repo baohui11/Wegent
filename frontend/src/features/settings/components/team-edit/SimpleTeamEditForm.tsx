@@ -28,6 +28,7 @@ import SkillManagementModal from '@/features/settings/components/skills/SkillMan
 import { RichSkillSelector } from '@/features/settings/components/skills/RichSkillSelector'
 import type { AgentType as McpAgentType } from '@/features/settings/utils/mcpTypeAdapter'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { cn } from '@/lib/utils'
 import type { KnowledgeBaseDefaultRef, TaskType } from '@/types/api'
 
@@ -181,7 +182,7 @@ export default function SimpleTeamEditForm({
   const { t } = useTranslation()
   const [skillManagementModalOpen, setSkillManagementModalOpen] = useState(false)
   const [promptFineTuneOpen, setPromptFineTuneOpen] = useState(false)
-  const showRequiresWorkspace = bindMode.includes('code')
+  const showRequiresWorkspace = isGitFeaturesEnabled() && bindMode.includes('code')
   const modelSelectValue = toModelSelectValue(modelName, modelType, modelNamespace)
   const selectedModel = useMemo(
     () =>

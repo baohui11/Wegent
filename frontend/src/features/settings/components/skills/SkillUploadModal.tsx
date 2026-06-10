@@ -57,6 +57,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { useSkillUploadLimits } from '@/hooks/useSkillUploadLimits'
 
 interface SkillUploadModalProps {
@@ -93,6 +94,7 @@ export default function SkillUploadModal({
   isPublic = false,
 }: SkillUploadModalProps) {
   const { t } = useTranslation('common')
+  const gitEnabled = isGitFeaturesEnabled()
   const { maxFileSizeMb, maxFileSizeBytes } = useSkillUploadLimits()
   const [activeTab, setActiveTab] = useState<'upload' | 'git'>('upload')
 
@@ -444,8 +446,8 @@ export default function SkillUploadModal({
             </DialogDescription>
           </DialogHeader>
 
-          {isEditMode ? (
-            // Edit mode: only show upload form
+          {isEditMode || !gitEnabled ? (
+            // Edit mode (or Git disabled): upload form only
             <UploadForm
               skillName={skillName}
               setSkillName={setSkillName}

@@ -47,6 +47,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import {
   fetchPublicSkillsList,
   uploadPublicSkill,
@@ -62,6 +63,7 @@ import { useSkillUploadLimits } from '@/hooks/useSkillUploadLimits'
 
 const SetupSkillStep: React.FC = () => {
   const { t } = useTranslation('admin')
+  const gitEnabled = isGitFeaturesEnabled()
   const { maxFileSizeMb, maxFileSizeBytes } = useSkillUploadLimits()
   const { toast } = useToast()
 
@@ -523,17 +525,26 @@ const SetupSkillStep: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'upload' | 'git')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="upload" className="flex items-center gap-2">
-                <UploadIcon className="w-4 h-4" />
-                {t('setup_wizard.skill_step.upload_tab')}
-              </TabsTrigger>
-              <TabsTrigger value="git" className="flex items-center gap-2" onClick={resetGitState}>
-                <GitBranch className="w-4 h-4" />
-                {t('setup_wizard.skill_step.git_import_tab')}
-              </TabsTrigger>
-            </TabsList>
+          <Tabs
+            value={gitEnabled ? activeTab : 'upload'}
+            onValueChange={v => gitEnabled && setActiveTab(v as 'upload' | 'git')}
+          >
+            {gitEnabled && (
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="upload" className="flex items-center gap-2">
+                  <UploadIcon className="w-4 h-4" />
+                  {t('setup_wizard.skill_step.upload_tab')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="git"
+                  className="flex items-center gap-2"
+                  onClick={resetGitState}
+                >
+                  <GitBranch className="w-4 h-4" />
+                  {t('setup_wizard.skill_step.git_import_tab')}
+                </TabsTrigger>
+              </TabsList>
+            )}
 
             <TabsContent value="upload" className="mt-4">
               <div className="space-y-4">
@@ -662,139 +673,141 @@ const SetupSkillStep: React.FC = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="git" className="mt-4">
-              {showResult && importResult ? (
-                <ImportResultView result={importResult} onDone={handleResultDone} t={t} />
-              ) : (
-                <div className="space-y-4">
-                  {/* Git URL Input */}
-                  <div className="space-y-2">
-                    <Label htmlFor="git-url">{t('setup_wizard.skill_step.git_url_label')}</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="git-url"
-                        placeholder={t('setup_wizard.skill_step.git_url_placeholder')}
-                        value={gitUrl}
-                        onChange={e => setGitUrl(e.target.value)}
-                        disabled={isLoading}
-                        onKeyDown={e => e.key === 'Enter' && !isLoading && handleScanRepository()}
-                      />
-                      <Button
-                        onClick={handleScanRepository}
-                        disabled={isLoading || !gitUrl.trim()}
-                        className="shrink-0"
-                      >
-                        {scanning ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            {t('setup_wizard.skill_step.git_scanning')}
-                          </>
-                        ) : (
-                          <>
-                            <Search className="w-4 h-4 mr-2" />
-                            {t('setup_wizard.skill_step.git_scan_button')}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-text-muted">
-                      {t('setup_wizard.skill_step.git_url_hint')}
-                    </p>
-                  </div>
-
-                  {/* Error Message */}
-                  {gitError && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        {gitError}
-                        {gitError === t('setup_wizard.skill_step.git_no_skills_found') && (
-                          <p className="mt-1 text-xs opacity-80">
-                            {t('setup_wizard.skill_step.git_no_skills_hint')}
-                          </p>
-                        )}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Scanned Skills List */}
-                  {scannedSkills.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">
-                          {t('setup_wizard.skill_step.git_skills_found', {
-                            count: scannedSkills.length,
-                          })}
-                        </span>
-                        <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                          {selectedSkillPaths.size === scannedSkills.length
-                            ? t('setup_wizard.skill_step.git_deselect_all')
-                            : t('setup_wizard.skill_step.git_select_all')}
+            {gitEnabled && (
+              <TabsContent value="git" className="mt-4">
+                {showResult && importResult ? (
+                  <ImportResultView result={importResult} onDone={handleResultDone} t={t} />
+                ) : (
+                  <div className="space-y-4">
+                    {/* Git URL Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="git-url">{t('setup_wizard.skill_step.git_url_label')}</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="git-url"
+                          placeholder={t('setup_wizard.skill_step.git_url_placeholder')}
+                          value={gitUrl}
+                          onChange={e => setGitUrl(e.target.value)}
+                          disabled={isLoading}
+                          onKeyDown={e => e.key === 'Enter' && !isLoading && handleScanRepository()}
+                        />
+                        <Button
+                          onClick={handleScanRepository}
+                          disabled={isLoading || !gitUrl.trim()}
+                          className="shrink-0"
+                        >
+                          {scanning ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              {t('setup_wizard.skill_step.git_scanning')}
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-4 h-4 mr-2" />
+                              {t('setup_wizard.skill_step.git_scan_button')}
+                            </>
+                          )}
                         </Button>
                       </div>
-
-                      <div className="max-h-60 overflow-y-auto border rounded-lg">
-                        {scannedSkills.map(skill => (
-                          <div
-                            key={skill.path}
-                            className="flex items-start space-x-3 p-3 border-b last:border-b-0 hover:bg-muted/50"
-                          >
-                            <Checkbox
-                              id={`skill-${skill.path}`}
-                              checked={selectedSkillPaths.has(skill.path)}
-                              onCheckedChange={() => handleToggleSkill(skill.path)}
-                              disabled={isLoading}
-                              className="mt-0.5"
-                            />
-                            <label
-                              htmlFor={`skill-${skill.path}`}
-                              className="flex-1 cursor-pointer"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm">{skill.name}</span>
-                                {skill.version && (
-                                  <span className="text-xs text-text-muted bg-muted px-1.5 py-0.5 rounded">
-                                    v{skill.version}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-text-muted mt-0.5 line-clamp-2">
-                                {skill.description}
-                              </p>
-                              <p className="text-xs text-text-muted/70 mt-0.5">{skill.path}</p>
-                            </label>
-                          </div>
-                        ))}
-                      </div>
+                      <p className="text-xs text-text-muted">
+                        {t('setup_wizard.skill_step.git_url_hint')}
+                      </p>
                     </div>
-                  )}
 
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={handleCloseUploadDialog}
-                      disabled={isLoading}
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={handleImportSkills}
-                      disabled={isLoading || selectedSkillPaths.size === 0}
-                    >
-                      {importing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {t('common.loading')}
-                        </>
-                      ) : (
-                        t('setup_wizard.skill_step.git_import_selected')
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </div>
-              )}
-            </TabsContent>
+                    {/* Error Message */}
+                    {gitError && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          {gitError}
+                          {gitError === t('setup_wizard.skill_step.git_no_skills_found') && (
+                            <p className="mt-1 text-xs opacity-80">
+                              {t('setup_wizard.skill_step.git_no_skills_hint')}
+                            </p>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Scanned Skills List */}
+                    {scannedSkills.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            {t('setup_wizard.skill_step.git_skills_found', {
+                              count: scannedSkills.length,
+                            })}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+                            {selectedSkillPaths.size === scannedSkills.length
+                              ? t('setup_wizard.skill_step.git_deselect_all')
+                              : t('setup_wizard.skill_step.git_select_all')}
+                          </Button>
+                        </div>
+
+                        <div className="max-h-60 overflow-y-auto border rounded-lg">
+                          {scannedSkills.map(skill => (
+                            <div
+                              key={skill.path}
+                              className="flex items-start space-x-3 p-3 border-b last:border-b-0 hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                id={`skill-${skill.path}`}
+                                checked={selectedSkillPaths.has(skill.path)}
+                                onCheckedChange={() => handleToggleSkill(skill.path)}
+                                disabled={isLoading}
+                                className="mt-0.5"
+                              />
+                              <label
+                                htmlFor={`skill-${skill.path}`}
+                                className="flex-1 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm">{skill.name}</span>
+                                  {skill.version && (
+                                    <span className="text-xs text-text-muted bg-muted px-1.5 py-0.5 rounded">
+                                      v{skill.version}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-text-muted mt-0.5 line-clamp-2">
+                                  {skill.description}
+                                </p>
+                                <p className="text-xs text-text-muted/70 mt-0.5">{skill.path}</p>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={handleCloseUploadDialog}
+                        disabled={isLoading}
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        onClick={handleImportSkills}
+                        disabled={isLoading || selectedSkillPaths.size === 0}
+                      >
+                        {importing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            {t('common.loading')}
+                          </>
+                        ) : (
+                          t('setup_wizard.skill_step.git_import_selected')
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
+              </TabsContent>
+            )}
           </Tabs>
         </DialogContent>
       </Dialog>

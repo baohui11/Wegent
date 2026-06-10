@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CollapsibleSection } from '@/components/common/CollapsibleSection'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import type { GitRepoInfo, GitBranch } from '@/types/api'
 import type { SubscriptionTriggerType } from '@/types/subscription'
 import { CronSchedulePicker } from '../CronSchedulePicker'
@@ -89,6 +90,7 @@ export function SubscriptionOptionsSection({
   setDurationDays,
 }: SubscriptionOptionsSectionProps) {
   const { t } = useTranslation('feed')
+  const gitEnabled = isGitFeaturesEnabled()
 
   const handleTriggerTypeChange = useCallback(
     (value: SubscriptionTriggerType) => {
@@ -214,11 +216,11 @@ export function SubscriptionOptionsSection({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="webhook">Webhook</SelectItem>
-                <SelectItem value="git_push">Git Push</SelectItem>
+                {gitEnabled && <SelectItem value="git_push">Git Push</SelectItem>}
                 <SelectItem value="inbox_message">Inbox Message</SelectItem>
               </SelectContent>
             </Select>
-            {triggerConfig.event_type === 'git_push' && (
+            {gitEnabled && triggerConfig.event_type === 'git_push' && (
               <div className="mt-3 space-y-3">
                 <div>
                   <Label>{t('git_repository')}</Label>
@@ -420,7 +422,7 @@ export function SubscriptionOptionsSection({
       </div>
 
       {/* Repository Selection - Only show for code-type teams */}
-      {isCodeTypeTeam && (
+      {gitEnabled && isCodeTypeTeam && (
         <div className="space-y-3 rounded-lg border border-border bg-background p-4">
           <div className="text-sm font-medium text-text-secondary">{t('workspace_settings')}</div>
 

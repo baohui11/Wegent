@@ -10,6 +10,7 @@ import { fetchTeamSkills, TeamSkillsResponse } from '@/apis/team'
 import type { Team } from '@/types/api'
 import { isChatShell } from '../service/messageService'
 import { filterVisibleSkills } from '@/utils/skillVisibility'
+import { filterSkillsByShellType, resolveTeamShellType } from '@/utils/skillShellCompatibility'
 
 /**
  * Skill reference with full identification info for backend
@@ -82,8 +83,8 @@ export function useSkillSelector({
   enabled = true,
   initialSelectedSkills = [],
 }: UseSkillSelectorOptions): UseSkillSelectorReturn {
-  // State for available skills from unified API
-  const [availableSkills, setAvailableSkills] = useState<UnifiedSkill[]>([])
+  // State for visible skills from unified API (before shell filtering)
+  const [visibleSkills, setVisibleSkills] = useState<UnifiedSkill[]>([])
   // State for team-specific skills (from backend)
   const [teamSkillsData, setTeamSkillsData] = useState<TeamSkillsResponse | null>(null)
   // User-selected skill names - initialize with initialSelectedSkills
@@ -94,6 +95,12 @@ export function useSkillSelector({
 
   // Determine if current team is Chat Shell type
   const isChatShellType = useMemo(() => isChatShell(team), [team])
+  const teamShellType = useMemo(() => resolveTeamShellType(team), [team])
+
+  const shellCompatibleSkills = useMemo(
+    () => filterSkillsByShellType(visibleSkills, teamShellType),
+    [visibleSkills, teamShellType]
+  )
 
   // Team's configured skill names (from team skills API)
   const teamSkillNames = useMemo(() => {
@@ -115,7 +122,7 @@ export function useSkillSelector({
     const teamSkillSet = new Set(teamSkillNames)
     const preloadedSkillSet = new Set(preloadedSkillNames)
 
-    return availableSkills
+    return shellCompatibleSkills
       .map(skill => {
         const availabilitySources: Array<'agent_builtin' | 'my_default'> = []
         if (teamSkillSet.has(skill.name) || preloadedSkillSet.has(skill.name)) {
@@ -132,7 +139,7 @@ export function useSkillSelector({
           : null
       })
       .filter((skill): skill is AutoAvailableSkill => skill !== null)
-  }, [availableSkills, teamSkillNames, preloadedSkillNames])
+  }, [shellCompatibleSkills, teamSkillNames, preloadedSkillNames])
 
   const autoAvailableSkillNames = useMemo(
     () => new Set(autoAvailableSkills.map(skill => skill.name)),
@@ -140,13 +147,13 @@ export function useSkillSelector({
   )
 
   const temporarySkills = useMemo(() => {
-    return availableSkills.filter(skill => !autoAvailableSkillNames.has(skill.name))
-  }, [availableSkills, autoAvailableSkillNames])
+    return shellCompatibleSkills.filter(skill => !autoAvailableSkillNames.has(skill.name))
+  }, [shellCompatibleSkills, autoAvailableSkillNames])
 
   // Fetch available skills when enabled
   useEffect(() => {
     if (!enabled) {
-      setAvailableSkills([])
+      setVisibleSkills([])
       return
     }
 
@@ -155,7 +162,7 @@ export function useSkillSelector({
       setError(null)
       try {
         const skills = await fetchUnifiedSkillsList({ scope: 'all' })
-        setAvailableSkills(filterVisibleSkills(skills))
+        setVisibleSkills(filterVisibleSkills(skills))
       } catch (err) {
         console.error('[useSkillSelector] Failed to fetch skills:', err)
         setError(err instanceof Error ? err : new Error('Failed to fetch skills'))
@@ -166,6 +173,16 @@ export function useSkillSelector({
 
     fetchSkills()
   }, [enabled])
+
+  useEffect(() => {
+    if (shellCompatibleSkills.length === 0) return
+
+    const compatibleNames = new Set(shellCompatibleSkills.map(skill => skill.name))
+    setSelectedSkillNames(prev => {
+      const next = prev.filter(name => compatibleNames.has(name))
+      return next.length === prev.length ? prev : next
+    })
+  }, [shellCompatibleSkills])
 
   // Fetch team-specific skills when team ID changes
   useEffect(() => {
@@ -239,7 +256,7 @@ export function useSkillSelector({
   // by looking up each selected skill name in availableSkills
   const selectedSkills = useMemo<SkillRef[]>(() => {
     return selectedSkillNames.map(name => {
-      const skill = availableSkills.find(s => s.name === name)
+      const skill = visibleSkills.find(s => s.name === name)
       if (skill) {
         return {
           name: skill.name,
@@ -255,10 +272,10 @@ export function useSkillSelector({
         is_public: false,
       }
     })
-  }, [selectedSkillNames, availableSkills])
+  }, [selectedSkillNames, visibleSkills])
 
   return {
-    availableSkills,
+    availableSkills: shellCompatibleSkills,
     autoAvailableSkills,
     temporarySkills,
     teamSkillNames,

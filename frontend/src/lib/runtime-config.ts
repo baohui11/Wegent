@@ -29,6 +29,8 @@ export interface RuntimeConfig {
   oidcLoginText: string
   /** Enable display quotas in frontend */
   enableDisplayQuotas: boolean
+  /** Enable Git repo integrations and repository-related UI (not Code task mode) */
+  enableGitFeatures: boolean
   /** Enable Wiki module */
   enableWiki: boolean
   /** Enable Code Knowledge add repository feature */
@@ -114,6 +116,7 @@ export const fetchRuntimeConfig = async (): Promise<RuntimeConfig> => {
         loginMode: process.env.NEXT_PUBLIC_LOGIN_MODE || 'all',
         oidcLoginText: process.env.NEXT_PUBLIC_OIDC_LOGIN_TEXT || '',
         enableDisplayQuotas: process.env.NEXT_PUBLIC_FRONTEND_ENABLE_DISPLAY_QUOTAS === 'enable',
+        enableGitFeatures: process.env.NEXT_PUBLIC_ENABLE_GIT_FEATURES !== 'false',
         enableWiki: process.env.NEXT_PUBLIC_ENABLE_WIKI !== 'false',
         enableCodeKnowledgeAddRepo:
           process.env.NEXT_PUBLIC_ENABLE_CODE_KNOWLEDGE_ADD_REPO !== 'false',
@@ -158,6 +161,7 @@ export const getRuntimeConfigSync = (): RuntimeConfig => {
     loginMode: process.env.NEXT_PUBLIC_LOGIN_MODE || 'all',
     oidcLoginText: process.env.NEXT_PUBLIC_OIDC_LOGIN_TEXT || '',
     enableDisplayQuotas: process.env.NEXT_PUBLIC_FRONTEND_ENABLE_DISPLAY_QUOTAS === 'enable',
+    enableGitFeatures: process.env.NEXT_PUBLIC_ENABLE_GIT_FEATURES !== 'false',
     enableWiki: process.env.NEXT_PUBLIC_ENABLE_WIKI !== 'false',
     enableCodeKnowledgeAddRepo: process.env.NEXT_PUBLIC_ENABLE_CODE_KNOWLEDGE_ADD_REPO !== 'false',
     enableProjectWorkspace: process.env.NEXT_PUBLIC_ENABLE_PROJECT_WORKSPACE === 'true',
@@ -241,6 +245,14 @@ export const getSocketUrl = (): string => {
 export const isChatContextEnabled = (): boolean => {
   const config = getRuntimeConfigSync()
   return config.enableChatContext
+}
+
+/**
+ * Check if Git-related features are enabled (Code page, repo selectors, Git integrations).
+ */
+export const isGitFeaturesEnabled = (): boolean => {
+  const config = getRuntimeConfigSync()
+  return config.enableGitFeatures
 }
 
 /**

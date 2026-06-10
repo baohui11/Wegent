@@ -79,7 +79,7 @@ export function DesktopNavLinks({ activePage }: DesktopNavLinksProps) {
           ]
         : []),
     ],
-    [t, router, startTransition]
+    [t, router, startTransition, isWikiEnabled]
   )
 
   useEffect(() => {

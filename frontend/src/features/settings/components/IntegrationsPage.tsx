@@ -5,11 +5,13 @@
 'use client'
 
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import GitHubIntegration from './GitHubIntegration'
 import McpProviderIntegrations from './McpProviderIntegrations'
 
 export default function IntegrationsPage() {
   const { t } = useTranslation()
+  const gitEnabled = isGitFeaturesEnabled()
 
   return (
     <div className="space-y-6" data-testid="settings-integrations-page">
@@ -21,8 +23,7 @@ export default function IntegrationsPage() {
         <p className="text-sm text-text-muted mb-1">{t('common:integrations.description')}</p>
       </div>
 
-      {/* Git integration section */}
-      <GitHubIntegration />
+      {gitEnabled && <GitHubIntegration />}
 
       <McpProviderIntegrations providerId="dingtalk" />
     </div>

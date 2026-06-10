@@ -30,6 +30,7 @@ import type { InteractiveFormAnswerPayload, Team, SubtaskContextBrief, TaskType 
 import type { Model } from '../../hooks/useModelSelection'
 import type { ContextItem, QueueMessageContext } from '@/types/context'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { useRouter } from 'next/navigation'
 import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { useOptionalTaskSession } from '@/features/tasks/session/TaskSession'
@@ -190,6 +191,10 @@ function ChatAreaContent({
   const [isQuickPhraseOverwriteOpen, setIsQuickPhraseOverwriteOpen] = useState(false)
   const [focusInputAtEndSignal, setFocusInputAtEndSignal] = useState(0)
   const { quote, clearQuote, formatQuoteForMessage } = useQuote()
+
+  // Code mode keeps the page; Git repo selector only appears when Git integrations are enabled
+  const effectiveShowRepositorySelector =
+    showRepositorySelector && (taskType !== 'code' || isGitFeaturesEnabled())
 
   // Task context
   const {
@@ -608,7 +613,7 @@ function ChatAreaContent({
     setForceOverride: chatState.setForceOverride,
     selectedRepo: chatState.selectedRepo,
     selectedBranch: chatState.selectedBranch,
-    showRepositorySelector,
+    showRepositorySelector: effectiveShowRepositorySelector,
     effectiveRequiresWorkspace: chatState.effectiveRequiresWorkspace,
     taskInputMessage: chatState.taskInputMessage,
     setTaskInputMessage: chatState.setTaskInputMessage,
@@ -1361,7 +1366,7 @@ function ChatAreaContent({
     setForceOverride: chatState.setForceOverride,
     teamId: chatState.selectedTeam?.id,
     taskId: selectedTaskDetail?.id,
-    showRepositorySelector,
+    showRepositorySelector: effectiveShowRepositorySelector,
     selectedRepo: chatState.selectedRepo,
     setSelectedRepo: chatState.setSelectedRepo,
     selectedBranch: chatState.selectedBranch,

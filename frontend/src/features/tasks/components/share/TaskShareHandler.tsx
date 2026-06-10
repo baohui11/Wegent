@@ -13,6 +13,7 @@ import { taskApis, TaskShareInfo } from '@/apis/tasks'
 import { teamApis } from '@/apis/team'
 import { githubApis } from '@/apis/github'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { useUser } from '@/features/common/UserContext'
 import Modal from '@/features/common/Modal'
 import ModelSelector, {
@@ -66,6 +67,7 @@ export default function TaskShareHandler({ onTaskCopied }: TaskShareHandlerProps
 
   const isSelfShare = shareInfo && user && shareInfo.user_id === user.id
   const isCodeTask = shareInfo?.task_type === 'code'
+  const gitEnabled = isGitFeaturesEnabled()
 
   // Find the selected team with full details
   const selectedTeam = useMemo(() => {
@@ -85,8 +87,8 @@ export default function TaskShareHandler({ onTaskCopied }: TaskShareHandlerProps
 
   // Check if repository and branch are required for code tasks
   const isRepoSelectionRequired = useMemo(() => {
-    return isCodeTask && (!selectedRepo || !selectedBranch)
-  }, [isCodeTask, selectedRepo, selectedBranch])
+    return isCodeTask && gitEnabled && (!selectedRepo || !selectedBranch)
+  }, [isCodeTask, gitEnabled, selectedRepo, selectedBranch])
 
   const cleanupUrlParams = React.useCallback(() => {
     const url = new URL(window.location.href)
@@ -214,8 +216,8 @@ export default function TaskShareHandler({ onTaskCopied }: TaskShareHandlerProps
       return
     }
 
-    // Validate repository and branch selection for code tasks
-    if (isCodeTask) {
+    // Validate repository and branch selection for code tasks (when Git is enabled)
+    if (isCodeTask && gitEnabled) {
       if (!selectedRepo) {
         toast({
           variant: 'destructive',
@@ -465,8 +467,8 @@ export default function TaskShareHandler({ onTaskCopied }: TaskShareHandlerProps
               />
             )}
 
-            {/* Repository and Branch Selection (only for code tasks) */}
-            {isCodeTask && (
+            {/* Repository and Branch Selection (only for code tasks with Git enabled) */}
+            {isCodeTask && gitEnabled && (
               <div className="space-y-4 p-4 bg-surface/50 rounded-lg border border-border">
                 <div className="flex items-center gap-2 mb-2">
                   <svg

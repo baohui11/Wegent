@@ -452,7 +452,7 @@ class PetService:
 
     def _build_pet_spec(
         self,
-        pet_name: str = "Wegi",
+        pet_name: str = "小中大",
         stage: int = 1,
         experience: int = 0,
         total_chats: int = 0,

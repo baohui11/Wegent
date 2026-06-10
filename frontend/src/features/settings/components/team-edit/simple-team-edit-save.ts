@@ -8,6 +8,7 @@ import type { UnifiedSkill } from '@/apis/skills'
 import type { CreateTeamRequest } from '@/apis/team'
 import type { TaskType } from '@/types/api'
 import { createPredefinedModelConfig } from '@/features/settings/services/bots'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { buildSkillRefsFromSelection } from '@/features/settings/utils/skillRefResolver'
 
 export interface SimpleBotFormValue {
@@ -95,6 +96,8 @@ export function buildSimpleTeamRequest(
   const trimmedDescription = form.description.trim()
   const quickPhrases = form.quickPhrases.map(phrase => phrase.trim()).filter(Boolean)
 
+  const gitEnabled = isGitFeaturesEnabled()
+
   return {
     name: form.name.trim(),
     displayName: trimmedDisplayName || undefined,
@@ -114,6 +117,6 @@ export function buildSimpleTeamRequest(
     quick_phrases: quickPhrases,
     namespace: form.namespace,
     icon: form.icon || undefined,
-    requires_workspace: form.requiresWorkspace ?? undefined,
+    requires_workspace: gitEnabled ? (form.requiresWorkspace ?? undefined) : false,
   }
 }

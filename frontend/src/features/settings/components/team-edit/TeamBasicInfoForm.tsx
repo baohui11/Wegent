@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { TeamIconPicker } from '../teams/TeamIconPicker'
 import { HelpCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -50,8 +51,9 @@ export default function TeamBasicInfoForm({
 }: TeamBasicInfoFormProps) {
   const { t } = useTranslation()
 
-  // Show requires_workspace toggle only when 'code' mode is selected
-  const showRequiresWorkspace = bindMode.includes('code') && setRequiresWorkspace
+  // Hide repository requirement when Git integrations are disabled
+  const showRequiresWorkspace =
+    isGitFeaturesEnabled() && bindMode.includes('code') && setRequiresWorkspace
 
   return (
     <div className="space-y-4">

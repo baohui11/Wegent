@@ -59,6 +59,7 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { adaptMcpConfigForAgent, isValidAgentType } from '../utils/mcpTypeAdapter'
 import { buildSkillRefsFromSelection } from '../utils/skillRefResolver'
 import { filterVisibleSkills } from '@/utils/skillVisibility'
+import { filterSkillsByShellType, resolveShellTypeFromShell } from '@/utils/skillShellCompatibility'
 import { shellSupportsPreloadSkills } from './team-edit/simple-team-edit-utils'
 
 /** Agent types supported by the system */
@@ -361,11 +362,17 @@ const BotEditInner: React.ForwardRefRenderFunction<BotEditRef, BotEditProps> = (
     return shellSupportsPreloadSkills(selectedShell || { name: agentName })
   }, [agentName, shells])
 
-  // Filter skills based on current shell type
-  // Note: bindShells filtering is deprecated, skills can be used in any context
-  const filterSkillsByShellType = useCallback((skills: UnifiedSkill[]): UnifiedSkill[] => {
-    return skills
-  }, [])
+  const currentShellType = useMemo(
+    () => resolveShellTypeFromShell(shells.find(s => s.name === agentName) || { name: agentName }),
+    [agentName, shells]
+  )
+
+  const filterSkillsForCurrentShell = useCallback(
+    (skills: UnifiedSkill[]): UnifiedSkill[] => {
+      return filterSkillsByShellType(skills, currentShellType)
+    },
+    [currentShellType]
+  )
 
   const filterSelectableSkills = useCallback(
     (skills: UnifiedSkill[]): UnifiedSkill[] => {
@@ -396,7 +403,7 @@ const BotEditInner: React.ForwardRefRenderFunction<BotEditRef, BotEditProps> = (
               })
         setAllSkills(skillsData)
         // Filter skills based on current shell type
-        setAvailableSkills(filterSkillsByShellType(filterSelectableSkills(skillsData)))
+        setAvailableSkills(filterSkillsForCurrentShell(filterSelectableSkills(skillsData)))
       } catch {
         toast({
           variant: 'destructive',
@@ -407,14 +414,22 @@ const BotEditInner: React.ForwardRefRenderFunction<BotEditRef, BotEditProps> = (
       }
     }
     fetchSkills()
-  }, [supportsSkills, toast, t, filterSkillsByShellType, filterSelectableSkills, scope, groupName])
+  }, [
+    supportsSkills,
+    toast,
+    t,
+    filterSkillsForCurrentShell,
+    filterSelectableSkills,
+    scope,
+    groupName,
+  ])
 
   // Re-filter available skills when shell type changes
   useEffect(() => {
     if (allSkills.length > 0) {
-      setAvailableSkills(filterSkillsByShellType(filterSelectableSkills(allSkills)))
+      setAvailableSkills(filterSkillsForCurrentShell(filterSelectableSkills(allSkills)))
     }
-  }, [allSkills, filterSkillsByShellType, filterSelectableSkills])
+  }, [allSkills, filterSkillsForCurrentShell, filterSelectableSkills])
 
   // Fetch corresponding model list when agentName changes
   useEffect(() => {
@@ -1601,7 +1616,7 @@ const BotEditInner: React.ForwardRefRenderFunction<BotEditRef, BotEditProps> = (
                     })
               setAllSkills(skillsData)
               // Filter skills based on current shell type
-              setAvailableSkills(filterSkillsByShellType(filterSelectableSkills(skillsData)))
+              setAvailableSkills(filterSkillsForCurrentShell(filterSelectableSkills(skillsData)))
             } catch {
               toast({
                 variant: 'destructive',

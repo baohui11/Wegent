@@ -6,6 +6,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SkillSelectorPopover from '@/features/tasks/components/selector/SkillSelectorPopover'
 import type { UnifiedSkill } from '@/apis/skills'
+import { filterSkillsByShellType } from '@/utils/skillShellCompatibility'
 
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({
@@ -82,5 +83,14 @@ describe('SkillSelectorPopover availability sections', () => {
 
     await user.click(screen.getByText('Temporary Skill'))
     expect(onToggleSkill).toHaveBeenCalledWith('temporary-skill')
+  })
+
+  it('only receives shell-compatible skills from callers', () => {
+    const skills = [
+      buildSkill({ id: 1, name: 'chat-only', bindShells: ['Chat'] }),
+      buildSkill({ id: 2, name: 'code-only', bindShells: ['ClaudeCode'] }),
+    ]
+
+    expect(filterSkillsByShellType(skills, 'Chat').map(skill => skill.name)).toEqual(['chat-only'])
   })
 })

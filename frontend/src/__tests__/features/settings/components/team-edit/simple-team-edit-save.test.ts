@@ -12,6 +12,10 @@ import {
   type SimpleTeamFormValue,
 } from '@/features/settings/components/team-edit/simple-team-edit-save'
 
+jest.mock('@/lib/runtime-config', () => ({
+  isGitFeaturesEnabled: jest.fn(() => true),
+}))
+
 const skills = [
   {
     id: 5,
@@ -166,5 +170,24 @@ describe('simple team edit save helpers', () => {
       icon: undefined,
       requires_workspace: undefined,
     })
+  })
+
+  it('forces no repository when Git features are disabled', () => {
+    const { isGitFeaturesEnabled } = jest.requireMock('@/lib/runtime-config') as {
+      isGitFeaturesEnabled: jest.Mock
+    }
+    isGitFeaturesEnabled.mockReturnValue(false)
+
+    const request = buildSimpleTeamRequest(
+      {
+        ...teamForm,
+        bindMode: ['chat', 'code'] as TaskType[],
+        requiresWorkspace: true,
+      },
+      42
+    )
+
+    expect(request.bind_mode).toEqual(['chat', 'code'])
+    expect(request.requires_workspace).toBe(false)
   })
 })

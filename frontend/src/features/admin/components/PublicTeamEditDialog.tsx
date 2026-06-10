@@ -30,6 +30,7 @@ import {
 } from '@/features/settings/components/team-modes'
 import TeamEditDrawer from '@/features/settings/components/TeamEditDrawer'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
 import { UnifiedShell } from '@/apis/shells'
 import { BotEditRef } from '@/features/settings/components/BotEdit'
 import { adminApis, AdminPublicTeam, AdminPublicTeamCreate } from '@/apis/admin'
@@ -76,7 +77,7 @@ function buildTeamJson(data: {
       bind_mode: data.bindMode,
       description: data.description || undefined,
       icon: data.icon || undefined,
-      requiresWorkspace: data.requiresWorkspace ?? true,
+      requiresWorkspace: data.requiresWorkspace ?? (isGitFeaturesEnabled() ? true : false),
       members: data.members.map(m => ({
         botRef: {
           name: m.botName,
@@ -125,7 +126,8 @@ function parseTeamJson(json: Record<string, unknown>): {
     const description = (spec?.description as string) || ''
     const bindMode = (spec?.bind_mode as TaskType[]) || ['chat', 'code']
     const icon = (spec?.icon as string) || null
-    const requiresWorkspace = (spec?.requiresWorkspace as boolean) ?? true
+    const requiresWorkspace =
+      (spec?.requiresWorkspace as boolean) ?? (isGitFeaturesEnabled() ? true : false)
     const mode = (spec?.collaborationModel as TeamMode) || 'solo'
 
     const rawMembers = (spec?.members as Array<Record<string, unknown>>) || []
@@ -164,7 +166,9 @@ export default function PublicTeamEditDialog({
   const [mode, setMode] = useState<TeamMode>('solo')
   const [bindMode, setBindMode] = useState<TaskType[]>(['chat'])
   const [icon, setIcon] = useState<string | null>(null)
-  const [requiresWorkspace, setRequiresWorkspace] = useState<boolean | null>(true)
+  const [requiresWorkspace, setRequiresWorkspace] = useState<boolean | null>(
+    isGitFeaturesEnabled() ? true : false
+  )
 
   // Bot selection state
   const [selectedBotKeys, setSelectedBotKeys] = useState<React.Key[]>([])
@@ -799,7 +803,7 @@ export default function PublicTeamEditDialog({
       updated_at: editingTeam.updated_at,
       bind_mode: bindMode,
       icon: icon || undefined,
-      requires_workspace: requiresWorkspace ?? true,
+      requires_workspace: isGitFeaturesEnabled() ? (requiresWorkspace ?? true) : false,
     }
   }, [editingTeam, mode, bindMode, icon, requiresWorkspace])
 

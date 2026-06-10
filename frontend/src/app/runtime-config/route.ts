@@ -76,6 +76,12 @@ export async function GET() {
         process.env.RUNTIME_ENABLE_DISPLAY_QUOTAS === 'enable' ||
         process.env.NEXT_PUBLIC_FRONTEND_ENABLE_DISPLAY_QUOTAS === 'enable',
 
+      // Enable Git repo integrations (Code task mode remains available separately)
+      // Priority: RUNTIME_ENABLE_GIT_FEATURES > NEXT_PUBLIC_ENABLE_GIT_FEATURES > true
+      enableGitFeatures:
+        process.env.RUNTIME_ENABLE_GIT_FEATURES !== 'false' &&
+        process.env.NEXT_PUBLIC_ENABLE_GIT_FEATURES !== 'false',
+
       // Enable Wiki module
       // Priority: RUNTIME_ENABLE_WIKI > NEXT_PUBLIC_ENABLE_WIKI > true (enabled by default)
       enableWiki:
