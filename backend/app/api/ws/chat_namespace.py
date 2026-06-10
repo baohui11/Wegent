@@ -327,6 +327,8 @@ class ChatNamespace(socketio.AsyncNamespace):
             {
                 "user_id": user.id,
                 "user_name": user.user_name,
+                "real_name": user.real_name,
+                "department_name": user.department_name,
                 "request_id": request_id,
                 "token_exp": token_exp,  # Store token expiry for later checks
                 "auth_token": token,  # Store original token for downstream services
@@ -890,6 +892,8 @@ class ChatNamespace(socketio.AsyncNamespace):
                     message=payload.message,
                     user_id=user_id,
                     user_name=user_name,
+                    real_name=user.real_name,
+                    department_name=user.department_name,
                     attachment_id=(
                         payload.attachment_ids[0]
                         if payload.attachment_ids
@@ -1024,6 +1028,8 @@ class ChatNamespace(socketio.AsyncNamespace):
         attachment_id: Optional[int],
         task_room: str,
         skip_sid: str,
+        real_name: Optional[str] = None,
+        department_name: Optional[str] = None,
     ):
         """
         Broadcast user message to task room (exclude sender).
@@ -1038,6 +1044,8 @@ class ChatNamespace(socketio.AsyncNamespace):
             message: Message content
             user_id: Sender's user ID
             user_name: Sender's user name
+            real_name: Sender's display name
+            department_name: Sender's department name
             attachment_id: Optional attachment/context ID
             task_room: Task room name
             skip_sid: Socket ID to skip (sender)
@@ -1081,6 +1089,8 @@ class ChatNamespace(socketio.AsyncNamespace):
                 "sender": {
                     "user_id": user_id,
                     "user_name": user_name,
+                    "real_name": real_name,
+                    "department_name": department_name,
                 },
                 "created_at": user_subtask.created_at.isoformat(),
                 "attachment": attachment_info,  # Keep for backward compatibility
@@ -1818,7 +1828,9 @@ def _fetch_subtasks_for_task_join(
                         subtask_dict["sender"] = {
                             "user_id": user.id,
                             "user_name": user.user_name,
-                            "avatar": user.avatar,
+                            "real_name": user.real_name,
+                            "department_name": user.department_name,
+                            "avatar": getattr(user, "avatar", None),
                         }
 
                 subtasks_dict.append(subtask_dict)

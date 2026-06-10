@@ -20,7 +20,6 @@ import type {
 } from '@/types/subscription'
 import type { UnifiedSkill } from '@/apis/skills'
 import type { DeviceInfo } from '@/apis/devices'
-import type { CompatibleProvider } from '@/utils/modelCompatibility'
 
 // Model type for selector
 export interface SubscriptionModel {
@@ -31,6 +30,7 @@ export interface SubscriptionModel {
   type?: string
   modelGroup?: string | null
   modelSubGroup?: string | null
+  config?: Record<string, unknown>
 }
 
 // Props for Send Area Section (renamed to Task Settings)
@@ -57,7 +57,6 @@ export interface SendAreaSectionProps {
   models: SubscriptionModel[]
   modelsLoading: boolean
   modelRequired: boolean
-  compatibleProvider: CompatibleProvider[] | undefined
   // Skills
   skillRefs: SubscriptionSkillRef[]
   setSkillRefs: React.Dispatch<React.SetStateAction<SubscriptionSkillRef[]>>

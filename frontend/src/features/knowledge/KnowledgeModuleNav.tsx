@@ -8,7 +8,6 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useTranslation } from '@/hooks/useTranslation'
-import { CodeBracketIcon } from '@heroicons/react/24/outline'
 import { UserFloatingMenu } from '@/features/layout/components/UserFloatingMenu'
 
 export type KnowledgeModule = 'code' | 'wiki'
@@ -26,20 +25,13 @@ interface ModuleItem {
 }
 
 const modules: ModuleItem[] = [
-  {
-    id: 'code',
-    labelKey: 'knowledge:modules.code',
-    icon: CodeBracketIcon,
-    href: '/knowledge',
-    description: 'knowledge:modules.code_desc',
-  },
-  // Future modules can be added here
+  // Code knowledge entry hidden
   // {
-  //   id: 'wiki',
-  //   labelKey: 'modules.wiki',
-  //   icon: BookOpenIcon,
-  //   href: '/knowledge/wiki',
-  //   description: 'modules.wiki_desc',
+  //   id: 'code',
+  //   labelKey: 'knowledge:modules.code',
+  //   icon: CodeBracketIcon,
+  //   href: '/knowledge',
+  //   description: 'knowledge:modules.code_desc',
   // },
 ]
 

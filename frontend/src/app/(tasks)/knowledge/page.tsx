@@ -17,29 +17,12 @@ import { TaskParamSync } from '@/features/tasks/components/params'
 import '@/app/tasks/tasks.css'
 import '@/features/common/scrollbar.css'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
-import { useTranslation } from '@/hooks/useTranslation'
 import { saveLastTab } from '@/utils/userPreferences'
-import { useUser } from '@/features/common/UserContext'
 import { useIsMobile } from '@/features/layout/hooks/useMediaQuery'
 import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { paths } from '@/config/paths'
 import { Spinner } from '@/components/ui/spinner'
-import { useWikiProjects } from '@/features/knowledge/useWikiProjects'
-import { SearchBox } from '@/features/knowledge/SearchBox'
 import { KnowledgeTabs } from '@/features/knowledge/KnowledgeTabs'
-import type { KnowledgeTabType } from '@/features/knowledge/KnowledgeTabs'
-
-const WikiProjectList = dynamic(() => import('@/features/knowledge/WikiProjectList'), {
-  ssr: false,
-})
-
-const AddRepoModal = dynamic(() => import('@/features/knowledge/AddRepoModal'), {
-  ssr: false,
-})
-
-const CancelConfirmDialog = dynamic(() => import('@/features/knowledge/CancelConfirmDialog'), {
-  ssr: false,
-})
 
 const KnowledgeDocumentPage = dynamic(
   () =>
@@ -54,52 +37,10 @@ const KNOWLEDGE_SIDEBAR_COLLAPSED_KEY = 'knowledge-sidebar-collapsed'
 
 // Main knowledge page content with URL parameter support
 function KnowledgePageContent() {
-  const { t } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useUser()
   const { selectTask } = useTaskSession()
   const isMobile = useIsMobile()
-
-  // Get initial knowledge type tab from URL parameter
-  const getInitialKnowledgeTab = useCallback((): KnowledgeTabType => {
-    const type = searchParams.get('type')
-    if (type === 'code') return 'code'
-    return 'document' // default
-  }, [searchParams])
-
-  // Use shared Hook to manage all state and logic
-  const {
-    projects,
-    loading,
-    loadingMore,
-    error,
-    cancellingIds,
-    hasMore,
-    isModalOpen,
-    formErrors,
-    isSubmitting,
-    confirmDialogOpen,
-    selectedRepo,
-    // Wiki config state (system-level configuration)
-    wikiConfig,
-    loadProjects,
-    loadMoreProjects,
-    handleAddRepo,
-    handleCloseModal,
-    handleRepoChange,
-    handleSubmit,
-    handleCancelClick,
-    confirmCancelGeneration,
-    setConfirmDialogOpen,
-    setPendingCancelProjectId,
-  } = useWikiProjects()
-
-  // Active knowledge tab - initialized from URL
-  const [activeTab, setActiveTab] = useState<KnowledgeTabType>(getInitialKnowledgeTab)
-
-  // Search term for project list
-  const [mainSearchTerm, setMainSearchTerm] = useState('')
 
   // Mobile sidebar state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
@@ -145,43 +86,17 @@ function KnowledgePageContent() {
     )
   }, [])
 
+  // Redirect legacy code knowledge URLs to document tab
+  useEffect(() => {
+    if (searchParams.get('type') === 'code') {
+      router.replace('?type=document')
+    }
+  }, [searchParams, router])
+
   // Handle knowledge type tab change with URL update
-  const handleTabChange = useCallback(
-    (tab: KnowledgeTabType) => {
-      setActiveTab(tab)
-      // Update URL - preserve other params like tab and group for document type
-      if (tab === 'code') {
-        router.replace('?type=code')
-      } else {
-        // For document tab, just set type=document (sub-tab state is managed by KnowledgeDocumentPage)
-        router.replace('?type=document')
-      }
-    },
-    [router]
-  )
-
-  const navigateToKnowledgeDetail = (projectId: number) => {
-    router.push(`/knowledge/project/${projectId}?from=code`)
-  }
-
-  const navigateToTask = (taskId: number) => {
-    router.push(`/code?taskId=${taskId}`)
-  }
-
-  // Filter projects to show only those with user's generations
-  // This ensures the knowledge page only shows projects created by the current user
-  const userProjects = projects.filter(project => {
-    // Check if user has any generations for this project
-    return (
-      project.generations &&
-      project.generations.length > 0 &&
-      (project.generations[0].status === 'RUNNING' ||
-        project.generations[0].status === 'COMPLETED' ||
-        project.generations[0].status === 'PENDING' ||
-        project.generations[0].status === 'FAILED' ||
-        project.generations[0].status === 'CANCELLED')
-    )
-  })
+  const handleTabChange = useCallback(() => {
+    router.replace('?type=document')
+  }, [router])
 
   // Load collapsed state from localStorage
   useEffect(() => {
@@ -194,11 +109,6 @@ function KnowledgePageContent() {
   useEffect(() => {
     saveLastTab('wiki')
   }, [])
-
-  useEffect(() => {
-    if (!user) return
-    loadProjects()
-  }, [user, loadProjects])
 
   const handleToggleCollapsed = () => {
     setIsCollapsed(prev => {
@@ -247,7 +157,7 @@ function KnowledgePageContent() {
           variant="with-sidebar"
           centerContent={
             <KnowledgeTabs
-              activeTab={activeTab}
+              activeTab="document"
               onTabChange={handleTabChange}
               isKnowledgeSidebarCollapsed={isKnowledgeSidebarCollapsed}
               onExpandClick={handleExpandKnowledgeSidebar}
@@ -259,68 +169,11 @@ function KnowledgePageContent() {
           {isMobile && <ThemeToggle />}
         </TopNavigation>
 
-        {/* Content area based on active tab */}
-        {activeTab === 'code' && (
-          <div className="flex-1 overflow-auto p-6">
-            {/* Center search box - using shared component */}
-            <SearchBox
-              value={mainSearchTerm}
-              onChange={setMainSearchTerm}
-              placeholder={t('knowledge:search_repositories')}
-              size="md"
-              className="mb-6 max-w-2xl mx-auto"
-            />
-            {/* Project list */}
-            <WikiProjectList
-              projects={userProjects}
-              loading={loading}
-              loadingMore={loadingMore}
-              error={error}
-              onAddRepo={handleAddRepo}
-              onProjectClick={navigateToKnowledgeDetail}
-              onTaskClick={navigateToTask}
-              onCancelClick={handleCancelClick}
-              cancellingIds={cancellingIds}
-              searchTerm={mainSearchTerm}
-              hasMore={hasMore}
-              onLoadMore={loadMoreProjects}
-              currentUserId={user?.id}
-            />
-          </div>
-        )}
-
         {/* Document knowledge - no padding, full height */}
-        {activeTab === 'document' && (
-          <div className="flex-1 flex flex-col min-h-0">
-            <KnowledgeDocumentPage />
-          </div>
-        )}
+        <div className="flex-1 flex flex-col min-h-0">
+          <KnowledgeDocumentPage />
+        </div>
       </div>
-
-      {/* Add repository modal */}
-      {isModalOpen && (
-        <AddRepoModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          formErrors={formErrors}
-          isSubmitting={isSubmitting}
-          onRepoChange={handleRepoChange}
-          onSubmit={handleSubmit}
-          selectedRepo={selectedRepo}
-          wikiConfig={wikiConfig}
-        />
-      )}
-      {/* Cancel confirm dialog */}
-      {confirmDialogOpen && (
-        <CancelConfirmDialog
-          isOpen={confirmDialogOpen}
-          onClose={() => {
-            setConfirmDialogOpen(false)
-            setPendingCancelProjectId(null)
-          }}
-          onConfirm={confirmCancelGeneration}
-        />
-      )}
     </div>
   )
 }

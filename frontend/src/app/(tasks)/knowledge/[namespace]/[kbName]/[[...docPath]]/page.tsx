@@ -197,11 +197,7 @@ function KnowledgeVirtualPageContent() {
           centerContent={
             <KnowledgeTabs
               activeTab="document"
-              onTabChange={tab => {
-                if (tab === 'code') {
-                  router.push('/knowledge?type=code')
-                }
-              }}
+              onTabChange={() => router.replace('?type=document')}
               isKnowledgeSidebarCollapsed={isKnowledgeSidebarCollapsed}
               onExpandClick={handleExpandKnowledgeSidebar}
             />

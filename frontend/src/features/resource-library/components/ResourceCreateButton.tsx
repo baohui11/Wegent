@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useUser } from '@/features/common/UserContext'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { Group } from '@/types/group'
 import type { ManagedResourceSourceFilter } from '../types'
@@ -34,7 +35,19 @@ interface ResourceCreateButtonProps {
   sourceFilter?: ManagedResourceSourceFilter
   groups?: Group[]
   onCreate: (target: ResourceCreateTarget) => void
+  /** When true, only system admins (user.role === 'admin') can see this button. */
+  adminOnly?: boolean
   'data-testid'?: string
+}
+
+export function useCanCreateInfrastructureResource(): boolean {
+  const { user, isLoading } = useUser()
+
+  if (isLoading) {
+    return true
+  }
+
+  return user?.role === 'admin'
 }
 
 function canCreateInGroup(group: Group): boolean {
@@ -83,15 +96,21 @@ export function ResourceCreateButton({
   sourceFilter = 'all',
   groups = [],
   onCreate,
+  adminOnly = false,
   'data-testid': testId = 'resource-create-button',
 }: ResourceCreateButtonProps) {
   const { t } = useTranslation('resource-library')
+  const canCreateInfrastructureResource = useCanCreateInfrastructureResource()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [groupQuery, setGroupQuery] = useState('')
   const writableGroups = useMemo(() => groups.filter(canCreateInGroup), [groups])
   const selectedWritableGroup = groupName
     ? writableGroups.find(group => group.name === groupName)
     : undefined
+
+  if (adminOnly && !canCreateInfrastructureResource) {
+    return null
+  }
 
   if (sourceFilter === 'system') {
     return null

@@ -15,15 +15,16 @@ import {
 } from '@/utils/notification'
 import { useToast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
 import { useUser } from '@/features/common/UserContext'
 import { userApis, type FeatureFlags } from '@/apis/user'
 import type { UserPreferences } from '@/types/api'
 
 export default function NotificationSettings() {
-  const { t } = useTranslation()
+  const { t } = useTranslation('settings')
+  const { t: tCommon } = useTranslation()
   const { toast } = useToast()
   const router = useRouter()
   const { user, refresh } = useUser()
@@ -198,7 +199,7 @@ export default function NotificationSettings() {
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold text-text-primary mb-2">
-          {t('common:settings.sections.general')}
+          {tCommon('common:settings.sections.general')}
         </h2>
         <p className="text-sm text-text-muted">{t('common:notifications.enable_description')}</p>
       </div>

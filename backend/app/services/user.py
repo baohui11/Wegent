@@ -201,6 +201,12 @@ class UserService(BaseService[User, UserUpdate, UserUpdate]):
         if obj_in.email:
             user.email = obj_in.email
 
+        if obj_in.real_name is not None:
+            user.real_name = obj_in.real_name.strip() or None
+
+        if obj_in.department_name is not None:
+            user.department_name = obj_in.department_name.strip() or None
+
         if obj_in.git_info is not None:
             # Get existing git_info
             existing_git_info = user.git_info or []

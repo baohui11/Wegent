@@ -702,6 +702,8 @@ class TeamKindsService(BaseService[Kind, TeamCreate, TeamUpdate]):
                 team_dict["user"] = {
                     "id": team_user.id,
                     "user_name": team_user.user_name,
+                    "real_name": team_user.real_name,
+                    "department_name": team_user.department_name,
                 }
 
             result.append(team_dict)

@@ -96,6 +96,13 @@ jest.mock('@/hooks/useTranslation', () => ({
   }),
 }))
 
+jest.mock('@/features/common/UserContext', () => ({
+  useUser: () => ({
+    user: { id: 1, role: 'admin' },
+    isLoading: false,
+  }),
+}))
+
 jest.mock('@/features/settings/components/ModelEditDialog', () => ({
   __esModule: true,
   default: ({ open }: { open?: boolean }) =>

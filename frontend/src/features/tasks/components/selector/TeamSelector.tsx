@@ -27,6 +27,8 @@ import { paths } from '@/config/paths'
 import { getSharedTagStyle as getSharedBadgeStyle } from '@/utils/styles'
 import { TeamIconDisplay } from '@/features/settings/components/teams/TeamIconDisplay'
 import { cn } from '@/lib/utils'
+import { UserIdentity } from '@/components/common/UserIdentity'
+import { getUserDisplayName } from '@/utils/userDisplay'
 import MobileTeamSelector from './MobileTeamSelector'
 import SystemTeamTag from './SystemTeamTag'
 import { getLastTeamIdByMode, saveLastTeamByMode } from '@/utils/userPreferences'
@@ -229,7 +231,7 @@ export default function TeamSelector({
                 variant="default"
                 style={sharedBadgeStyle}
               >
-                {t('common:teams.shared_by', { author: team.user?.user_name })}
+                {t('common:teams.shared_by', { author: getUserDisplayName(team.user) })}
               </Tag>
             )}
           </div>
@@ -294,7 +296,7 @@ export default function TeamSelector({
             variant="default"
             style={sharedBadgeStyle}
           >
-            {team.user?.user_name}
+            <UserIdentity user={team.user} compact hideDepartment />
           </Tag>
         )}
       </div>

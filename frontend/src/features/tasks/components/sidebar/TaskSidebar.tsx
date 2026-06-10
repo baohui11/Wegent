@@ -35,6 +35,7 @@ import { UserFloatingMenu } from '@/features/layout/components/UserFloatingMenu'
 import HistoryManageDialog from './HistoryManageDialog'
 import { TaskDndProvider } from '@/features/projects'
 import { useInboxUnreadCount } from '@/features/inbox'
+import { useUser } from '@/features/common/UserContext'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,6 +71,8 @@ export default function TaskSidebar({
 }: TaskSidebarProps) {
   const { t } = useTranslation()
   const router = useRouter()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
   const {
     tasks,
     groupTasks,
@@ -164,18 +167,20 @@ export default function TaskSidebar({
     buttonPageType: ButtonPageType
     unreadCount?: number
     testId?: string
+    adminOnly?: boolean
   }
 
   const currentPath = typeof window === 'undefined' ? '' : window.location.pathname
   const resourceLibraryPath = paths.resourceLibrary?.getHref?.() ?? '/resource-library'
 
-  const navigationButtons: NavigationButton[] = [
+  const allNavigationButtons: NavigationButton[] = [
     {
       label: t('common:navigation.flow'),
       icon: Workflow,
       path: paths.feed.getHref(),
       isActive: pageType === 'flow',
       buttonPageType: 'flow',
+      adminOnly: true,
     },
     {
       label: t('common:navigation.code'),
@@ -206,6 +211,7 @@ export default function TaskSidebar({
       path: paths.devices.getHref(),
       isActive: pageType === 'devices',
       buttonPageType: 'devices',
+      adminOnly: true,
     },
     {
       label: t('common:navigation.inbox'),
@@ -215,7 +221,8 @@ export default function TaskSidebar({
       buttonPageType: 'inbox',
       unreadCount: inboxUnreadCount,
     },
-  ]
+  ] as NavigationButton[]
+  const navigationButtons = allNavigationButtons.filter(btn => isAdmin || !btn.adminOnly)
 
   // New conversation - always navigate to chat page
   const handleNewAgentClick = () => {
@@ -542,7 +549,7 @@ export default function TaskSidebar({
                       className="object-contain"
                       priority
                     />
-                    <span className="text-base font-semibold text-text-primary">Wegent</span>
+                    <span className="text-base font-semibold text-text-primary">中大 Agent</span>
                   </div>
                   {onToggleCollapsed && (
                     <TooltipProvider>

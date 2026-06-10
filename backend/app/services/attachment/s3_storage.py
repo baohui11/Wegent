@@ -226,6 +226,19 @@ class S3StorageBackend(StorageBackend):
             logger.error("Unexpected error stat-ing object key=%s: %s", key, exc)
             return False
 
+    def get_size(self, key: str) -> Optional[int]:
+        """Return the object size via ``stat_object`` without downloading it."""
+        try:
+            return self.client.stat_object(self._bucket, key).size
+        except S3Error as exc:
+            if exc.code in {"NoSuchKey", "NoSuchObject"}:
+                return None
+            logger.error("Failed to stat object size key=%s: %s", key, exc)
+            return None
+        except Exception as exc:
+            logger.error("Unexpected error stat-ing object size key=%s: %s", key, exc)
+            return None
+
     def get_url(
         self, key: str, expires: int = 3600, *, public: bool = False
     ) -> Optional[str]:

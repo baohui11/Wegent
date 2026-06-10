@@ -79,6 +79,10 @@
       "new_password_placeholder": "请输入新密码（至少6位）",
       "email": "邮箱",
       "email_placeholder": "请输入邮箱（可选）",
+      "real_name": "姓名",
+      "real_name_placeholder": "请输入姓名（可选）",
+      "department_name": "部门名称",
+      "department_name_placeholder": "请输入部门名称（可选）",
       "role": "角色",
       "role_select": "请选择角色",
       "auth_source": "认证方式",
@@ -117,6 +121,20 @@
       "cannot_delete_self": "不能删除自己的账号",
       "cannot_disable_self": "不能禁用自己的账号",
       "cannot_demote_self": "当只有一个管理员时，不能降级自己的角色"
+    },
+    "bulk_import": {
+      "button": "批量导入",
+      "title": "批量导入用户",
+      "description": "上传 CSV 文件批量创建用户。必填列：user_name（用户名）、password（密码）；可选列：email（邮箱）、real_name（姓名）、department_name（部门名称）、role（角色，user 或 admin）。",
+      "download_template": "下载模板",
+      "select_file": "选择 CSV 文件",
+      "no_file": "请先选择 CSV 文件",
+      "import": "开始导入",
+      "importing": "导入中...",
+      "result_summary": "共 {{total}} 行，成功 {{created}} 个，失败 {{failed}} 个",
+      "failed_rows": "失败明细",
+      "row_label": "第 {{row}} 行",
+      "success": "批量导入完成"
     }
   },
   "public_models": {

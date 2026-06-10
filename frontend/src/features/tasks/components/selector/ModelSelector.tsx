@@ -89,6 +89,8 @@ export interface ModelSelectorProps {
   initialForceOverride?: boolean
   /** Model category type for filtering and display (default: 'llm') */
   modelCategoryType?: ModelCategoryType
+  /** Lock ClaudeCode model list to first message runtime family when task has messages */
+  hasMessages?: boolean
 }
 
 // ============================================================================
@@ -123,6 +125,7 @@ export default function ModelSelector({
   taskModelId,
   initialForceOverride,
   modelCategoryType = 'llm',
+  hasMessages = false,
 }: ModelSelectorProps) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -138,6 +141,7 @@ export default function ModelSelector({
     selectedTeam,
     disabled,
     modelCategoryType,
+    hasMessages,
   })
   const {
     selectedModel: internalSelectedModel,

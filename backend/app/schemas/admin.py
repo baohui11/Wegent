@@ -19,6 +19,8 @@ class AdminUserCreate(BaseModel):
     email: Optional[EmailStr] = Field(None, validate_default=True)
     role: Literal["admin", "user"] = "user"
     auth_source: Literal["password", "oidc"] = "password"
+    real_name: Optional[str] = Field(None, max_length=100)
+    department_name: Optional[str] = Field(None, max_length=200)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -36,6 +38,8 @@ class AdminUserUpdate(BaseModel):
     email: Optional[EmailStr] = Field(None, validate_default=True)
     role: Optional[Literal["admin", "user"]] = None
     is_active: Optional[bool] = None
+    real_name: Optional[str] = Field(None, max_length=100)
+    department_name: Optional[str] = Field(None, max_length=200)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -61,6 +65,8 @@ class AdminUserResponse(BaseModel):
     role: str
     auth_source: str
     is_active: bool
+    real_name: Optional[str] = None
+    department_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -141,6 +147,24 @@ class RoleUpdate(BaseModel):
     """Role update model"""
 
     role: Literal["admin", "user"]
+
+
+class BulkUserImportFailedItem(BaseModel):
+    """Single row failure from bulk user CSV import"""
+
+    row: int
+    user_name: Optional[str] = None
+    reason: str
+
+
+class BulkUserImportResponse(BaseModel):
+    """Result of bulk user CSV import"""
+
+    total_rows: int
+    created_count: int
+    failed_count: int
+    created: List[AdminUserResponse]
+    failed: List[BulkUserImportFailedItem]
 
 
 # System Config Schemas

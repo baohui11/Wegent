@@ -15,6 +15,7 @@ import { getToken, userApis } from '@/apis/user'
 import { LogIn, BookOpen, Clock, Send, AlertCircle } from 'lucide-react'
 import { useTheme } from '@/features/theme/ThemeProvider'
 import TopNavigation from '@/features/layout/TopNavigation'
+import { UserIdentity } from '@/components/common/UserIdentity'
 import { useTranslation } from '@/hooks/useTranslation'
 import { Spinner } from '@/components/ui/spinner'
 import type { User } from '@/types/api'
@@ -171,8 +172,7 @@ function SharedKnowledgeContent() {
   if (isLoading) {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <Spinner className="w-12 h-12 mx-auto mb-4" />
@@ -207,8 +207,7 @@ function SharedKnowledgeContent() {
 
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
             {/* Error Icon */}
@@ -247,8 +246,7 @@ function SharedKnowledgeContent() {
   if (kbData.is_expired) {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
             <div className="flex justify-center mb-6">
@@ -282,8 +280,7 @@ function SharedKnowledgeContent() {
   if (applyStatus === 'pending') {
     return (
       <div className="flex flex-col smart-h-screen bg-base text-text-primary box-border">
-        <TopNavigation variant="standalone" showLogo>
-        </TopNavigation>
+        <TopNavigation variant="standalone" showLogo></TopNavigation>
         <div className="flex-1 flex items-center justify-center p-4">
           <Card padding="lg" className="max-w-md w-full">
             <div className="text-center space-y-4">
@@ -342,7 +339,7 @@ function SharedKnowledgeContent() {
         <TopNavigation variant="standalone" showLogo>
           {isLoggedIn && currentUser ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-text-primary">{currentUser.user_name}</span>
+              <UserIdentity user={currentUser} />
             </div>
           ) : (
             <Button

@@ -6,6 +6,8 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
+import { UserIdentity } from '@/components/common/UserIdentity'
+import { getUserDisplayName } from '@/utils/userDisplay'
 import Modal from '@/features/common/Modal'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -63,7 +65,7 @@ const GROUP_MEMBER_ERROR_MESSAGE_KEYS: Record<string, string> = {
 }
 
 function getMemberDisplayName(member: GroupMember): string {
-  return member.user_name?.trim() || `User ${member.user_id}`
+  return getUserDisplayName(member, `User ${member.user_id}`)
 }
 
 function getGroupMemberErrorMessage(
@@ -558,7 +560,7 @@ export function GroupMembersDialog({
                       }
                     >
                       <td className="px-4 py-3 text-sm font-medium text-text-primary">
-                        {getMemberDisplayName(member)}
+                        <UserIdentity user={member} fallback={`User ${member.user_id}`} />
                         {isMe && (
                           <Badge variant="info" className="ml-2">
                             {t('groups:groupMembers.you')}
@@ -609,7 +611,17 @@ export function GroupMembersDialog({
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
-                        {member.invited_by_user_name || '-'}
+                        {member.invited_by_user_name ? (
+                          <UserIdentity
+                            user={{
+                              user_name: member.invited_by_user_name,
+                              real_name: member.invited_by_real_name,
+                              department_name: member.invited_by_department_name,
+                            }}
+                          />
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary">
                         {new Date(member.created_at).toLocaleDateString()}

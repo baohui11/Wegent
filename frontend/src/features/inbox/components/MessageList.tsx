@@ -5,6 +5,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import { UserIdentity } from '@/components/common/UserIdentity'
 import {
   CheckCircle2,
   Circle,
@@ -531,7 +532,11 @@ export function MessageList({
                   {/* Message content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{message.sender.userName}</span>
+                      <UserIdentity
+                        user={message.sender}
+                        fallback={message.sender.userName}
+                        compact
+                      />
                       <span className="text-xs text-text-muted">
                         {formatUTCDate(message.createdAt)}
                       </span>

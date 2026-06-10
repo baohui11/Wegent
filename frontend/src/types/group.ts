@@ -53,9 +53,13 @@ export interface GroupMember {
   group_name: string
   user_id: number
   user_name?: string
+  real_name?: string | null
+  department_name?: string | null
   role: GroupRole
   invited_by_user_id: number | null
   invited_by_user_name?: string
+  invited_by_real_name?: string | null
+  invited_by_department_name?: string | null
   is_active: boolean
   created_at: string
   updated_at: string

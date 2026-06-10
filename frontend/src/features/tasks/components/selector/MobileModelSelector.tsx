@@ -52,6 +52,7 @@ interface MobileModelSelectorProps {
   teamId?: number | null
   taskId?: number | null
   taskModelId?: string | null
+  hasMessages?: boolean
 }
 
 export default function MobileModelSelector({
@@ -65,6 +66,7 @@ export default function MobileModelSelector({
   teamId,
   taskId,
   taskModelId,
+  hasMessages = false,
 }: MobileModelSelectorProps) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -75,6 +77,7 @@ export default function MobileModelSelector({
     taskModelId,
     selectedTeam,
     disabled,
+    hasMessages,
   })
 
   useEffect(() => {

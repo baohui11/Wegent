@@ -399,6 +399,8 @@ export interface ChatMessagePayload {
   sender: {
     user_id: number
     user_name: string
+    real_name?: string | null
+    department_name?: string | null
     avatar?: string
   }
   created_at: string

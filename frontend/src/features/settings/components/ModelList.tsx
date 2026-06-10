@@ -399,6 +399,7 @@ const ModelList: React.FC<ModelListProps> = ({
 
   const createAction = hasResourceCreateTargets({ scope, groupName, sourceFilter, groups }) ? (
     <ResourceCreateButton
+      adminOnly
       label={t('common:models.create')}
       scope={scope}
       groupName={groupName}

@@ -47,8 +47,7 @@ import type {
   SubscriptionVisibility,
 } from '@/types/subscription'
 import { toast } from 'sonner'
-import { getCompatibleProviderFromAgentType } from '@/utils/modelCompatibility'
-import type { CompatibleProvider } from '@/utils/modelCompatibility'
+import { isModelCompatibleWithAgentType } from '@/utils/modelCompatibility'
 import { useSocket } from '@/contexts/SocketContext'
 import {
   SendAreaSection,
@@ -462,6 +461,7 @@ export function SubscriptionForm({
           type: m.type,
           modelGroup: m.modelGroup,
           modelSubGroup: m.modelSubGroup,
+          config: m.config,
         }))
         setModels(modelList)
       } catch (error) {
@@ -563,7 +563,6 @@ export function SubscriptionForm({
     })
   })()
 
-  const compatibleProvider = getCompatibleProviderFromAgentType(selectedTeam?.agent_type)
   const selectableDevices = sortDevicesForSelection(availableDevices)
   const hasSelectableDevices = selectableDevices.length > 0
 
@@ -667,13 +666,17 @@ export function SubscriptionForm({
 
   // Clear incompatible model selection when team changes
   useEffect(() => {
-    if (!selectedModel || !compatibleProvider) return
-    const matchedModel = models.find(model => model.name === selectedModel.name)
-    const resolvedProvider = matchedModel?.provider || selectedModel.provider
-    if (resolvedProvider && !compatibleProvider.includes(resolvedProvider as CompatibleProvider)) {
+    if (!selectedModel) return
+    const matchedModel = models.find(model => model.name === selectedModel.name) ?? selectedModel
+    if (
+      !isModelCompatibleWithAgentType(
+        { provider: matchedModel.provider ?? '', config: matchedModel.config },
+        selectedTeam?.agent_type
+      )
+    ) {
       setSelectedModel(null)
     }
-  }, [compatibleProvider, models, selectedModel])
+  }, [models, selectedModel, selectedTeam?.agent_type])
 
   // Handle team change - reset repo/branch when team changes
   const handleTeamChange = useCallback((newTeamId: number | null) => {
@@ -1009,7 +1012,6 @@ export function SubscriptionForm({
               models={models}
               modelsLoading={modelsLoading}
               modelRequired={modelRequired}
-              compatibleProvider={compatibleProvider ?? undefined}
               skillRefs={skillRefs}
               setSkillRefs={setSkillRefs}
               availableSkills={availableSkills}

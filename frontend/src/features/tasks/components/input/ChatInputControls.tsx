@@ -635,6 +635,7 @@ export function ChatInputControls({
                 teamId={teamId}
                 taskId={taskId}
                 taskModelId={taskModelId}
+                hasMessages={hasMessages}
               />
             )}
           </div>

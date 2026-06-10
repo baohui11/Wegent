@@ -217,6 +217,8 @@ class SubtaskInDB(SubtaskBase):
     sender_type: Optional[SenderType] = None  # USER or TEAM
     sender_user_id: Optional[int] = None  # User ID when sender_type=USER
     sender_user_name: Optional[str] = None  # User name for display
+    sender_real_name: Optional[str] = None
+    sender_department_name: Optional[str] = None
     reply_to_subtask_id: Optional[int] = None  # Quoted message ID
 
     @field_validator("sender_type", mode="before")

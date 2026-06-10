@@ -279,6 +279,7 @@ const RetrieverList: React.FC<RetrieverListProps> = ({
 
   const createAction = hasResourceCreateTargets({ scope, groupName, sourceFilter, groups }) ? (
     <ResourceCreateButton
+      adminOnly
       label={t('common:retrievers.create')}
       scope={scope}
       groupName={groupName}

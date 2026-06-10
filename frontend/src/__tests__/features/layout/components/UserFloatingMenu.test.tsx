@@ -40,14 +40,6 @@ jest.mock('@/hooks/useTranslation', () => ({
   }),
 }))
 
-jest.mock('@/features/layout/DocsButton', () => ({
-  DocsButton: ({ className = '', onClick }: { className?: string; onClick?: () => void }) => (
-    <button type="button" className={className} onClick={onClick}>
-      docs
-    </button>
-  ),
-}))
-
 jest.mock('@/features/theme/ThemeToggle', () => ({
   ThemeToggle: ({ className = '', onToggle }: { className?: string; onToggle?: () => void }) => (
     <button type="button" className={className} onClick={onToggle}>

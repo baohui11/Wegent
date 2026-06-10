@@ -165,19 +165,29 @@ class SubtaskService(BaseService[Subtask, SubtaskCreate, SubtaskUpdate]):
                 sender_ids.add(subtask.sender_user_id)
 
         # Batch query users
-        user_name_map = {}
+        user_profile_map = {}
         if sender_ids:
             users = db.query(User).filter(User.id.in_(sender_ids)).all()
-            user_name_map = {user.id: user.user_name for user in users}
+            user_profile_map = {
+                user.id: {
+                    "user_name": user.user_name,
+                    "real_name": user.real_name,
+                    "department_name": user.department_name,
+                }
+                for user in users
+            }
 
-        # Set sender_user_name for each subtask
+        # Set sender profile fields for each subtask
         for subtask in subtasks:
             if (
                 subtask.sender_user_id
                 and subtask.sender_user_id > 0
-                and subtask.sender_user_id in user_name_map
-            ):  # Check > 0
-                subtask.sender_user_name = user_name_map[subtask.sender_user_id]
+                and subtask.sender_user_id in user_profile_map
+            ):
+                profile = user_profile_map[subtask.sender_user_id]
+                subtask.sender_user_name = profile["user_name"]
+                subtask.sender_real_name = profile["real_name"]
+                subtask.sender_department_name = profile["department_name"]
 
         # Restore the original order (IN clause doesn't preserve order)
         id_to_subtask = {s.id: s for s in subtasks}

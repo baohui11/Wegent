@@ -37,6 +37,8 @@ export interface UpdateUserRequest {
   is_active?: boolean
   git_info?: GitInfo[]
   preferences?: UserPreferences
+  real_name?: string | null
+  department_name?: string | null
 }
 
 export interface SearchUsersResponse {

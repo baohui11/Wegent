@@ -24,6 +24,7 @@ import {
   KeyIcon,
   NoSymbolIcon,
   CheckCircleIcon,
+  ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
 import { Loader2 } from 'lucide-react'
@@ -47,8 +48,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { adminApis, AdminUser, AdminUserCreate, AdminUserUpdate, UserRole } from '@/apis/admin'
+import {
+  adminApis,
+  AdminUser,
+  AdminUserCreate,
+  AdminUserUpdate,
+  BulkUserImportResponse,
+  UserRole,
+} from '@/apis/admin'
 import UnifiedAddButton from '@/components/common/UnifiedAddButton'
+import { UserIdentity } from '@/components/common/UserIdentity'
+import { getUserDisplayName } from '@/utils/userDisplay'
+
+const DEFAULT_USER_FORM: AdminUserCreate = {
+  user_name: '',
+  password: '',
+  email: '',
+  role: 'user',
+  auth_source: 'password',
+  real_name: '',
+  department_name: '',
+}
 
 const UserList: React.FC = () => {
   const { t } = useTranslation()
@@ -76,18 +96,15 @@ const UserList: React.FC = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false)
+  const [isBulkImportDialogOpen, setIsBulkImportDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
 
   // Form states
-  const [formData, setFormData] = useState<AdminUserCreate>({
-    user_name: '',
-    password: '',
-    email: '',
-    role: 'user',
-    auth_source: 'password',
-  })
+  const [formData, setFormData] = useState<AdminUserCreate>({ ...DEFAULT_USER_FORM })
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importResult, setImportResult] = useState<BulkUserImportResponse | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -136,7 +153,13 @@ const UserList: React.FC = () => {
 
     setSaving(true)
     try {
-      await adminApis.createUser(formData)
+      await adminApis.createUser({
+        ...formData,
+        user_name: formData.user_name.trim(),
+        email: formData.email?.trim() || undefined,
+        real_name: formData.real_name?.trim() || null,
+        department_name: formData.department_name?.trim() || null,
+      })
       toast({ title: t('admin:users.success.created') })
       setIsCreateDialogOpen(false)
       resetForm()
@@ -166,6 +189,12 @@ const UserList: React.FC = () => {
       }
       if (formData.role !== selectedUser.role) {
         updateData.role = formData.role as UserRole
+      }
+      if ((formData.real_name || '') !== (selectedUser.real_name || '')) {
+        updateData.real_name = formData.real_name?.trim() || null
+      }
+      if ((formData.department_name || '') !== (selectedUser.department_name || '')) {
+        updateData.department_name = formData.department_name?.trim() || null
       }
 
       await adminApis.updateUser(selectedUser.id, updateData)
@@ -246,25 +275,69 @@ const UserList: React.FC = () => {
     }
   }
 
+  const handleBulkImport = async () => {
+    if (!importFile) {
+      toast({
+        variant: 'destructive',
+        title: t('admin:users.bulk_import.no_file'),
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await adminApis.bulkImportUsers(importFile)
+      setImportResult(result)
+      toast({ title: t('admin:users.bulk_import.success') })
+      if (result.created_count > 0) {
+        fetchUsers()
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: t('admin:users.errors.create_failed'),
+        description: (error as Error).message,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const downloadImportTemplate = () => {
+    const template =
+      'user_name,password,email,real_name,department_name,role\n' +
+      'example,password123,example@example.com,Example User,Example Dept,user\n'
+    const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'users_import_template.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const openBulkImportDialog = () => {
+    setImportFile(null)
+    setImportResult(null)
+    setIsBulkImportDialogOpen(true)
+  }
+
   const resetForm = () => {
-    setFormData({
-      user_name: '',
-      password: '',
-      email: '',
-      role: 'user',
-      auth_source: 'password',
-    })
+    setFormData({ ...DEFAULT_USER_FORM })
     setSelectedUser(null)
   }
 
   const openEditDialog = (user: AdminUser) => {
     setSelectedUser(user)
     setFormData({
+      ...DEFAULT_USER_FORM,
       user_name: user.user_name,
       email: user.email || '',
       role: user.role,
       auth_source:
         user.auth_source === 'unknown' ? 'password' : (user.auth_source as 'password' | 'oidc'),
+      real_name: user.real_name || '',
+      department_name: user.department_name || '',
     })
     setIsEditDialogOpen(true)
   }
@@ -319,6 +392,15 @@ const UserList: React.FC = () => {
             />
             {t('admin:users.show_inactive')}
           </label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openBulkImportDialog}
+            data-testid="bulk-import-users-button"
+          >
+            <ArrowUpTrayIcon className="w-4 h-4 mr-1" />
+            {t('admin:users.bulk_import.button')}
+          </Button>
         </div>
       </div>
 
@@ -352,9 +434,11 @@ const UserList: React.FC = () => {
                     <UserIcon className="w-5 h-5 text-primary flex-shrink-0" />
                     <div className="flex flex-col justify-center min-w-0 flex-1">
                       <div className="flex items-center space-x-2 min-w-0">
-                        <h3 className="text-base font-medium text-text-primary truncate">
-                          {user.user_name}
-                        </h3>
+                        <UserIdentity
+                          user={user}
+                          nameClassName="text-base font-medium text-text-primary"
+                          departmentClassName="text-xs text-text-muted"
+                        />
                         {getRoleTag(user.role)}
                         {getStatusTag(user.is_active)}
                       </div>
@@ -479,7 +563,7 @@ const UserList: React.FC = () => {
               <Label htmlFor="username">{t('admin:users.form.username')} *</Label>
               <Input
                 id="username"
-                value={formData.user_name}
+                value={formData.user_name ?? ''}
                 onChange={e => setFormData({ ...formData, user_name: e.target.value })}
                 placeholder={t('admin:users.form.username_placeholder')}
               />
@@ -507,7 +591,7 @@ const UserList: React.FC = () => {
                 <Input
                   id="password"
                   type="password"
-                  value={formData.password}
+                  value={formData.password ?? ''}
                   onChange={e => setFormData({ ...formData, password: e.target.value })}
                   placeholder={t('admin:users.form.password_placeholder')}
                 />
@@ -518,9 +602,27 @@ const UserList: React.FC = () => {
               <Input
                 id="email"
                 type="email"
-                value={formData.email}
+                value={formData.email ?? ''}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
                 placeholder={t('admin:users.form.email_placeholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="real_name">{t('admin:users.form.real_name')}</Label>
+              <Input
+                id="real_name"
+                value={formData.real_name || ''}
+                onChange={e => setFormData({ ...formData, real_name: e.target.value })}
+                placeholder={t('admin:users.form.real_name_placeholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="department_name">{t('admin:users.form.department_name')}</Label>
+              <Input
+                id="department_name"
+                value={formData.department_name || ''}
+                onChange={e => setFormData({ ...formData, department_name: e.target.value })}
+                placeholder={t('admin:users.form.department_name_placeholder')}
               />
             </div>
             <div className="space-y-2">
@@ -562,7 +664,7 @@ const UserList: React.FC = () => {
               <Label htmlFor="edit-username">{t('admin:users.form.username')}</Label>
               <Input
                 id="edit-username"
-                value={formData.user_name}
+                value={formData.user_name ?? ''}
                 onChange={e => setFormData({ ...formData, user_name: e.target.value })}
                 placeholder={t('admin:users.form.username_placeholder')}
               />
@@ -572,9 +674,27 @@ const UserList: React.FC = () => {
               <Input
                 id="edit-email"
                 type="email"
-                value={formData.email}
+                value={formData.email ?? ''}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
                 placeholder={t('admin:users.form.email_placeholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-real_name">{t('admin:users.form.real_name')}</Label>
+              <Input
+                id="edit-real_name"
+                value={formData.real_name || ''}
+                onChange={e => setFormData({ ...formData, real_name: e.target.value })}
+                placeholder={t('admin:users.form.real_name_placeholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-department_name">{t('admin:users.form.department_name')}</Label>
+              <Input
+                id="edit-department_name"
+                value={formData.department_name || ''}
+                onChange={e => setFormData({ ...formData, department_name: e.target.value })}
+                placeholder={t('admin:users.form.department_name_placeholder')}
               />
             </div>
             <div className="space-y-2">
@@ -611,7 +731,9 @@ const UserList: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{t('admin:users.confirm.reset_password_title')}</DialogTitle>
             <DialogDescription>
-              {t('admin:users.confirm.reset_password_message', { name: selectedUser?.user_name })}
+              {t('admin:users.confirm.reset_password_message', {
+                name: getUserDisplayName(selectedUser ?? undefined, selectedUser?.user_name || ''),
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -638,13 +760,91 @@ const UserList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk Import Dialog */}
+      <Dialog open={isBulkImportDialogOpen} onOpenChange={setIsBulkImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('admin:users.bulk_import.title')}</DialogTitle>
+            <DialogDescription>{t('admin:users.bulk_import.description')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadImportTemplate}
+                data-testid="download-import-template-button"
+              >
+                {t('admin:users.bulk_import.download_template')}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-import-file">{t('admin:users.bulk_import.select_file')}</Label>
+              <Input
+                id="bulk-import-file"
+                type="file"
+                accept=".csv,text/csv"
+                data-testid="bulk-import-file-input"
+                onChange={e => {
+                  setImportFile(e.target.files?.[0] ?? null)
+                  setImportResult(null)
+                }}
+              />
+              {importFile && <p className="text-xs text-text-muted">{importFile.name}</p>}
+            </div>
+            {importResult && (
+              <div className="space-y-2 rounded-md border border-border p-3 bg-surface">
+                <p className="text-sm text-text-primary">
+                  {t('admin:users.bulk_import.result_summary', {
+                    total: importResult.total_rows,
+                    created: importResult.created_count,
+                    failed: importResult.failed_count,
+                  })}
+                </p>
+                {importResult.failed.length > 0 && (
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    <p className="text-xs font-medium text-text-secondary">
+                      {t('admin:users.bulk_import.failed_rows')}
+                    </p>
+                    {importResult.failed.map((item, index) => (
+                      <p key={`${item.row}-${index}`} className="text-xs text-error">
+                        {t('admin:users.bulk_import.row_label', { row: item.row })}
+                        {item.user_name ? `: ${item.user_name}` : ''} — {item.reason}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkImportDialogOpen(false)}>
+              {t('admin:common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleBulkImport}
+              disabled={saving || !importFile}
+              data-testid="bulk-import-submit-button"
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving
+                ? t('admin:users.bulk_import.importing')
+                : t('admin:users.bulk_import.import')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('admin:users.confirm.delete_title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('admin:users.confirm.delete_message', { name: selectedUser?.user_name })}
+              {t('admin:users.confirm.delete_message', {
+                name: getUserDisplayName(selectedUser ?? undefined, selectedUser?.user_name || ''),
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -14,6 +14,7 @@ import { getToken, userApis } from '@/apis/user'
 import { LogIn } from 'lucide-react'
 import { useTheme } from '@/features/theme/ThemeProvider'
 import TopNavigation from '@/features/layout/TopNavigation'
+import { UserIdentity } from '@/components/common/UserIdentity'
 import type { Message } from '@/features/tasks/components/message'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { User, SubtaskContextBrief } from '@/types/api'
@@ -295,7 +296,7 @@ function SharedTaskContent() {
         <TopNavigation activePage="chat" variant="standalone" showLogo>
           {isLoggedIn && currentUser ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-text-primary">{currentUser.user_name}</span>
+              <UserIdentity user={currentUser} />
             </div>
           ) : (
             <Button

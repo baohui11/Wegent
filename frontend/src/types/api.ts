@@ -28,6 +28,8 @@ export interface SearchUser {
   id: number
   user_name: string
   email?: string
+  real_name?: string
+  department_name?: string
 }
 
 export interface User {
@@ -37,6 +39,8 @@ export interface User {
   is_active: boolean
   role?: UserRole
   auth_source?: AuthSource
+  real_name?: string | null
+  department_name?: string | null
   created_at: string
   updated_at: string
   git_info: GitInfo[]
@@ -177,6 +181,8 @@ export interface Team {
   default_for_modes?: string[]
   user?: {
     user_name: string
+    real_name?: string | null
+    department_name?: string | null
   }
 }
 
@@ -408,6 +414,8 @@ export interface TaskDetailSubtask {
   sender_type?: 'USER' | 'TEAM' | 'SYSTEM'
   sender_user_id?: number
   sender_user_name?: string
+  sender_real_name?: string | null
+  sender_department_name?: string | null
   reply_to_subtask_id?: number
 }
 

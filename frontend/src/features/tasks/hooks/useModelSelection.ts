@@ -26,7 +26,13 @@ import {
   getModelTypeFromConfig,
   getAllowedModelsFromConfig,
 } from '@/features/settings/services/bots'
-import { getCompatibleProviderFromAgentType } from '@/utils/modelCompatibility'
+import {
+  getCompatibleProviderFromAgentType,
+  getClaudeCodeModelRuntimeFamily,
+  isClaudeCodeModelRuntimeFamily,
+  isModelCompatibleWithAgentType,
+  shouldLockClaudeCodeModelRuntimeFamily,
+} from '@/utils/modelCompatibility'
 import type { CompatibleProvider } from '@/utils/modelCompatibility'
 import {
   saveGlobalModelPreference,
@@ -89,6 +95,8 @@ export interface UseModelSelectionOptions {
   disabled?: boolean
   /** Model category type to filter models (default: 'llm') */
   modelCategoryType?: ModelCategoryType
+  /** When true, ClaudeCode tasks lock model list to the runtime family used on first message */
+  hasMessages?: boolean
 }
 
 /** Return type for useModelSelection hook */
@@ -166,6 +174,29 @@ function modelMatchesConfiguredRef(
   return true
 }
 
+function resolveClaudeCodeRuntimeLockModel(
+  models: Model[],
+  selectedModel: Model | null,
+  taskModelId: string | null | undefined,
+  boundDefaultModel: Model | null
+): Model | null {
+  if (selectedModel && selectedModel.name !== DEFAULT_MODEL_NAME) {
+    const matched = models.find(model => {
+      if (selectedModel.type && model.type !== selectedModel.type) return false
+      return model.name === selectedModel.name || model.displayName === selectedModel.name
+    })
+    return matched ?? selectedModel
+  }
+
+  if (taskModelId && taskModelId !== DEFAULT_MODEL_NAME) {
+    return (
+      models.find(model => model.name === taskModelId || model.displayName === taskModelId) ?? null
+    )
+  }
+
+  return boundDefaultModel
+}
+
 /** Check if all bots in a team have predefined models */
 export function allBotsHavePredefinedModel(team: TeamWithBotDetails | null): boolean {
   if (!team || !team.bots || team.bots.length === 0) {
@@ -190,6 +221,7 @@ export function useModelSelection({
   taskModelId,
   selectedTeam,
   modelCategoryType = 'llm',
+  hasMessages = false,
 }: UseModelSelectionOptions): UseModelSelectionReturn {
   const { t } = useTranslation()
 
@@ -261,25 +293,31 @@ export function useModelSelection({
     return configuredModels[0] ?? null
   }, [selectedTeam?.bots, models])
 
-  /** Check if there are any advanced models (after provider filtering) */
-  const hasAdvancedModels = useMemo(() => {
-    let result = models
-    if (compatibleProvider && compatibleProvider.length > 0) {
-      result = result.filter(model =>
-        compatibleProvider.includes(model.provider as CompatibleProvider)
-      )
-    }
-    return result.some(model => model.isAdvanced === true)
-  }, [models, compatibleProvider])
+  const agentType = selectedTeam?.agent_type
 
-  /** Filter models by compatible provider, advanced flag, allowed_models whitelist, and sort by display name */
+  /** Check if there are any advanced models (after agent compatibility filtering) */
+  const hasAdvancedModels = useMemo(() => {
+    const result = models.filter(model => isModelCompatibleWithAgentType(model, agentType))
+    return result.some(model => model.isAdvanced === true)
+  }, [models, agentType])
+
+  /** Filter models by agent compatibility, runtime lock, advanced flag, allowed_models whitelist */
   const filteredModels = useMemo(() => {
-    let result = models
-    if (compatibleProvider && compatibleProvider.length > 0) {
-      result = result.filter(model =>
-        compatibleProvider.includes(model.provider as CompatibleProvider)
+    let result = models.filter(model => isModelCompatibleWithAgentType(model, agentType))
+
+    if (shouldLockClaudeCodeModelRuntimeFamily(agentType, hasMessages)) {
+      const lockModel = resolveClaudeCodeRuntimeLockModel(
+        models,
+        selectedModel,
+        taskModelId,
+        boundDefaultModel
       )
+      const lockedFamily = getClaudeCodeModelRuntimeFamily(lockModel)
+      if (lockedFamily) {
+        result = result.filter(model => isClaudeCodeModelRuntimeFamily(model, lockedFamily))
+      }
     }
+
     if (!showAdvancedModels) {
       result = result.filter(model => !model.isAdvanced)
     }
@@ -293,7 +331,16 @@ export function useModelSelection({
       const displayB = getModelDisplayTextHelper(b).toLowerCase()
       return displayA.localeCompare(displayB)
     })
-  }, [models, compatibleProvider, showAdvancedModels, allowedModels])
+  }, [
+    models,
+    agentType,
+    hasMessages,
+    selectedModel,
+    taskModelId,
+    boundDefaultModel,
+    showAdvancedModels,
+    allowedModels,
+  ])
 
   /** Check if model selection is required */
   const isModelRequired = !showDefaultOption && !selectedModel

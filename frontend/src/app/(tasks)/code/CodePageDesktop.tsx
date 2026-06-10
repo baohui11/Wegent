@@ -15,12 +15,12 @@ import {
   CollapsedSidebarButtons,
 } from '@/features/tasks/components/sidebar'
 import WorkbenchToggle from '@/features/layout/WorkbenchToggle'
-import { OpenMenu } from '@/features/tasks/components/input'
+// import { OpenMenu } from '@/features/tasks/components/input'
 import { Team, WorkbenchData } from '@/types/api'
 import type { MessageBlock } from '@/features/tasks/components/message/thinking/types'
 import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import { saveLastTab } from '@/utils/userPreferences'
-import { calculateOpenLinks } from '@/utils/openLinks'
+// import { calculateOpenLinks } from '@/utils/openLinks'
 import { useUser } from '@/features/common/UserContext'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
 import { ChatArea } from '@/features/tasks/components/chat'
@@ -130,10 +130,10 @@ export function CodePageDesktop() {
     }
   }, [hasTaskId])
 
-  // Calculate open links from task detail
-  const openLinks = useMemo(() => {
-    return calculateOpenLinks(selectedTaskDetail)
-  }, [selectedTaskDetail])
+  // Calculate open links from task detail (OpenMenu disabled)
+  // const openLinks = useMemo(() => {
+  //   return calculateOpenLinks(selectedTaskDetail)
+  // }, [selectedTaskDetail])
 
   const taskState =
     sessionTaskState && sessionTaskState.taskId === selectedTaskDetail?.id ? sessionTaskState : null
@@ -244,7 +244,7 @@ export function CodePageDesktop() {
             />
           )}
           {shareButton}
-          {hasTaskId && <OpenMenu openLinks={openLinks} />}
+          {/* {hasTaskId && <OpenMenu openLinks={openLinks} />} */}
           {hasTaskId && (
             <WorkbenchToggle
               isOpen={isWorkbenchOpen}

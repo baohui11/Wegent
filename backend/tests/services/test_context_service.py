@@ -163,7 +163,7 @@ class TestContextServiceAttachmentCopy:
         assert copied.type_data["quick_launch_function_id"] == "create_ppt"
         assert copied.type_data["quick_launch_preset_id"] == "roadmap"
         assert copied.type_data["original_filename"] == "template.pdf"
-        assert copied.type_data["storage_key"].endswith("_7_501")
+        assert copied.type_data["storage_key"].endswith("_7_501.pdf")
         assert storage.saved[0][1] == b"template-bytes"
         db.commit.assert_called_once()
         db.refresh.assert_called_once_with(copied)
@@ -1448,16 +1448,21 @@ class TestContextServiceOverwrite:
                         binary_data=new_binary_data,
                     )
 
+        # Legacy keys without an extension suffix are upgraded in-place by
+        # resolve_attachment_storage_key so downstream systems can infer the
+        # file type from the object key.
+        expected_key = f"{storage_key}.txt"
+
         assert truncation_info is None
         assert updated_context.id == context.id
         assert updated_context.status == ContextStatus.READY.value
         assert updated_context.name == "new.txt"
         assert updated_context.original_filename == "new.txt"
         assert updated_context.file_size == len(new_binary_data)
-        assert updated_context.storage_key == storage_key
+        assert updated_context.storage_key == expected_key
         mock_backend.save.assert_called_once()
         saved_key, saved_data, saved_metadata = mock_backend.save.call_args.args
-        assert saved_key == storage_key
+        assert saved_key == expected_key
         assert saved_data == new_binary_data
         assert saved_metadata["file_size"] == len(new_binary_data)
 
@@ -1925,6 +1930,57 @@ class TestContextServiceDirectUpload:
 
         assert context.status == ContextStatus.FAILED.value
         assert "not found" in (context.error_message or "")
+        mock_db.commit.assert_called_once()
+
+    def test_finalize_direct_upload_rejects_oversized_object(self):
+        from app.models.subtask_context import (
+            ContextStatus,
+            ContextType,
+            SubtaskContext,
+        )
+        from app.services.attachment.parser import DocumentParser
+        from app.services.attachment.storage_backend import StorageError
+        from app.services.context.context_service import context_service as cs
+
+        cs_module = self._cs_module()
+
+        context = SubtaskContext(
+            subtask_id=0,
+            user_id=1,
+            context_type=ContextType.ATTACHMENT.value,
+            name="huge.pdf",
+            status=ContextStatus.UPLOADING.value,
+            type_data={
+                "storage_backend": "s3",
+                "storage_key": "attachments/huge",
+                "file_extension": ".pdf",
+            },
+        )
+        context.id = 101
+
+        mock_db = Mock()
+        mock_backend = Mock()
+        mock_backend.exists.return_value = True
+        # Report a size larger than the allowed maximum.
+        mock_backend.get_size.return_value = DocumentParser.get_max_file_size() + 1
+
+        with (
+            patch.object(cs, "get_context_optional", return_value=context),
+            patch.object(cs_module, "get_storage_backend", return_value=mock_backend),
+        ):
+            with pytest.raises(StorageError):
+                cs.finalize_direct_upload(
+                    db=mock_db,
+                    user_id=1,
+                    context_id=101,
+                )
+
+        # The oversized object must be deleted and the row marked FAILED
+        # without ever reading the bytes into memory.
+        mock_backend.delete.assert_called_once_with("attachments/huge")
+        mock_backend.get.assert_not_called()
+        assert context.status == ContextStatus.FAILED.value
+        assert "maximum file size" in (context.error_message or "")
         mock_db.commit.assert_called_once()
 
     def test_finalize_direct_upload_is_idempotent_for_ready_rows(self):

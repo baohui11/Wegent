@@ -60,6 +60,7 @@ import { ShareTokenProvider } from '@/contexts/ShareTokenContext'
 import { SmartLink, SmartImage, SmartTextLine } from '@/components/common/SmartUrlRenderer'
 import { formatDateTime } from '@/utils/dateTime'
 import { getTeamDisplayName } from '@/utils/team'
+import { UserIdentity } from '@/components/common/UserIdentity'
 import { ErrorCard } from './ErrorCard'
 export interface Message {
   type: 'user' | 'ai'
@@ -120,6 +121,8 @@ export interface Message {
   isWaiting?: boolean
   /** Group chat: sender user name (for USER type messages) */
   senderUserName?: string
+  senderRealName?: string | null
+  senderDepartmentName?: string | null
   /** Group chat: sender user ID (for determining message alignment) */
   senderUserId?: number
   /** Whether this is a group chat or chat agent type (to show sender names) */
@@ -1404,7 +1407,16 @@ const MessageBubble = memo(
               {isUserTypeMessage && !shouldAlignRight && msg.shouldShowSender && (
                 <div className="flex items-center gap-2 mb-2 text-xs opacity-80">
                   <User className="w-4 h-4" />
-                  <span className="font-semibold">{msg.senderUserName || 'Unknown User'}</span>
+                  <UserIdentity
+                    user={{
+                      user_name: msg.senderUserName,
+                      real_name: msg.senderRealName,
+                      department_name: msg.senderDepartmentName,
+                    }}
+                    fallback="Unknown User"
+                    nameClassName="font-semibold"
+                    departmentClassName="text-xs font-normal text-text-muted"
+                  />
                   {timestampLabel && <span>{timestampLabel}</span>}
                 </div>
               )}

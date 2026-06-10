@@ -16,6 +16,7 @@ import { Tag } from '@/components/ui/tag'
 import type { Team } from '@/types/api'
 import SystemTeamTag from './SystemTeamTag'
 import { useTeamFavorites } from './useTeamFavorites'
+import { getUserDisplayName } from '@/utils/userDisplay'
 
 interface MobileTeamSelectorProps {
   selectedTeam: Team | null
@@ -212,7 +213,7 @@ export default function MobileTeamSelector({
                         </div>
                         {isSharedTeam && (
                           <div className="text-[13px] text-[#8e8e93] mt-0.5 truncate">
-                            {t('common:teams.shared_by', { author: team.user?.user_name })}
+                            {t('common:teams.shared_by', { author: getUserDisplayName(team.user) })}
                           </div>
                         )}
                       </div>

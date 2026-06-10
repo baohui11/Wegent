@@ -30,6 +30,10 @@
   },
   "account": {
     "profile": "Profile",
+    "real_name": "Name",
+    "department_name": "Department",
+    "profile_save_success": "Profile saved",
+    "profile_save_failed": "Failed to save profile",
     "email": "Email",
     "password": "Password",
     "change_password": "Change Password",

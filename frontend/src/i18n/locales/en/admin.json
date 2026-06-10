@@ -79,6 +79,10 @@
       "new_password_placeholder": "Enter new password (min 6 characters)",
       "email": "Email",
       "email_placeholder": "Enter email (optional)",
+      "real_name": "Name",
+      "real_name_placeholder": "Enter name (optional)",
+      "department_name": "Department",
+      "department_name_placeholder": "Enter department (optional)",
       "role": "Role",
       "role_select": "Select role",
       "auth_source": "Authentication Method",
@@ -117,6 +121,20 @@
       "cannot_delete_self": "Cannot delete your own account",
       "cannot_disable_self": "Cannot disable your own account",
       "cannot_demote_self": "Cannot demote yourself when you are the only admin"
+    },
+    "bulk_import": {
+      "button": "Bulk Import",
+      "title": "Bulk Import Users",
+      "description": "Upload a CSV file to create users in bulk. Required columns: user_name, password. Optional: email, real_name, department_name, role (user or admin).",
+      "download_template": "Download Template",
+      "select_file": "Select CSV File",
+      "no_file": "Please select a CSV file first",
+      "import": "Import",
+      "importing": "Importing...",
+      "result_summary": "{{total}} rows, {{created}} created, {{failed}} failed",
+      "failed_rows": "Failed Rows",
+      "row_label": "Row {{row}}",
+      "success": "Bulk import completed"
     }
   },
   "public_models": {

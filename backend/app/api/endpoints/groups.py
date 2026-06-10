@@ -220,6 +220,8 @@ def list_members(
         user = db.query(User).filter(User.id == m.user_id).first()
         if user:
             member_dict["user_name"] = user.user_name
+            member_dict["real_name"] = user.real_name
+            member_dict["department_name"] = user.department_name
 
         # Get invited_by user name
         if m.invited_by_user_id:
@@ -228,6 +230,10 @@ def list_members(
             )
             if invited_by_user:
                 member_dict["invited_by_user_name"] = invited_by_user.user_name
+                member_dict["invited_by_real_name"] = invited_by_user.real_name
+                member_dict["invited_by_department_name"] = (
+                    invited_by_user.department_name
+                )
 
         result.append(GroupMemberResponse(**member_dict))
 

@@ -105,6 +105,8 @@ export interface SenderInfo {
   id: number
   userName: string
   email?: string
+  realName?: string | null
+  departmentName?: string | null
 }
 
 export interface MessageContentSnapshot {
@@ -207,6 +209,8 @@ export interface RecentContact {
   id: number
   userId: number
   userName: string
+  realName?: string | null
+  departmentName?: string | null
   email?: string
   lastContactAt: string
   contactCount: number

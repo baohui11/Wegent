@@ -9,6 +9,7 @@ import { ChevronDown, Search, Settings2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslation } from '@/hooks/useTranslation'
 import { DroppableHistory, ProjectSection, useProjectContext } from '@/features/projects'
+import { useUser } from '@/features/common/UserContext'
 import type { Task } from '@/types/api'
 import TaskListSection from './TaskListSection'
 
@@ -54,19 +55,22 @@ export default function TaskHistorySection({
   setIsHistoryManageDialogOpen,
 }: TaskHistorySectionProps) {
   const { t } = useTranslation()
+  const { user } = useUser()
+  const isAdmin = user?.role === 'admin'
   const { projectTaskIds, projects } = useProjectContext()
 
-  // Filter out tasks that are already in projects from history lists.
+  // Filter out tasks that are already in projects from history lists (admin only).
   const filteredPersonalTasks = useMemo(
-    () => personalTasks.filter(task => !projectTaskIds.has(task.id)),
-    [personalTasks, projectTaskIds]
+    () => (isAdmin ? personalTasks.filter(task => !projectTaskIds.has(task.id)) : personalTasks),
+    [personalTasks, projectTaskIds, isAdmin]
   )
   const filteredGroupTasks = useMemo(
-    () => groupTasks.filter(task => !projectTaskIds.has(task.id)),
-    [groupTasks, projectTaskIds]
+    () => (isAdmin ? groupTasks.filter(task => !projectTaskIds.has(task.id)) : groupTasks),
+    [groupTasks, projectTaskIds, isAdmin]
   )
 
-  const hasProjectsWithTasks = projects.some(project => project.tasks && project.tasks.length > 0)
+  const hasProjectsWithTasks =
+    isAdmin && projects.some(project => project.tasks && project.tasks.length > 0)
 
   if (
     filteredGroupTasks.length === 0 &&
@@ -80,7 +84,7 @@ export default function TaskHistorySection({
 
   return (
     <>
-      {!isCollapsed && !isSearchResult && <ProjectSection onTaskSelect={onTaskSelect} />}
+      {!isCollapsed && !isSearchResult && isAdmin && <ProjectSection onTaskSelect={onTaskSelect} />}
 
       {filteredPersonalTasks.length > 0 && (
         <DroppableHistory>

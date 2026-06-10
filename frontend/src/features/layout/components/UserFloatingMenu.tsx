@@ -8,8 +8,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/features/common/UserContext'
+import { UserIdentity } from '@/components/common/UserIdentity'
 import { useTranslation, languageNames } from '@/hooks/useTranslation'
-import { DocsButton } from '@/features/layout/DocsButton'
 import { ThemeToggle } from '@/features/theme/ThemeToggle'
 import { paths } from '@/config/paths'
 import { getRuntimeConfigSync } from '@/lib/runtime-config'
@@ -34,7 +34,6 @@ export function UserFloatingMenu({ className = '' }: UserFloatingMenuProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const userDisplayName = user?.user_name || t('common:user.default_name')
   const isAdmin = user?.role === 'admin'
   const currentLanguage = getCurrentLanguage()
   const supportedLanguages = getSupportedLanguages()
@@ -108,10 +107,13 @@ export function UserFloatingMenu({ className = '' }: UserFloatingMenuProps) {
           <UserCircleIcon className="w-5 h-5 text-primary" />
         </div>
         <div className="flex flex-col items-start flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-text-primary leading-tight truncate">
-              {userDisplayName}
-            </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <UserIdentity
+              user={user}
+              fallback={t('common:user.default_name')}
+              nameClassName="text-sm font-medium text-text-primary leading-tight"
+              departmentClassName="text-xs text-text-muted leading-tight"
+            />
             <Cog6ToothIcon
               className="w-4 h-4 text-primary/70 group-hover:text-primary group-hover:rotate-45 transition-all duration-300"
               title={t('common:navigation.settings')}
@@ -170,9 +172,6 @@ export function UserFloatingMenu({ className = '' }: UserFloatingMenuProps) {
             <UsersIcon className="w-4 h-4 text-text-muted" />
             {t('common:settings.groupManager')}
           </button>
-
-          {/* Docs */}
-          <DocsButton showLabel className="w-full px-3 py-2" onClick={() => setIsExpanded(false)} />
 
           {/* Theme toggle */}
           <ThemeToggle

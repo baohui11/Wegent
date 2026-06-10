@@ -90,6 +90,22 @@ class StorageBackend(ABC):
             True if file exists, False otherwise
         """
 
+    def get_size(self, key: str) -> Optional[int]:
+        """
+        Return the stored object size in bytes without downloading it.
+
+        Backends that cannot cheaply determine the size (or do not store
+        the object out-of-process) should return None, in which case
+        callers must fall back to reading the data to learn its length.
+
+        Args:
+            key: Storage key to inspect
+
+        Returns:
+            Object size in bytes, or None if unknown/unsupported
+        """
+        return None
+
     def get_url(self, key: str, expires: int = 3600) -> Optional[str]:
         """
         Get a URL for accessing the file.

@@ -30,6 +30,10 @@
   },
   "account": {
     "profile": "个人资料",
+    "real_name": "姓名",
+    "department_name": "部门名称",
+    "profile_save_success": "个人资料已保存",
+    "profile_save_failed": "保存个人资料失败",
     "email": "邮箱",
     "password": "Password",
     "change_password": "修改Password",

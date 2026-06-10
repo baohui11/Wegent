@@ -370,6 +370,8 @@ export function useMessageSyncer({
         subtaskId: subtask_id,
         messageId: message_id,
         senderUserName: sender?.user_name,
+        senderRealName: sender?.real_name,
+        senderDepartmentName: sender?.department_name,
         senderUserId: sender?.user_id,
         shouldShowSender: isUserMessage,
         attachments: attachments,

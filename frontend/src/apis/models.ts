@@ -96,6 +96,8 @@ export interface ModelCRD {
     }
     protocol?: string
     isCustomConfig?: boolean
+    isAdvanced?: boolean
+    dynamic_thinking?: boolean
     // Context window and output token limits for LLM models
     contextWindow?: number // Maximum context window size in tokens
     maxOutputTokens?: number // Maximum output tokens the model can generate per response

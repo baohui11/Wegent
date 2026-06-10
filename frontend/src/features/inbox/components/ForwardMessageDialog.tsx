@@ -29,6 +29,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { UserSearchSelect } from '@/components/common/UserSearchSelect'
+import { UserIdentity } from '@/components/common/UserIdentity'
+import type { UserDisplayFields } from '@/utils/userDisplay'
 import { toast } from 'sonner'
 import {
   forwardMessages,
@@ -77,10 +79,11 @@ interface ForwardMessageDialogProps {
   onSuccess?: () => void
 }
 
-interface RecipientWithQueue {
+interface RecipientWithQueue extends UserDisplayFields {
   type: 'user' | 'group'
   id: number
-  name: string
+  /** Group display name (user recipients use real_name / user_name via UserIdentity) */
+  name?: string
   email?: string
   queueId?: number
   queueName?: string
@@ -238,7 +241,9 @@ export function ForwardMessageDialog({
       const newRecipients: RecipientWithQueue[] = users.map(user => ({
         type: 'user' as const,
         id: user.id,
-        name: user.user_name,
+        user_name: user.user_name,
+        real_name: user.real_name,
+        department_name: user.department_name,
         email: user.email,
       }))
 
@@ -270,7 +275,9 @@ export function ForwardMessageDialog({
         {
           type: 'user',
           id: contact.userId,
-          name: contact.userName,
+          user_name: contact.userName,
+          real_name: contact.realName,
+          department_name: contact.departmentName,
           email: contact.email,
         },
       ])
@@ -543,11 +550,12 @@ export function ForwardMessageDialog({
                                   )}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-medium truncate">
-                                      {recipient.name}
-                                    </span>
-                                  </div>
+                                  <UserIdentity
+                                    user={recipient}
+                                    fallback={recipient.name || recipient.user_name || ''}
+                                    nameClassName="text-sm font-medium"
+                                    compact
+                                  />
                                   {recipient.email && (
                                     <span className="text-xs text-text-muted truncate block">
                                       {recipient.email}
@@ -655,7 +663,15 @@ export function ForwardMessageDialog({
                               onClick={() => !isSelected && handleAddRecentContact(contact)}
                               disabled={isSelected}
                             >
-                              {contact.userName}
+                              <UserIdentity
+                                user={{
+                                  userName: contact.userName,
+                                  realName: contact.realName,
+                                  departmentName: contact.departmentName,
+                                }}
+                                fallback={contact.userName}
+                                compact
+                              />
                             </button>
                           )
                         })}

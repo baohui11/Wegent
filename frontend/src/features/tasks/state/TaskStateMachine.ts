@@ -72,6 +72,8 @@ export interface UnifiedMessage {
   errorType?: string
   botName?: string
   senderUserName?: string
+  senderRealName?: string | null
+  senderDepartmentName?: string | null
   senderUserId?: number
   shouldShowSender?: boolean
   subtaskStatus?: string
@@ -1710,6 +1712,8 @@ export class TaskStateMachine {
         senderUserName:
           subtask.sender_user_name ||
           (isUserMessage && subtask.sender_user_id === currentUserId ? currentUserName : undefined),
+        senderRealName: subtask.sender_real_name,
+        senderDepartmentName: subtask.sender_department_name,
         senderUserId: subtask.sender_user_id || (isUserMessage ? currentUserId : undefined),
         shouldShowSender: isGroupChat && isUserMessage,
         subtaskStatus: subtask.status,

@@ -36,7 +36,7 @@ import { CollapsibleSection } from '@/components/common/CollapsibleSection'
 import type { SendAreaSectionProps } from './types'
 import type { DeviceInfo } from '@/apis/devices'
 import type { SubscriptionExecutionTargetType } from '@/types/subscription'
-import type { CompatibleProvider } from '@/utils/modelCompatibility'
+import { isModelCompatibleWithAgentType } from '@/utils/modelCompatibility'
 
 const sortDevicesForSelection = (devices: DeviceInfo[]): DeviceInfo[] =>
   [...devices].sort((left, right) => {
@@ -72,7 +72,6 @@ export function SendAreaSection({
   models,
   modelsLoading,
   modelRequired,
-  compatibleProvider,
   skillRefs,
   setSkillRefs,
   availableSkills,
@@ -194,9 +193,13 @@ export function SendAreaSection({
   )
 
   // Filter models based on search and compatibility
-  const compatibleModels = compatibleProvider
-    ? models.filter(model => compatibleProvider.includes(model.provider as CompatibleProvider))
-    : models
+  const selectedTeam = teams.find(team => team.id === teamId)
+  const compatibleModels = models.filter(model =>
+    isModelCompatibleWithAgentType(
+      { provider: model.provider ?? '', config: model.config },
+      selectedTeam?.agent_type
+    )
+  )
 
   const cascadeLabels: ModelCascadeLabels = useMemo(
     () => ({

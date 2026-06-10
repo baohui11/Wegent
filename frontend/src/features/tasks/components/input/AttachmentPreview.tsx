@@ -5,6 +5,7 @@
 'use client'
 
 import React, { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Download, X, ZoomIn, ZoomOut, RotateCw, Loader2, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -102,7 +103,7 @@ function ImageLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
       {/* Toolbar */}
@@ -255,14 +256,17 @@ export default function AttachmentPreview({
             >
               <img src={imageUrl} alt={attachment.filename} className="h-12 w-12 object-cover" />
             </div>
-            {showLightbox && (
-              <ImageLightbox
-                src={imageUrl}
-                alt={attachment.filename}
-                onClose={handleCloseLightbox}
-                onDownload={handleDownload}
-              />
-            )}
+            {showLightbox &&
+              typeof document !== 'undefined' &&
+              createPortal(
+                <ImageLightbox
+                  src={imageUrl}
+                  alt={attachment.filename}
+                  onClose={handleCloseLightbox}
+                  onDownload={handleDownload}
+                />,
+                document.body
+              )}
           </>
         )
       }
@@ -307,14 +311,17 @@ export default function AttachmentPreview({
               </div>
             </div>
           </div>
-          {showLightbox && (
-            <ImageLightbox
-              src={imageUrl}
-              alt={attachment.filename}
-              onClose={handleCloseLightbox}
-              onDownload={handleDownload}
-            />
-          )}
+          {showLightbox &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <ImageLightbox
+                src={imageUrl}
+                alt={attachment.filename}
+                onClose={handleCloseLightbox}
+                onDownload={handleDownload}
+              />,
+              document.body
+            )}
         </>
       )
     }

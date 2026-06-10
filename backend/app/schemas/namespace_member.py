@@ -81,8 +81,12 @@ class GroupMemberResponse(GroupMemberBase):
     id: int
     group_name: str
     user_name: Optional[str] = None
+    real_name: Optional[str] = None
+    department_name: Optional[str] = None
     invited_by_user_id: Optional[int] = None
     invited_by_user_name: Optional[str] = None
+    invited_by_real_name: Optional[str] = None
+    invited_by_department_name: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

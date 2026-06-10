@@ -15,7 +15,8 @@
 
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { Download, Maximize2, X, ChevronLeft, ChevronRight, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -109,6 +110,16 @@ export function ImageGallery({ images, className, onUseAsReference }: ImageGalle
     [selectedIndex, images.length]
   )
 
+  // Prevent body scroll when lightbox is open
+  useEffect(() => {
+    if (selectedIndex === null) return
+
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [selectedIndex])
+
   if (!images || images.length === 0) {
     return null
   }
@@ -180,78 +191,81 @@ export function ImageGallery({ images, className, onUseAsReference }: ImageGalle
         ))}
       </div>
 
-      {/* Lightbox Modal */}
-      {selectedIndex !== null && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center"
-          onClick={() => setSelectedIndex(null)}
-          onKeyDown={handleKeyDown}
-          tabIndex={0}
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('image.lightbox', 'Image preview')}
-        >
-          {/* Close button - 44px touch target */}
-          <button
-            type="button"
-            className="absolute top-4 right-4 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
+      {/* Lightbox Modal - portaled to body to stay above chat input and sidebar */}
+      {selectedIndex !== null &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center"
             onClick={() => setSelectedIndex(null)}
-            title={t('common:actions.close', 'Close')}
+            onKeyDown={handleKeyDown}
+            tabIndex={0}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('image.lightbox', 'Image preview')}
           >
-            <X className="h-6 w-6 text-white" />
-          </button>
-
-          {/* Download button in lightbox - 44px touch target */}
-          <button
-            type="button"
-            className="absolute top-4 right-20 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
-            onClick={e => handleDownload(images[selectedIndex].url, selectedIndex, e)}
-            title={t('image.download', 'Download image')}
-          >
-            <Download className="h-6 w-6 text-white" />
-          </button>
-
-          {/* Previous button - 44px touch target */}
-          {selectedIndex > 0 && (
+            {/* Close button - 44px touch target */}
             <button
               type="button"
-              className="absolute left-4 top-1/2 -translate-y-1/2 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
-              onClick={handlePrevious}
-              title={t('common:common.previous', 'Previous')}
+              className="absolute top-4 right-4 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
+              onClick={() => setSelectedIndex(null)}
+              title={t('common:actions.close', 'Close')}
             >
-              <ChevronLeft className="h-6 w-6 text-white" />
+              <X className="h-6 w-6 text-white" />
             </button>
-          )}
 
-          {/* Next button - 44px touch target */}
-          {selectedIndex < images.length - 1 && (
+            {/* Download button in lightbox - 44px touch target */}
             <button
               type="button"
-              className="absolute right-4 top-1/2 -translate-y-1/2 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
-              onClick={handleNext}
-              title={t('common:common.next', 'Next')}
+              className="absolute top-4 right-20 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
+              onClick={e => handleDownload(images[selectedIndex].url, selectedIndex, e)}
+              title={t('image.download', 'Download image')}
             >
-              <ChevronRight className="h-6 w-6 text-white" />
+              <Download className="h-6 w-6 text-white" />
             </button>
-          )}
 
-          {/* Main image in lightbox - using regular img for full-size preview */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={images[selectedIndex].url}
-            alt={`${t('image.generated_image', 'Generated image')} ${selectedIndex + 1}`}
-            className="max-w-[90vw] max-h-[90vh] object-contain"
-            onClick={e => e.stopPropagation()}
-          />
+            {/* Previous button - 44px touch target */}
+            {selectedIndex > 0 && (
+              <button
+                type="button"
+                className="absolute left-4 top-1/2 -translate-y-1/2 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
+                onClick={handlePrevious}
+                title={t('common:common.previous', 'Previous')}
+              >
+                <ChevronLeft className="h-6 w-6 text-white" />
+              </button>
+            )}
 
-          {/* Image counter */}
-          {images.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/60 text-white text-sm">
-              {selectedIndex + 1} / {images.length}
-            </div>
-          )}
-        </div>
-      )}
+            {/* Next button - 44px touch target */}
+            {selectedIndex < images.length - 1 && (
+              <button
+                type="button"
+                className="absolute right-4 top-1/2 -translate-y-1/2 h-11 w-11 min-w-[44px] flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors z-10"
+                onClick={handleNext}
+                title={t('common:common.next', 'Next')}
+              >
+                <ChevronRight className="h-6 w-6 text-white" />
+              </button>
+            )}
+
+            {/* Main image in lightbox - using regular img for full-size preview */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={images[selectedIndex].url}
+              alt={`${t('image.generated_image', 'Generated image')} ${selectedIndex + 1}`}
+              className="max-w-[90vw] max-h-[90vh] object-contain"
+              onClick={e => e.stopPropagation()}
+            />
+
+            {/* Image counter */}
+            {images.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-black/60 text-white text-sm">
+                {selectedIndex + 1} / {images.length}
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
     </>
   )
 }

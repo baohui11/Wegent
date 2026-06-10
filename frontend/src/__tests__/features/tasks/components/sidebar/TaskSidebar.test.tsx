@@ -103,6 +103,14 @@ jest.mock('@/hooks/useTranslation', () => ({
   }),
 }))
 
+const mockUserContext = {
+  user: { role: 'admin' as const },
+}
+
+jest.mock('@/features/common/UserContext', () => ({
+  useUser: () => mockUserContext,
+}))
+
 jest.mock('@/features/layout/MobileSidebar', () => ({
   __esModule: true,
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -170,6 +178,7 @@ jest.mock('@/features/projects', () => ({
 
 describe('TaskSidebar scroll structure', () => {
   beforeEach(() => {
+    mockUserContext.user = { role: 'admin' }
     Object.assign(mockTaskSessionContext, {
       tasks: [],
       groupTasks: [],
@@ -246,6 +255,28 @@ describe('TaskSidebar scroll structure', () => {
     const flyout = screen.getByTestId('task-sidebar-more-flyout')
     expect(within(flyout).getByText('resource-library:title')).toBeInTheDocument()
     expect(within(flyout).getByText('devices:my_devices')).toBeInTheDocument()
+    expect(within(flyout).getByText('common:navigation.inbox')).toBeInTheDocument()
+  })
+
+  it('hides automation and devices navigation for non-admin users', () => {
+    mockUserContext.user = { role: 'user' }
+
+    render(
+      <TaskSidebar isMobileSidebarOpen={false} setIsMobileSidebarOpen={jest.fn()} pageType="chat" />
+    )
+
+    const fixedSection = screen.getAllByTestId('task-sidebar-fixed-section')[0]
+
+    expect(within(fixedSection).queryByText('common:navigation.flow')).not.toBeInTheDocument()
+    expect(
+      within(fixedSection).queryByTestId('task-sidebar-nav-flow-button')
+    ).not.toBeInTheDocument()
+
+    fireEvent.mouseEnter(within(fixedSection).getByTestId('task-sidebar-more-button'))
+
+    const flyout = screen.getByTestId('task-sidebar-more-flyout')
+    expect(within(flyout).queryByText('devices:my_devices')).not.toBeInTheDocument()
+    expect(within(flyout).getByText('resource-library:title')).toBeInTheDocument()
     expect(within(flyout).getByText('common:navigation.inbox')).toBeInTheDocument()
   })
 

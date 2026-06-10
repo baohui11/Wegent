@@ -42,6 +42,7 @@ jest.mock('@/features/settings/services/bots', () => ({
 }))
 
 jest.mock('@/utils/modelCompatibility', () => ({
+  ...jest.requireActual('@/utils/modelCompatibility'),
   getCompatibleProviderFromAgentType: jest.fn(() => null),
 }))
 
@@ -74,6 +75,15 @@ const mockOpenAIAdvancedModel: Model = {
   modelId: 'gpt-5-advanced',
   type: 'public',
   isAdvanced: true,
+}
+
+const mockCodexOpenAIModel: Model = {
+  name: 'gpt-5-codex',
+  displayName: 'GPT-5 Codex',
+  provider: 'openai',
+  modelId: 'gpt-5-codex',
+  type: 'public',
+  config: { protocol: 'openai-responses' },
 }
 
 const mockTeam: TeamWithBotDetails = {
@@ -412,10 +422,14 @@ describe('useModelSelection', () => {
     expect(result.current.showAdvancedModels).toBe(true)
   })
 
-  it('filters OpenAI models out for ClaudeCode-compatible teams', async () => {
+  it('filters non-CodeX OpenAI models out for ClaudeCode-compatible teams', async () => {
     ;(getCompatibleProviderFromAgentType as jest.Mock).mockReturnValue(['claude', 'anthropic'])
     ;(modelApis.getUnifiedModels as jest.Mock).mockReset()
-    const modelLoad = mockDeferredModelsLoad([mockModel, mockOpenAIAdvancedModel])
+    const modelLoad = mockDeferredModelsLoad([
+      mockModel,
+      mockOpenAIAdvancedModel,
+      mockCodexOpenAIModel,
+    ])
     const claudeCodeTeam: TeamWithBotDetails = {
       ...mockTeam,
       agent_type: 'claude',
@@ -432,7 +446,63 @@ describe('useModelSelection', () => {
     await modelLoad.resolve()
 
     await waitFor(() => {
-      expect(result.current.filteredModels).toEqual([expect.objectContaining(mockModel)])
+      expect(result.current.filteredModels).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining(mockModel),
+          expect.objectContaining(mockCodexOpenAIModel),
+        ])
+      )
     })
+    expect(result.current.filteredModels).not.toEqual(
+      expect.arrayContaining([expect.objectContaining(mockOpenAIAdvancedModel)])
+    )
+  })
+
+  it('locks ClaudeCode model list to the runtime family used after the first message', async () => {
+    ;(getCompatibleProviderFromAgentType as jest.Mock).mockReturnValue(['claude', 'anthropic'])
+    ;(modelApis.getUnifiedModels as jest.Mock).mockReset()
+    const modelLoad = mockDeferredModelsLoad([mockModel, mockCodexOpenAIModel])
+    const claudeCodeTeam: TeamWithBotDetails = {
+      ...mockTeam,
+      agent_type: 'claude',
+    }
+
+    const { result, rerender } = renderHook(
+      props =>
+        useModelSelection({
+          teamId: 1,
+          taskId: props.taskId,
+          selectedTeam: claudeCodeTeam,
+          hasMessages: props.hasMessages,
+          taskModelId: props.taskModelId,
+        }),
+      {
+        initialProps: {
+          taskId: null as number | null,
+          hasMessages: false,
+          taskModelId: null as string | null,
+        },
+      }
+    )
+
+    await modelLoad.resolve()
+
+    await waitFor(() => {
+      expect(result.current.filteredModels).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining(mockModel),
+          expect.objectContaining(mockCodexOpenAIModel),
+        ])
+      )
+    })
+
+    rerender({ taskId: 42, hasMessages: true, taskModelId: mockCodexOpenAIModel.name })
+
+    await waitFor(() => {
+      expect(result.current.filteredModels).toEqual([expect.objectContaining(mockCodexOpenAIModel)])
+    })
+    expect(result.current.filteredModels).not.toEqual(
+      expect.arrayContaining([expect.objectContaining(mockModel)])
+    )
   })
 })

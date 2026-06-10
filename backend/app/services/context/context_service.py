@@ -742,6 +742,23 @@ class ContextService:
                 f"Uploaded object {storage_key} not found in storage", storage_key
             )
 
+        # The presigned PUT URL does not enforce a content-length limit, so the
+        # client could upload an object far larger than the size it declared at
+        # presign time. Validate the real object size against the upload cap
+        # before reading the bytes into memory to avoid an OOM/DoS.
+        actual_size = backend.get_size(storage_key)
+        if actual_size is not None and not self.parser.validate_file_size(actual_size):
+            backend.delete(storage_key)
+            context.status = ContextStatus.FAILED.value
+            context.error_message = "Uploaded object exceeds maximum file size"
+            db.commit()
+            max_size_mb = DocumentParser.get_max_file_size() / (1024 * 1024)
+            raise StorageError(
+                f"Uploaded object {storage_key} exceeds maximum file size "
+                f"({max_size_mb} MB)",
+                storage_key,
+            )
+
         binary_data = backend.get(storage_key)
         if binary_data is None:
             context.status = ContextStatus.FAILED.value
@@ -872,7 +889,9 @@ class ContextService:
         db.add(copied_context)
         db.flush()
 
-        storage_key = generate_storage_key(copied_context.id, target_user_id)
+        storage_key = resolve_attachment_storage_key(
+            copied_context.id, target_user_id, source_context.file_extension
+        )
         copied_context.type_data = {
             **copied_context.type_data,
             "storage_key": storage_key,

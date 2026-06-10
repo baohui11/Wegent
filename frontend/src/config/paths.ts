@@ -2,14 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { getRuntimeConfigSync } from '@/lib/runtime-config'
-
 export const paths = {
   home: {
     getHref: () => '/',
-  },
-  docs: {
-    getHref: () => getRuntimeConfigSync().docsUrl,
   },
   auth: {
     password_login: {

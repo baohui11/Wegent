@@ -89,6 +89,8 @@ class UserBase(BaseModel):
     user_name: str
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = True
+    real_name: Optional[str] = Field(None, max_length=100)
+    department_name: Optional[str] = Field(None, max_length=200)
 
 
 class UserCreate(UserBase):
@@ -107,6 +109,8 @@ class UserUpdate(BaseModel):
     git_info: Optional[List[GitInfo]] = None
     preferences: Optional[UserPreferences] = None
     password: Optional[str] = None
+    real_name: Optional[str] = Field(None, max_length=100)
+    department_name: Optional[str] = Field(None, max_length=200)
 
 
 class UserInDB(UserBase):
@@ -162,6 +166,8 @@ class UserInfo(BaseModel):
     id: int
     user_name: str
     role: str = "user"
+    real_name: Optional[str] = None
+    department_name: Optional[str] = None
 
 
 class UserAuthTypeResponse(BaseModel):

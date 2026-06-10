@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { userApis } from '@/apis/user'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { SearchUser } from '@/types/api'
+import { UserIdentity } from '@/components/common/UserIdentity'
 
 interface UserSearchSelectProps<T extends SearchUser = SearchUser> {
   /** Currently selected users */
@@ -184,10 +185,12 @@ export function UserSearchSelect<T extends SearchUser = SearchUser>({
                     disabled={isSelected}
                     className="w-full flex items-center gap-3 p-3 hover:bg-surface cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <div className="flex-1">
-                      <span className="font-medium text-sm text-text-primary">
-                        {user.user_name}
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <UserIdentity
+                        user={user}
+                        nameClassName="font-medium text-sm text-text-primary"
+                        departmentClassName="text-xs text-text-muted"
+                      />
                       {user.email && <div className="text-xs text-text-muted">{user.email}</div>}
                     </div>
                     {isSelected && <Check className="h-4 w-4 text-green-500" />}
@@ -218,7 +221,7 @@ export function UserSearchSelect<T extends SearchUser = SearchUser>({
           <div className="flex flex-wrap gap-2">
             {selectedUsers.map(user => (
               <Badge key={user.id} variant="secondary" className="pr-1">
-                {user.user_name}
+                <UserIdentity user={user} compact hideDepartment />
                 <button
                   onClick={() => handleRemoveUser(user.id)}
                   className="ml-1 hover:bg-accent rounded-full p-0.5"

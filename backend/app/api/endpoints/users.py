@@ -47,6 +47,29 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _user_to_in_db(
+    user: User, *, admin_setup_completed: Optional[bool] = None
+) -> UserInDB:
+    """Serialize a User ORM object to UserInDB."""
+    payload = {
+        "id": user.id,
+        "user_name": user.user_name,
+        "email": user.email,
+        "is_active": user.is_active,
+        "git_info": user.git_info,
+        "preferences": user.preferences,
+        "role": user.role,
+        "auth_source": user.auth_source,
+        "real_name": user.real_name,
+        "department_name": user.department_name,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }
+    if admin_setup_completed is not None:
+        payload["admin_setup_completed"] = admin_setup_completed
+    return UserInDB(**payload)
+
+
 # ==================== Feature Flags ====================
 
 
@@ -117,20 +140,7 @@ async def read_current_user(
         else:
             admin_setup_completed = False
 
-    # Create response with admin_setup_completed field
-    return UserInDB(
-        id=current_user.id,
-        user_name=current_user.user_name,
-        email=current_user.email,
-        is_active=current_user.is_active,
-        git_info=current_user.git_info,
-        preferences=current_user.preferences,
-        role=current_user.role,
-        auth_source=current_user.auth_source,
-        created_at=current_user.created_at,
-        updated_at=current_user.updated_at,
-        admin_setup_completed=admin_setup_completed,
-    )
+    return _user_to_in_db(current_user, admin_setup_completed=admin_setup_completed)
 
 
 @router.put("/me", response_model=UserInDB)
@@ -148,18 +158,7 @@ async def update_current_user_endpoint(
         )
         # Explicitly convert ORM object to Pydantic model to avoid
         # session access during response serialization
-        return UserInDB(
-            id=user.id,
-            user_name=user.user_name,
-            email=user.email,
-            is_active=user.is_active,
-            git_info=user.git_info,
-            preferences=user.preferences,
-            role=user.role,
-            auth_source=user.auth_source,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-        )
+        return _user_to_in_db(user)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -297,18 +296,7 @@ async def delete_git_token(
         )
         # Explicitly convert ORM object to Pydantic model to avoid
         # session access during response serialization
-        return UserInDB(
-            id=user.id,
-            user_name=user.user_name,
-            email=user.email,
-            is_active=user.is_active,
-            git_info=user.git_info,
-            preferences=user.preferences,
-            role=user.role,
-            auth_source=user.auth_source,
-            created_at=user.created_at,
-            updated_at=user.updated_at,
-        )
+        return _user_to_in_db(user)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -321,20 +309,7 @@ def create_user(
 ):
     """Create new user (admin only)"""
     user = user_service.create_user(db=db, obj_in=user_create)
-    # Explicitly convert ORM object to Pydantic model to avoid
-    # session access during response serialization
-    return UserInDB(
-        id=user.id,
-        user_name=user.user_name,
-        email=user.email,
-        is_active=user.is_active,
-        git_info=user.git_info,
-        preferences=user.preferences,
-        role=user.role,
-        auth_source=user.auth_source,
-        created_at=user.created_at,
-        updated_at=user.updated_at,
-    )
+    return _user_to_in_db(user)
 
 
 QUICK_ACCESS_CONFIG_KEY = "quick_access_recommended"
@@ -781,6 +756,8 @@ class UserSearchItem(BaseModel):
     id: int
     user_name: str
     email: Optional[str] = None
+    real_name: Optional[str] = None
+    department_name: Optional[str] = None
 
 
 class SearchUsersResponse(BaseModel):
@@ -869,7 +846,10 @@ async def search_users(
     # Search in username and email
     search_pattern = f"%{q}%"
     query = query.filter(
-        (User.user_name.ilike(search_pattern)) | (User.email.ilike(search_pattern))
+        (User.user_name.ilike(search_pattern))
+        | (User.email.ilike(search_pattern))
+        | (User.real_name.ilike(search_pattern))
+        | (User.department_name.ilike(search_pattern))
     )
 
     # Get results with limit
@@ -877,7 +857,13 @@ async def search_users(
 
     return SearchUsersResponse(
         users=[
-            UserSearchItem(id=user.id, user_name=user.user_name, email=user.email)
+            UserSearchItem(
+                id=user.id,
+                user_name=user.user_name,
+                email=user.email,
+                real_name=user.real_name,
+                department_name=user.department_name,
+            )
             for user in users
         ],
         total=len(users),

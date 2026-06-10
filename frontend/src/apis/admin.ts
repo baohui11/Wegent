@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { apiClient } from './client'
+import { getApiBaseUrl } from '@/lib/runtime-config'
+import { getToken } from './user'
 import {
   getQuickLaunchFunctionsConfig,
   updateQuickLaunchFunctionsConfig,
@@ -41,6 +43,8 @@ export interface AdminUser {
   role: UserRole
   auth_source: AuthSource
   is_active: boolean
+  real_name?: string | null
+  department_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -56,6 +60,8 @@ export interface AdminUserCreate {
   email?: string
   role?: UserRole
   auth_source?: 'password' | 'oidc'
+  real_name?: string | null
+  department_name?: string | null
 }
 
 export interface AdminUserUpdate {
@@ -63,6 +69,8 @@ export interface AdminUserUpdate {
   email?: string
   role?: UserRole
   is_active?: boolean
+  real_name?: string | null
+  department_name?: string | null
 }
 
 export interface PasswordResetRequest {
@@ -71,6 +79,20 @@ export interface PasswordResetRequest {
 
 export interface RoleUpdateRequest {
   role: UserRole
+}
+
+export interface BulkUserImportFailedItem {
+  row: number
+  user_name?: string | null
+  reason: string
+}
+
+export interface BulkUserImportResponse {
+  total_rows: number
+  created_count: number
+  failed_count: number
+  created: AdminUser[]
+  failed: BulkUserImportFailedItem[]
 }
 
 // Public Model Types
@@ -650,6 +672,39 @@ export const adminApis = {
    */
   async updateUserRole(userId: number, data: RoleUpdateRequest): Promise<AdminUser> {
     return apiClient.put(`/admin/users/${userId}/role`, data)
+  },
+
+  /**
+   * Bulk import users from a CSV file
+   */
+  async bulkImportUsers(file: File): Promise<BulkUserImportResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const token = getToken()
+    const response = await fetch(`${getApiBaseUrl()}/admin/users/bulk-import`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMsg = errorText
+      try {
+        const json = JSON.parse(errorText)
+        if (json && typeof json.detail === 'string') {
+          errorMsg = json.detail
+        }
+      } catch {
+        // use raw text
+      }
+      throw new Error(errorMsg)
+    }
+
+    return response.json()
   },
 
   // ==================== Public Model Management ====================

@@ -222,6 +222,7 @@ const ShellList: React.FC<ShellListProps> = ({
 
   const createAction = hasResourceCreateTargets({ scope, groupName, sourceFilter, groups }) ? (
     <ResourceCreateButton
+      adminOnly
       label={t('common:shells.create')}
       scope={scope}
       groupName={groupName}

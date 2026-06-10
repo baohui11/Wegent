@@ -8,7 +8,16 @@ import asyncio
 import threading
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Path,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -19,9 +28,12 @@ from app.schemas.admin import (
     AdminUserListResponse,
     AdminUserResponse,
     AdminUserUpdate,
+    BulkUserImportFailedItem,
+    BulkUserImportResponse,
     PasswordReset,
     RoleUpdate,
 )
+from app.services.admin_user_import import parse_users_csv
 from app.services.k_batch import apply_default_resources_async
 from app.services.user import user_service
 
@@ -37,6 +49,8 @@ def _user_to_response(user: User) -> AdminUserResponse:
         role=user.role,
         auth_source=user.auth_source,
         is_active=user.is_active,
+        real_name=user.real_name,
+        department_name=user.department_name,
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
@@ -128,19 +142,107 @@ async def create_user(
         is_active=True,
         git_info=[],
         preferences="{}",
+        real_name=user_data.real_name,
+        department_name=user_data.department_name,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Apply default resources for the new user in a background thread
+    _apply_default_resources_background(new_user.id)
+
+    return _user_to_response(new_user)
+
+
+def _apply_default_resources_background(user_id: int) -> None:
+    """Apply default resources for a new user in a background thread."""
+
     def run_async_task():
-        asyncio.run(apply_default_resources_async(new_user.id))
+        asyncio.run(apply_default_resources_async(user_id))
 
     thread = threading.Thread(target=run_async_task, daemon=True)
     thread.start()
 
-    return _user_to_response(new_user)
+
+@router.post("/users/bulk-import", response_model=BulkUserImportResponse)
+async def bulk_import_users(
+    file: UploadFile = File(..., description="CSV file with user rows"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    Bulk create users from a CSV file (admin only).
+
+    Required columns: user_name, password
+    Optional columns: email, real_name, department_name, role
+    """
+    raw_bytes = await file.read()
+    if not raw_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file is empty",
+        )
+
+    try:
+        content = raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file must be UTF-8 encoded",
+        ) from exc
+
+    rows, parse_failures = parse_users_csv(content)
+    failures: list[BulkUserImportFailedItem] = [
+        BulkUserImportFailedItem(
+            row=failure.row_number,
+            user_name=failure.user_name,
+            reason=failure.error,
+        )
+        for failure in parse_failures
+    ]
+
+    created: list[AdminUserResponse] = []
+    for row in rows:
+        existing_user = db.query(User).filter(User.user_name == row.user_name).first()
+        if existing_user:
+            failures.append(
+                BulkUserImportFailedItem(
+                    row=row.row_number,
+                    user_name=row.user_name,
+                    reason=f"User with username '{row.user_name}' already exists",
+                )
+            )
+            continue
+
+        new_user = User(
+            user_name=row.user_name,
+            email=row.email,
+            password_hash=get_password_hash(row.password),
+            role=row.role,
+            auth_source="password",
+            is_active=True,
+            git_info=[],
+            preferences="{}",
+            real_name=row.real_name,
+            department_name=row.department_name,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        created.append(_user_to_response(new_user))
+        _apply_default_resources_background(new_user.id)
+
+    total_rows = len(rows) + len(
+        [failure for failure in parse_failures if failure.row_number >= 2]
+    )
+
+    return BulkUserImportResponse(
+        total_rows=total_rows,
+        created_count=len(created),
+        failed_count=len(failures),
+        created=created,
+        failed=failures,
+    )
 
 
 @router.put("/users/{user_id}", response_model=AdminUserResponse)
@@ -201,6 +303,10 @@ async def update_user(
         user.role = user_data.role
     if user_data.is_active is not None:
         user.is_active = user_data.is_active
+    if user_data.real_name is not None:
+        user.real_name = user_data.real_name.strip() or None
+    if user_data.department_name is not None:
+        user.department_name = user_data.department_name.strip() or None
 
     db.commit()
     db.refresh(user)

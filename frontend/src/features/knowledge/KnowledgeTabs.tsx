@@ -5,7 +5,7 @@
 'use client'
 
 import { useTranslation } from '@/hooks/useTranslation'
-import { CodeBracketIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import { ListTree } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -34,11 +34,12 @@ const tabs: KnowledgeTabItem[] = [
     labelKey: 'knowledge:tabs.document',
     icon: DocumentTextIcon,
   },
-  {
-    id: 'code',
-    labelKey: 'knowledge:tabs.code',
-    icon: CodeBracketIcon,
-  },
+  // Code knowledge tab hidden
+  // {
+  //   id: 'code',
+  //   labelKey: 'knowledge:tabs.code',
+  //   icon: CodeBracketIcon,
+  // },
 ]
 
 /**
@@ -72,16 +73,17 @@ export function KnowledgeTabs({
         </Button>
       )}
 
-      {tabs.map(tab => {
-        const isActive = activeTab === tab.id
-        const Icon = tab.icon
+      {tabs.length > 1 &&
+        tabs.map(tab => {
+          const isActive = activeTab === tab.id
+          const Icon = tab.icon
 
-        return (
-          <button
-            key={tab.id}
-            onClick={() => !tab.disabled && onTabChange(tab.id)}
-            disabled={tab.disabled}
-            className={`
+          return (
+            <button
+              key={tab.id}
+              onClick={() => !tab.disabled && onTabChange(tab.id)}
+              disabled={tab.disabled}
+              className={`
               relative flex items-center gap-2 px-3 py-2 text-sm font-medium whitespace-nowrap rounded-md transition-colors duration-200
               ${
                 isActive
@@ -91,17 +93,17 @@ export function KnowledgeTabs({
                     : 'text-text-secondary hover:text-text-primary hover:bg-muted'
               }
             `}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{t(tab.labelKey)}</span>
-            {tab.comingSoon && (
-              <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-muted text-text-muted">
-                {t('knowledge:coming_soon')}
-              </span>
-            )}
-          </button>
-        )
-      })}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{t(tab.labelKey)}</span>
+              {tab.comingSoon && (
+                <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-muted text-text-muted">
+                  {t('knowledge:coming_soon')}
+                </span>
+              )}
+            </button>
+          )
+        })}
     </div>
   )
 }

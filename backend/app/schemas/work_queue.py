@@ -220,6 +220,8 @@ class SenderInfo(BaseModel):
     id: int
     userName: str
     email: Optional[str] = None
+    realName: Optional[str] = None
+    departmentName: Optional[str] = None
 
 
 class QueueMessageResponse(BaseModel):
@@ -326,6 +328,8 @@ class RecentContactResponse(BaseModel):
     id: int
     userId: int
     userName: str
+    realName: Optional[str] = None
+    departmentName: Optional[str] = None
     email: Optional[str] = None
     lastContactAt: datetime
     contactCount: int

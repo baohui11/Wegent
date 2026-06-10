@@ -17,6 +17,8 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_name = Column(String(50), nullable=False, unique=True)
+    real_name = Column(String(100), nullable=True)
+    department_name = Column(String(200), nullable=True)
     password_hash = Column(String(256), nullable=False)
     email = Column(String(100))
     git_info = Column(JSON)
