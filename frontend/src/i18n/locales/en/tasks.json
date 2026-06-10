@@ -109,6 +109,7 @@
   "workbench": {
     "overview": "Overview",
     "files_changed": "Files Changed",
+    "web_search": "Web Search",
     "close_panel": "Close panel",
     "open_main_menu": "Open main menu",
     "waiting_result": "Waiting for task execution result...",

@@ -50,9 +50,6 @@ jest.mock('@/features/tasks/components/input', () => ({
   OpenMenu: () => <div>open-menu</div>,
 }))
 
-jest.mock('@/features/layout/GithubStarButton', () => ({
-  GithubStarButton: () => <div>github-star</div>,
-}))
 jest.mock('@/features/common/UserContext', () => ({
   useUser: () => ({ user: null }),
 }))
@@ -106,6 +103,14 @@ jest.mock('@/features/tasks/components/remote-workspace', () => ({
   RemoteWorkspaceEntry: ({ taskId }: { taskId?: number | null }) => (
     <div data-testid="remote-workspace-entry">{String(taskId)}</div>
   ),
+}))
+
+jest.mock('@/features/tasks/session/WebSearchResultsContext', () => ({
+  useOptionalWebSearchResults: () => null,
+}))
+
+jest.mock('@/features/tasks/components/web-search/WebSearchResultsSync', () => ({
+  WebSearchResultsSync: () => null,
 }))
 
 describe('CodePageDesktop remote workspace integration', () => {

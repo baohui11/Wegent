@@ -25,6 +25,8 @@ import { useUser } from '@/features/common/UserContext'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
 import { ChatArea } from '@/features/tasks/components/chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
+import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
+import { useOptionalWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
 import { paths } from '@/config/paths'
 
 const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
@@ -98,6 +100,7 @@ export function CodePageDesktop() {
 
   // Workbench state - default to true when taskId exists
   const [isWorkbenchOpen, setIsWorkbenchOpen] = useState(true)
+  const webSearchResults = useOptionalWebSearchResults()
 
   // Search dialog state (controlled from page level for global shortcut support)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
@@ -129,6 +132,13 @@ export function CodePageDesktop() {
       setIsWorkbenchOpen(true)
     }
   }, [hasTaskId])
+
+  // Open workbench when user views web search results from the task stream
+  useEffect(() => {
+    if (webSearchResults?.isPanelOpen && webSearchResults.hasSessions) {
+      setIsWorkbenchOpen(true)
+    }
+  }, [webSearchResults?.isPanelOpen, webSearchResults?.hasSessions])
 
   // Calculate open links from task detail (OpenMenu disabled)
   // const openLinks = useMemo(() => {
@@ -253,6 +263,9 @@ export function CodePageDesktop() {
             />
           )}
         </TopNavigation>
+        <WebSearchResultsSync
+          taskId={selectedTask?.id ?? selectedTaskDetail?.id ?? (taskId ? Number(taskId) : null)}
+        />
         {/* Content area with split layout */}
         <div className="flex flex-1 min-h-0">
           {/* Chat area - affected by workbench */}

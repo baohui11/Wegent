@@ -28,6 +28,11 @@ import { taskApis, BranchDiffResponse } from '@/apis/tasks'
 import DiffViewer from '../message/DiffViewer'
 import { TaskApp } from '@/types/api'
 import type { MessageBlock } from '../message/thinking/types'
+import { WebSearchResultsPanelContent } from '../web-search/WebSearchResultsPanel'
+import { useOptionalWebSearchResults } from '@/features/tasks/session/WebSearchResultsContext'
+import { isGitFeaturesEnabled } from '@/lib/runtime-config'
+
+type WorkbenchTab = 'overview' | 'files' | 'preview' | 'web-search'
 
 // Tool icon mapping
 const TOOL_ICONS: Record<string, string> = {
@@ -212,7 +217,16 @@ export default function Workbench({
   app,
   taskStatus,
 }: WorkbenchProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'files' | 'preview'>('overview')
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>('overview')
+  const gitEnabled = isGitFeaturesEnabled()
+  const webSearchResults = useOptionalWebSearchResults()
+  const hasWebSearchSessions = Boolean(webSearchResults?.hasSessions)
+  const webSearchSessions = webSearchResults?.sessions ?? []
+  const activeWebSearchSession = webSearchResults?.activeSession ?? null
+  const webSearchResultCount = webSearchSessions.reduce(
+    (total, session) => total + session.results.length,
+    0
+  )
   const [showCommits, setShowCommits] = useState(false)
   const [copiedCommitId, setCopiedCommitId] = useState<string | null>(null)
   const [diffData, setDiffData] = useState<BranchDiffResponse | null>(null)
@@ -371,23 +385,51 @@ export default function Workbench({
   // Check if task has a git repository
   const hasRepository = Boolean(displayData?.repository)
 
+  // Reset to overview when the active tab is no longer available
+  useEffect(() => {
+    if (activeTab === 'files' && !gitEnabled) {
+      setActiveTab('overview')
+    }
+    if (activeTab === 'web-search' && !hasWebSearchSessions) {
+      setActiveTab('overview')
+    }
+  }, [activeTab, gitEnabled, hasWebSearchSessions])
+
+  useEffect(() => {
+    if (webSearchResults?.isPanelOpen && hasWebSearchSessions) {
+      setActiveTab('web-search')
+    }
+  }, [webSearchResults?.isPanelOpen, hasWebSearchSessions])
+
   const navigation = [
     {
       name: t('tasks:workbench.overview'),
       value: 'overview' as const,
       current: activeTab === 'overview',
     },
-    // Files Changed tab - always shown for code tasks
-    {
-      name: t('tasks:workbench.files_changed'),
-      value: 'files' as const,
-      current: activeTab === 'files',
-      badge:
-        hasRepository && shouldShowDiffData()
-          ? diffData?.files?.length || 0
-          : displayData?.file_changes?.length || 0,
-    },
-    // Preview tab - only shown when app data is available
+    ...(hasWebSearchSessions
+      ? [
+          {
+            name: t('tasks:workbench.web_search'),
+            value: 'web-search' as const,
+            current: activeTab === 'web-search',
+            badge: webSearchResultCount,
+          },
+        ]
+      : []),
+    ...(gitEnabled
+      ? [
+          {
+            name: t('tasks:workbench.files_changed'),
+            value: 'files' as const,
+            current: activeTab === 'files',
+            badge:
+              hasRepository && shouldShowDiffData()
+                ? diffData?.files?.length || 0
+                : displayData?.file_changes?.length || 0,
+          },
+        ]
+      : []),
     ...(app
       ? [
           {
@@ -654,8 +696,25 @@ export default function Workbench({
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-7xl px-2 pt-4 pb-2 sm:px-3 lg:px-4">
-                {shouldShowLoading ? (
+              <div
+                className={classNames(
+                  'mx-auto max-w-7xl',
+                  activeTab === 'web-search' ? 'h-full px-0 py-0' : 'px-2 pt-4 pb-2 sm:px-3 lg:px-4'
+                )}
+              >
+                {activeTab === 'web-search' && hasWebSearchSessions && webSearchResults ? (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <WebSearchResultsPanelContent
+                      onClose={() => {
+                        setActiveTab('overview')
+                        webSearchResults.closePanel()
+                      }}
+                      session={activeWebSearchSession}
+                      sessions={webSearchSessions}
+                      onSelectSession={webSearchResults.selectSession}
+                    />
+                  </div>
+                ) : shouldShowLoading ? (
                   // Loading state - no workbench data and no blocks
                   <div className="space-y-6">
                     {/* Task Title Section - shown even during loading */}

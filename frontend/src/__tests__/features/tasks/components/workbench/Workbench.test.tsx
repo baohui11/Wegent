@@ -27,6 +27,18 @@ jest.mock('@/features/tasks/components/message/DiffViewer', () => ({
   default: () => <div>diff-viewer</div>,
 }))
 
+jest.mock('@/lib/runtime-config', () => ({
+  isGitFeaturesEnabled: jest.fn(() => true),
+}))
+
+jest.mock('@/features/tasks/session/WebSearchResultsContext', () => ({
+  useOptionalWebSearchResults: jest.fn(() => null),
+}))
+
+jest.mock('@/features/tasks/components/web-search/WebSearchResultsPanel', () => ({
+  WebSearchResultsPanelContent: () => <div>web-search-panel</div>,
+}))
+
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { returnObjects?: boolean }) => {
@@ -40,6 +52,7 @@ jest.mock('@/hooks/useTranslation', () => ({
       const translations: Record<string, string> = {
         'tasks:workbench.overview': 'Overview',
         'tasks:workbench.files_changed': 'Files Changed',
+        'tasks:workbench.web_search': 'Web Search',
         'tasks:workbench.status.completed': 'Completed',
         'tasks:workbench.status.failed': 'Failed',
         'tasks:workbench.status.pending_confirmation': 'Awaiting confirmation',
@@ -113,5 +126,65 @@ describe('Workbench', () => {
     expect(screen.getByText('Pipeline task')).toBeInTheDocument()
     expect(screen.getByText('Awaiting confirmation')).toBeInTheDocument()
     expect(screen.queryByText('Running')).not.toBeInTheDocument()
+  })
+
+  test('hides files changed tab when Git features are disabled', () => {
+    const { isGitFeaturesEnabled } = jest.requireMock('@/lib/runtime-config') as {
+      isGitFeaturesEnabled: jest.Mock
+    }
+    isGitFeaturesEnabled.mockReturnValue(false)
+
+    render(
+      <Workbench
+        isOpen={true}
+        onClose={jest.fn()}
+        onOpen={jest.fn()}
+        isLoading={false}
+        workbenchData={runningWorkbenchData}
+        taskStatus="RUNNING"
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Files Changed' })).not.toBeInTheDocument()
+  })
+
+  test('shows web search tab when task has web search sessions', () => {
+    const { useOptionalWebSearchResults } = jest.requireMock(
+      '@/features/tasks/session/WebSearchResultsContext'
+    ) as {
+      useOptionalWebSearchResults: jest.Mock
+    }
+    useOptionalWebSearchResults.mockReturnValue({
+      hasSessions: true,
+      sessions: [
+        {
+          id: 'search-1',
+          query: 'consulting trends',
+          status: 'done',
+          results: [{ title: 'Result', url: 'https://example.com', snippet: 'Snippet' }],
+        },
+      ],
+      activeSession: {
+        id: 'search-1',
+        query: 'consulting trends',
+        status: 'done',
+        results: [{ title: 'Result', url: 'https://example.com', snippet: 'Snippet' }],
+      },
+      selectSession: jest.fn(),
+    })
+
+    render(
+      <Workbench
+        isOpen={true}
+        onClose={jest.fn()}
+        onOpen={jest.fn()}
+        isLoading={false}
+        workbenchData={runningWorkbenchData}
+        taskStatus="RUNNING"
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /Web Search/ })).toBeInTheDocument()
   })
 })

@@ -18,6 +18,7 @@ import { useUser } from '@/features/common/UserContext'
 import { useSearchShortcut } from '@/features/tasks/hooks/useSearchShortcut'
 import { ChatArea } from '@/features/tasks/components/chat'
 import { RemoteWorkspaceEntry } from '@/features/tasks/components/remote-workspace'
+import { WebSearchResultsSync } from '@/features/tasks/components/web-search/WebSearchResultsSync'
 
 const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/SearchDialog'), {
   ssr: false,
@@ -39,7 +40,8 @@ const SearchDialog = dynamic(() => import('@/features/tasks/components/sidebar/S
 export function CodePageMobile() {
   // Get search params to check for taskId
   const searchParams = useSearchParams()
-  const _hasTaskId = !!searchParams.get('taskId')
+  const taskId = searchParams.get('taskId')
+  const _hasTaskId = !!taskId
 
   // Team state from context (centralized to avoid duplicate API calls)
   const { teams, isTeamsLoading, refreshTeams } = useTeamContext()
@@ -146,6 +148,9 @@ export function CodePageMobile() {
           <ThemeToggle />
           {/* Note: Open menu and workbench toggle are hidden on mobile for simplicity */}
         </TopNavigation>
+        <WebSearchResultsSync
+          taskId={selectedTask?.id ?? selectedTaskDetail?.id ?? (taskId ? Number(taskId) : null)}
+        />
         {/* Chat area - full width on mobile */}
         <div className="flex-1 flex flex-col min-h-0">
           <ChatArea

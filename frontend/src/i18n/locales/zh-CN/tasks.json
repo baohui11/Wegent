@@ -109,6 +109,7 @@
   "workbench": {
     "overview": "概览",
     "files_changed": "文件变更",
+    "web_search": "联网搜索",
     "close_panel": "关闭面板",
     "open_main_menu": "打开主菜单",
     "waiting_result": "等待任务执行结果...",
