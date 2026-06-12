@@ -103,6 +103,23 @@ async def lifespan(app):
     except Exception as e:
         logger.error(f"Failed to start task queue consumers: {e}")
 
+    # Reconcile orphaned executor containers left over from a previous run
+    # (e.g. after `docker compose down`) before starting the schedulers.
+    from executor_manager.config.config import EXECUTOR_DISPATCHER_MODE
+
+    if EXECUTOR_DISPATCHER_MODE == "docker":
+        try:
+            import asyncio
+
+            from executor_manager.services.idle_executor_gc import (
+                get_idle_executor_gc,
+            )
+
+            await asyncio.to_thread(get_idle_executor_gc().reconcile_on_startup)
+            logger.info("Idle executor reconcile on startup completed")
+        except Exception as e:
+            logger.warning(f"Idle executor reconcile on startup failed: {e}")
+
     # Start SandboxManager scheduler for GC
     sandbox_manager = get_sandbox_manager()
     try:

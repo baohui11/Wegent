@@ -249,7 +249,7 @@ class JobService(BaseService[Kind, None, None]):
         try:
             now = datetime.now()
             cutoff = now - timedelta(
-                hours=settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS
+                minutes=settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES
             )
             lookback_start = now - timedelta(hours=self._get_lookback_hours())
             logger.info(
@@ -570,15 +570,15 @@ class JobService(BaseService[Kind, None, None]):
         valid_candidates: List[Subtask] = []
         filter_stats = CleanupFilterStats()
         code_cutoff = datetime.now() - timedelta(
-            hours=settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS
+            minutes=settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES
         )
-        stale_non_terminal_hours = (
-            settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS
+        stale_non_terminal_minutes = (
+            settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES
         )
-        if not isinstance(stale_non_terminal_hours, (int, float)):
-            stale_non_terminal_hours = 24
+        if not isinstance(stale_non_terminal_minutes, (int, float)):
+            stale_non_terminal_minutes = 1440
         stale_non_terminal_cutoff = datetime.now() - timedelta(
-            hours=stale_non_terminal_hours
+            minutes=stale_non_terminal_minutes
         )
 
         for subtask in candidates:

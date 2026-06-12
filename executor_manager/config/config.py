@@ -36,8 +36,8 @@ EXECUTOR_ENV = os.environ.get("EXECUTOR_ENV", "{}")
 # Sandbox configuration
 # Default timeout for Sandbox task execution (seconds)
 SANDBOX_DEFAULT_TIMEOUT = int(os.getenv("SANDBOX_DEFAULT_TIMEOUT", "600"))
-# Redis cache TTL for Sandbox task state (seconds, 24 hours)
-SANDBOX_REDIS_TTL = int(os.getenv("SANDBOX_REDIS_TTL", "86400"))
+# Note: sandbox idle TTL is configured via SANDBOX_IDLE_TIMEOUT_MINUTES and
+# resolved in executor_manager/common/config.py (TimeoutConfig.redis_ttl).
 # Maximum concurrent Sandbox tasks per user
 SANDBOX_MAX_CONCURRENT = int(os.getenv("SANDBOX_MAX_CONCURRENT", "5"))
 

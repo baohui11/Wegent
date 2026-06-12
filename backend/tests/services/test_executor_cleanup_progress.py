@@ -23,9 +23,9 @@ from app.services.executor_cleanup_cursor_service import (
 @contextmanager
 def _patched_cleanup_settings():
     with patch("app.services.adapters.executor_job.settings") as mock_settings:
-        mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-        mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
-        mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
+        mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+        mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
+        mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
         mock_settings.TASK_EXECUTOR_CLEANUP_PRIMARY_SCAN_BATCH_SIZE = 2000
         mock_settings.TASK_EXECUTOR_CLEANUP_LOOKBACK_HOURS = 48
         mock_settings.TASK_EXECUTOR_CLEANUP_LOOKBACK_SCAN_LIMIT = 500

@@ -287,6 +287,16 @@ async def lifespan(app: FastAPI):
     event_bus.subscribe(QueueMessageCreatedEvent, handle_inbox_message_created)
     logger.info("✓ Inbox auto-process handler registered")
 
+    # Register workspace file sync handler
+    # Incrementally mirrors executor workspace files to object storage on each
+    # subtask checkpoint so "view task files" serves everything from S3.
+    from app.services.workspace_sync.event_handlers import (
+        register_workspace_sync_event_handlers,
+    )
+
+    register_workspace_sync_event_handlers()
+    logger.info("✓ Workspace sync handler registered")
+
     logger.info("✓ Event bus initialized and handlers registered")
 
     # Initialize PendingRequestRegistry for skill frontend interactions

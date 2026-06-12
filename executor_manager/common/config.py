@@ -18,6 +18,25 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+def _get_sandbox_idle_ttl_seconds() -> int:
+    """Resolve the sandbox idle TTL in seconds.
+
+    Prefers ``SANDBOX_IDLE_TIMEOUT_MINUTES`` (minutes, so deployments can use
+    sub-hour values). Falls back to the legacy ``SANDBOX_REDIS_TTL`` (seconds)
+    and finally to 24 hours.
+    """
+    minutes = os.getenv("SANDBOX_IDLE_TIMEOUT_MINUTES")
+    if minutes is not None:
+        try:
+            return max(1, int(minutes)) * 60
+        except ValueError:
+            pass
+    try:
+        return int(os.getenv("SANDBOX_REDIS_TTL", "86400"))
+    except ValueError:
+        return 86400
+
+
 def _get_redis_protocol() -> int:
     """Read and validate Redis wire protocol version."""
     value = os.getenv("REDIS_PROTOCOL", "2")
@@ -83,11 +102,15 @@ class TimeoutConfig:
     http_execution_request: float = 30.0
     http_container_wait: float = 5.0
 
-    # Redis TTL
-    redis_ttl: int = 86400  # 24 hours
+    # Sandbox idle TTL: a sandbox with no activity for longer than this is
+    # garbage-collected. Configurable via SANDBOX_IDLE_TIMEOUT_MINUTES (minutes)
+    # so deployments can use sub-hour values; defaults to 24 hours.
+    redis_ttl: int = field(default_factory=_get_sandbox_idle_ttl_seconds)
     # Session hash TTL must be longer than redis_ttl to ensure GC can load sandbox data
-    # Formula: redis_ttl + GC_INTERVAL + buffer (default: 86400 + 3600 + 3600 = 93600)
-    session_hash_ttl: int = 93600
+    # Formula: redis_ttl + GC_INTERVAL + buffer
+    session_hash_ttl: int = field(
+        default_factory=lambda: _get_sandbox_idle_ttl_seconds() + 7200
+    )
 
 
 @dataclass(frozen=True)

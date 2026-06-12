@@ -94,12 +94,38 @@ class SandboxScheduler:
             replace_existing=True,
         )
 
+        # Add idle executor GC job: reap regular task containers that are no
+        # longer running any task (DB-independent safety net for idle/orphaned
+        # containers). Only registered in Docker dispatcher mode.
+        from executor_manager.config.config import EXECUTOR_DISPATCHER_MODE
+        from executor_manager.services.idle_executor_gc import (
+            IDLE_GC_INTERVAL_SECONDS,
+            get_idle_executor_gc,
+        )
+
+        idle_gc_registered = False
+        if EXECUTOR_DISPATCHER_MODE == "docker":
+            idle_gc = get_idle_executor_gc()
+            self._scheduler.add_job(
+                idle_gc.collect_idle_executors,
+                IntervalTrigger(seconds=IDLE_GC_INTERVAL_SECONDS),
+                id="idle_executor_gc",
+                name="Idle Executor GC",
+                replace_existing=True,
+            )
+            idle_gc_registered = True
+
         self._scheduler.start()
         logger.info(
             f"[SandboxScheduler] Started with jobs: "
             f"sandbox_heartbeat_check (every {HEARTBEAT_CHECK_INTERVAL}s), "
             f"task_heartbeat_check (every {HEARTBEAT_CHECK_INTERVAL}s), "
             f"sandbox_gc (every {GC_INTERVAL}s)"
+            + (
+                f", idle_executor_gc (every {IDLE_GC_INTERVAL_SECONDS}s)"
+                if idle_gc_registered
+                else ""
+            )
         )
 
     async def stop(self) -> None:

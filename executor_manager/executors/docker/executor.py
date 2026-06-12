@@ -922,6 +922,10 @@ class DockerExecutor(Executor):
             f"aigc.weibo.com/task-type={get_metadata_field(task, 'type', 'online')}",
             "--label",
             f"subtask_next_id={get_metadata_field(task, 'subtask_next_id', '')}",
+            # preserve_executor keeps the container warm for reuse; the idle GC
+            # must never reap containers explicitly marked for preservation.
+            "--label",
+            f"preserve_executor={'true' if get_metadata_field(task, 'preserve_executor', False) else 'false'}",
         ]
 
         # Conditionally disable seccomp for older kernels (e.g., CentOS 7)

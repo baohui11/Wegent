@@ -570,6 +570,58 @@ def get_container_status(container_name: str) -> dict:
         }
 
 
+def list_owned_containers(running_only: bool = True) -> list:
+    """List containers owned by executor_manager with lifecycle-relevant labels.
+
+    Used by the idle executor GC and the startup reconcile to decide which
+    containers are safe to reap, without depending on the Backend database.
+
+    Args:
+        running_only: When True, only return running containers (``docker ps``).
+            When False, include stopped/exited containers (``docker ps -a``).
+
+    Returns:
+        list of dicts with keys: name, task_type, preserve, state.
+        Returns an empty list on any error (fail-safe: never reap on error).
+    """
+    try:
+        cmd = ["docker", "ps"]
+        if not running_only:
+            cmd.append("-a")
+        cmd.extend(
+            [
+                "--filter",
+                "label=owner=executor_manager",
+                "--format",
+                '{{.Names}}|{{.Label "aigc.weibo.com/task-type"}}'
+                '|{{.Label "preserve_executor"}}|{{.State}}',
+            ]
+        )
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+        containers = []
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split("|")
+            if len(parts) < 4:
+                continue
+            containers.append(
+                {
+                    "name": parts[0],
+                    "task_type": parts[1] or "online",
+                    "preserve": (parts[2] or "").lower(),
+                    "state": parts[3] or "",
+                }
+            )
+        return containers
+    except Exception as e:
+        error_msg = getattr(e, "stderr", str(e))
+        logger.error(f"Error listing owned containers: {error_msg}")
+        return []
+
+
 def get_container_task_id(container_name: str) -> Optional[str]:
     """
     Get task_id from container label.

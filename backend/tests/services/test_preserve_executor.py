@@ -182,9 +182,9 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
-            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
+            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
 
             await job_service.cleanup_stale_executors(mock_db)
 
@@ -202,8 +202,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -227,8 +227,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -256,8 +256,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -289,8 +289,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -316,8 +316,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -343,8 +343,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 side_effect=HTTPException(
                     status_code=500,
@@ -378,8 +378,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
 
             await job_service.cleanup_stale_executors(mock_db)
 
@@ -403,8 +403,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 side_effect=HTTPException(
                     status_code=500,
@@ -451,8 +451,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 1
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 60
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
 
             await job_service.cleanup_stale_executors(mock_db)
 
@@ -523,8 +523,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             executor_service.delete_executor_task_async = AsyncMock(
                 return_value={"success": True}
             )
@@ -600,9 +600,9 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
-            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
+            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
             executor_service.delete_executor_task_async = AsyncMock(
                 return_value={"success": True}
             )
@@ -658,8 +658,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as cleanup_entries,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
 
             await job_service.cleanup_stale_executors(mock_db)
 
@@ -706,8 +706,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as cleanup_entries,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
 
             await job_service.cleanup_stale_executors(mock_db)
 
@@ -739,9 +739,9 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
-            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
+            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -771,9 +771,9 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as mock_executor_service,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
-            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
+            mock_settings.STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
             mock_executor_service.delete_executor_task_async = AsyncMock(
                 return_value=True
             )
@@ -828,8 +828,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as cleanup_entries,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
             cleanup_entries.return_value = {
                 "task_id": 200,
                 "deleted": True,
@@ -907,8 +907,8 @@ class TestCleanupStaleExecutorsWithPreserveFlag(CleanupExecutorTestHelpers):
             ) as cleanup_groups,
             patch("app.services.adapters.executor_job.settings") as mock_settings,
         ):
-            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS = 24
-            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS = 48
+            mock_settings.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 1440
+            mock_settings.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES = 2880
 
             await job_service.cleanup_stale_executors(mock_db)
 
