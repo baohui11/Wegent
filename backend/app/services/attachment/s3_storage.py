@@ -226,6 +226,35 @@ class S3StorageBackend(StorageBackend):
             logger.error("Unexpected error stat-ing object key=%s: %s", key, exc)
             return False
 
+    def list_objects(self, prefix: str) -> list[dict]:
+        """List objects under ``prefix`` recursively.
+
+        Returns a list of ``{"key", "size", "last_modified"}`` dicts. Folder
+        placeholder entries (``is_dir``) are skipped so callers only see real
+        objects.
+        """
+        results: list[dict] = []
+        try:
+            for obj in self.client.list_objects(
+                self._bucket, prefix=prefix, recursive=True
+            ):
+                if getattr(obj, "is_dir", False):
+                    continue
+                results.append(
+                    {
+                        "key": obj.object_name,
+                        "size": int(obj.size or 0),
+                        "last_modified": obj.last_modified,
+                    }
+                )
+            return results
+        except S3Error as exc:
+            logger.error("Failed to list objects prefix=%s: %s", prefix, exc)
+            return results
+        except Exception as exc:
+            logger.error("Unexpected error listing objects prefix=%s: %s", prefix, exc)
+            return results
+
     def get_size(self, key: str) -> Optional[int]:
         """Return the object size via ``stat_object`` without downloading it."""
         try:
@@ -263,10 +292,23 @@ class S3StorageBackend(StorageBackend):
             logger.error("Failed to presign GET url for key=%s: %s", key, exc)
             return None
 
-    def get_upload_url(self, key: str, expires: int = 600) -> Optional[str]:
-        """Generate a presigned PUT URL for direct browser uploads."""
+    def get_upload_url(
+        self, key: str, expires: int = 600, *, public: bool = True
+    ) -> Optional[str]:
+        """Generate a presigned PUT URL.
+
+        Args:
+            key: Object key in the bucket.
+            expires: URL lifetime in seconds.
+            public: When True (default), sign with ``ATTACHMENT_S3_PUBLIC_ENDPOINT``
+                for direct browser uploads. When False, sign with the in-cluster
+                endpoint so executors and other Docker-network callers can PUT
+                with a valid signature (browser-facing hosts are unreachable
+                from inside the executor network).
+        """
         try:
-            return self.public_presign_client.presigned_put_object(
+            client = self.public_presign_client if public else self.client
+            return client.presigned_put_object(
                 self._bucket,
                 key,
                 expires=timedelta(seconds=expires),

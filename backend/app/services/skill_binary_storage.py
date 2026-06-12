@@ -10,8 +10,8 @@ adapter, API endpoints, batch tools, ...) do not need to know whether the
 bytes live in MySQL or in an S3-compatible object store.
 
 Why a dedicated service:
-    - Strategy pattern: dispatches to ``MySQLStorageBackend``-style logic or
-      to ``S3StorageBackend`` based on ``ATTACHMENT_STORAGE_BACKEND``.
+    - Strategy pattern: dispatches to object storage (``S3StorageBackend``) or
+      to a legacy ``binary_data`` column based on ``ATTACHMENT_STORAGE_BACKEND``.
     - Single source of truth for the storage-key format
       (``skills/{kind_id}.zip``).
     - Avoids scattering "if backend == s3 ... else ..." branches across the
@@ -75,11 +75,16 @@ class SkillBinaryStorage:
         file_content: bytes,
         file_size: int,
         file_hash: str,
+        file_name: Optional[str] = None,
+        binary_type: Optional[str] = None,
     ) -> SkillBinary:
-        """Persist a Skill ZIP, creating or updating the ``SkillBinary`` row.
+        """Persist a Skill/Plugin ZIP, creating or updating the row.
 
-        Returns the (attached) ``SkillBinary`` row. The DB transaction is
-        flushed but not committed; callers control commit/rollback.
+        Skills and Claude Code plugins share the same ``SkillBinary`` table and
+        storage path; ``binary_type`` distinguishes them (e.g. "skill" vs
+        "plugin"). Returns the (attached) ``SkillBinary`` row. The DB
+        transaction is flushed but not committed; callers control
+        commit/rollback.
         """
         record = db.query(SkillBinary).filter(SkillBinary.kind_id == kind_id).first()
 
@@ -95,35 +100,31 @@ class SkillBinaryStorage:
                     "content_type": "application/zip",
                 },
             )
-            if record:
-                record.binary_data = None
-                record.storage_key = key
-                record.file_size = file_size
-                record.file_hash = file_hash
-            else:
-                record = SkillBinary(
-                    kind_id=kind_id,
-                    binary_data=None,
-                    storage_key=key,
-                    file_size=file_size,
-                    file_hash=file_hash,
-                )
-                db.add(record)
+            stored_bytes: Optional[bytes] = None
+            storage_key: Optional[str] = key
         else:
-            if record:
-                record.binary_data = file_content
-                record.storage_key = None
-                record.file_size = file_size
-                record.file_hash = file_hash
-            else:
-                record = SkillBinary(
-                    kind_id=kind_id,
-                    binary_data=file_content,
-                    storage_key=None,
-                    file_size=file_size,
-                    file_hash=file_hash,
-                )
-                db.add(record)
+            stored_bytes = file_content
+            storage_key = None
+
+        if record:
+            record.binary_data = stored_bytes
+            record.storage_key = storage_key
+            record.file_size = file_size
+            record.file_hash = file_hash
+        else:
+            record = SkillBinary(
+                kind_id=kind_id,
+                binary_data=stored_bytes,
+                storage_key=storage_key,
+                file_size=file_size,
+                file_hash=file_hash,
+            )
+            db.add(record)
+
+        if file_name is not None:
+            record.file_name = file_name
+        if binary_type is not None:
+            record.type = binary_type
 
         db.flush()
         return record
@@ -182,9 +183,8 @@ class SkillBinaryStorage:
     def delete(self, db: Session, *, kind_id: int) -> None:
         """Delete the SkillBinary row and the underlying object (if any).
 
-        Object deletion failures are logged but never raise; this matches
-        the behaviour of ``MySQLStorageBackend.delete`` and prevents stale
-        DB rows when the bucket is unreachable.
+        Object deletion failures are logged but never raise; this prevents
+        stale DB rows when the bucket is unreachable.
         """
         record = db.query(SkillBinary).filter(SkillBinary.kind_id == kind_id).first()
         if record is None:

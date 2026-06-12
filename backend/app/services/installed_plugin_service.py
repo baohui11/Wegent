@@ -20,6 +20,7 @@ from app.schemas.installed_plugin import (
     PluginUploadInfo,
 )
 from app.services.claude_plugin_parser import claude_plugin_parser
+from app.services.skill_binary_storage import skill_binary_storage
 
 
 class InstalledPluginService:
@@ -152,9 +153,12 @@ class InstalledPluginService:
             db, user_id=user_id, installed_id=installed_id
         )
         package = db.query(SkillBinary).filter(SkillBinary.kind_id == row.id).first()
-        if not package or not package.binary_data:
+        if not package:
             raise HTTPException(status_code=404, detail="Plugin package not found")
-        return package.binary_data, package.file_name or self._fallback_filename(row)
+        package_bytes = skill_binary_storage.get_bytes(db, kind_id=row.id)
+        if not package_bytes:
+            raise HTTPException(status_code=404, detail="Plugin package not found")
+        return package_bytes, package.file_name or self._fallback_filename(row)
 
     def _reactivate_existing(
         self,
@@ -301,24 +305,16 @@ class InstalledPluginService:
         file_hash: str,
         filename: str,
     ) -> None:
-        package = db.query(SkillBinary).filter(SkillBinary.kind_id == kind_id).first()
-        if package:
-            package.binary_data = package_bytes
-            package.file_size = len(package_bytes)
-            package.file_hash = file_hash
-            package.file_name = filename
-            package.type = "plugin"
-            return
-
-        db.add(
-            SkillBinary(
-                kind_id=kind_id,
-                binary_data=package_bytes,
-                file_size=len(package_bytes),
-                file_hash=file_hash,
-                file_name=filename,
-                type="plugin",
-            )
+        # Route through the shared storage facade so plugin packages live in
+        # S3 (when object storage is configured) just like skill packages.
+        skill_binary_storage.save(
+            db,
+            kind_id=kind_id,
+            file_content=package_bytes,
+            file_size=len(package_bytes),
+            file_hash=file_hash,
+            file_name=filename,
+            binary_type="plugin",
         )
 
     def _fallback_filename(self, row: Kind) -> str:

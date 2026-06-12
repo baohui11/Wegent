@@ -113,8 +113,8 @@ class TestSettings:
 
         assert s.APPEND_CHAT_TASK_EXPIRE_HOURS == 2
         assert s.APPEND_CODE_TASK_EXPIRE_HOURS == 24
-        assert s.CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS == 2
-        assert s.CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS == 24
+        assert s.CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES == 120
+        assert s.CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES == 1440
 
     def test_max_skill_size_defaults(self):
         """Test Skill ZIP upload size default (megabytes)."""

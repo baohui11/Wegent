@@ -80,7 +80,7 @@ services:
       - |
         set -eu
         mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}"
-        for bucket in "${ATTACHMENT_S3_BUCKET:-attachments}" "${ATTACHMENT_S3_SKILL_BUCKET:-skills}" "${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}"; do
+        for bucket in "${ATTACHMENT_S3_BUCKET:-attachments}" "${ATTACHMENT_S3_SKILL_BUCKET:-skills}" "${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}" "${WORKSPACE_FILES_BUCKET:-wegent-workspace-files}"; do
           mc mb --ignore-existing "local/$$bucket"
         done
 
@@ -144,22 +144,24 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       APPEND_CHAT_TASK_EXPIRE_HOURS: ${BACKEND_APPEND_CHAT_TASK_EXPIRE_HOURS:-2}
       APPEND_CODE_TASK_EXPIRE_HOURS: ${BACKEND_APPEND_CODE_TASK_EXPIRE_HOURS:-2}
-      CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS: ${BACKEND_CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS:-2}
-      CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS: ${BACKEND_CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS:-2}
+      # Executor auto-delete thresholds in MINUTES (backend scheduled cleanup)
+      CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES: ${BACKEND_CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES:-120}
+      CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES: ${BACKEND_CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES:-1440}
+      STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES: ${BACKEND_STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES:-1440}
       INIT_DATA_DIR: ${BACKEND_INIT_DATA_DIR:-/app/init_data}
       INIT_DATA_ENABLED: "${BACKEND_INIT_DATA_ENABLED:-True}"
       MAX_UPLOAD_FILE_SIZE_MB: ${BACKEND_MAX_UPLOAD_FILE_SIZE_MB:-50}
       MAX_SKILL_SIZE: ${BACKEND_MAX_SKILL_SIZE:-10}
       MAX_EXTRACTED_TEXT_LENGTH: ${BACKEND_MAX_EXTRACTED_TEXT_LENGTH:-1000000}
-      # Attachment / Skill storage backend (mysql | s3 | minio)
-      # Defaults to "mysql" so the stack stays compatible with the upstream
-      # configuration; flip to "s3" (or "minio") to route blobs to MinIO.
-      ATTACHMENT_STORAGE_BACKEND: ${ATTACHMENT_STORAGE_BACKEND:-mysql}
+      # Object storage backend for attachments / skills / workspace files.
+      # Only "s3" and "minio" are supported (the legacy "mysql" backend was
+      # removed). Both values use the same S3 client; default to "s3".
+      ATTACHMENT_STORAGE_BACKEND: ${ATTACHMENT_STORAGE_BACKEND:-s3}
+      # In-cluster endpoint reached via the service name. Server-side callers
+      # (backend, executor PUT for workspace sync) connect through this.
       ATTACHMENT_S3_ENDPOINT: ${ATTACHMENT_S3_ENDPOINT:-http://minio:9000}
-      # Public endpoint used to rewrite presigned URLs for browsers and
-      # off-cluster executors. When the backend reaches MinIO through the
-      # service name (http://minio:9000), this should be the host:port that
-      # is published to the host (default ${WEGENT_MINIO_PUBLIC_HOST}).
+      # Public endpoint used to sign presigned URLs for browsers (and the
+      # enterprise encrypt/decrypt gateway). Must be the host:port clients call.
       ATTACHMENT_S3_PUBLIC_ENDPOINT: ${ATTACHMENT_S3_PUBLIC_ENDPOINT:-http://localhost:${MINIO_API_PORT:-9000}}
       ATTACHMENT_S3_ACCESS_KEY: ${ATTACHMENT_S3_ACCESS_KEY:-${MINIO_ROOT_USER:-minioadmin}}
       ATTACHMENT_S3_SECRET_KEY: ${ATTACHMENT_S3_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-minioadmin}}
@@ -167,6 +169,14 @@ services:
       ATTACHMENT_S3_SKILL_BUCKET: ${ATTACHMENT_S3_SKILL_BUCKET:-skills}
       ATTACHMENT_S3_REGION: ${ATTACHMENT_S3_REGION:-us-east-1}
       ATTACHMENT_S3_USE_SSL: ${ATTACHMENT_S3_USE_SSL:-False}
+      # Workspace archive + incremental workspace-file sync to object storage.
+      # Buckets must match the ones minio-init creates above.
+      WORKSPACE_ARCHIVE_BUCKET: ${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}
+      WORKSPACE_ARCHIVE_ENABLED: ${WORKSPACE_ARCHIVE_ENABLED:-true}
+      WORKSPACE_FILES_BUCKET: ${WORKSPACE_FILES_BUCKET:-wegent-workspace-files}
+      WORKSPACE_SYNC_ENABLED: ${WORKSPACE_SYNC_ENABLED:-true}
+      WORKSPACE_SYNC_MAX_FILE_SIZE_MB: ${WORKSPACE_SYNC_MAX_FILE_SIZE_MB:-100}
+      WORKSPACE_SYNC_PRESIGN_EXPIRE_SECONDS: ${WORKSPACE_SYNC_PRESIGN_EXPIRE_SECONDS:-3600}
       TEAM_SHARE_BASE_URL: ${TEAM_SHARE_BASE_URL:-http://localhost:3000/chat}
       TASK_SHARE_BASE_URL: ${TASK_SHARE_BASE_URL:-http://localhost:3000}
       TEAM_SHARE_QUERY_PARAM: ${TEAM_SHARE_QUERY_PARAM:-teamShare}
@@ -351,6 +361,12 @@ services:
       - TASK_DISPATCH_MODE=${TASK_DISPATCH_MODE:-push}
       # Service pool name for this instance (used for queue isolation)
       - SERVICE_POOL=${SERVICE_POOL:-default}
+      # Idle executor GC: reap regular task containers idle longer than this
+      # (minutes). DB-independent safety net for idle/orphaned containers.
+      - EXECUTOR_IDLE_TIMEOUT_MINUTES=${EXECUTOR_IDLE_TIMEOUT_MINUTES:-30}
+      - EXECUTOR_IDLE_GC_INTERVAL_SECONDS=${EXECUTOR_IDLE_GC_INTERVAL_SECONDS:-120}
+      # Sandbox idle TTL (minutes); sandboxes idle longer than this are GC'd.
+      - SANDBOX_IDLE_TIMEOUT_MINUTES=${SANDBOX_IDLE_TIMEOUT_MINUTES:-1440}
       # JWT secret for verifying backend tokens (must match backend SECRET_KEY)
       - JWT_SECRET_KEY=${BACKEND_SECRET_KEY:-your-secret-key-here}
       - JWT_ALGORITHM=${BACKEND_ALGORITHM:-HS256}

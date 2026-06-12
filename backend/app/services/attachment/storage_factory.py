@@ -71,22 +71,21 @@ class StorageBackendRegistry:
             return
         StorageBackendRegistry._initialized = True
         self._backends: Dict[str, StorageBackendFactory] = {}
-        self._default_backend: str = "mysql"
+        self._default_backend: str = "s3"
         self._register_default_backends()
 
     def _register_default_backends(self) -> None:
-        """Register built-in backends (MySQL and S3/MinIO).
+        """Register built-in backends (S3/MinIO).
 
-        S3 and MinIO share a single ``S3StorageBackend`` implementation but
-        are exposed under two aliases so ``ATTACHMENT_STORAGE_BACKEND`` can
+        Attachment binary data lives exclusively in S3-compatible object
+        storage. S3 and MinIO share a single ``S3StorageBackend`` implementation
+        but are exposed under two aliases so ``ATTACHMENT_STORAGE_BACKEND`` can
         be set to either value without forcing operators to remember which
         flavour of object storage they are using.
         """
         # Import here to avoid circular imports
-        from app.services.attachment.mysql_storage import MySQLStorageBackend
         from app.services.attachment.s3_storage import S3StorageBackend
 
-        self.register("mysql", lambda db: MySQLStorageBackend(db))
         self.register("s3", lambda db: S3StorageBackend(db))
         self.register("minio", lambda db: S3StorageBackend(db))
 
@@ -332,13 +331,22 @@ def get_storage_backend(db: Session) -> StorageBackend:
 
 def is_external_storage_configured() -> bool:
     """
-    Check if an external storage backend is configured.
+    Check if object storage (S3/MinIO) is configured and usable.
+
+    Attachments are stored exclusively in S3-compatible object storage, so this
+    returns True only when the configured backend is registered AND the S3
+    endpoint/credentials are present. Features that depend on object storage
+    (presigned downloads, browser direct upload, workspace file sync) use this
+    to decide whether they can operate.
 
     Returns:
-        True if a non-default storage backend is configured and registered,
-        False otherwise
+        True if S3 storage is configured and usable, False otherwise.
     """
     backend_type = settings.ATTACHMENT_STORAGE_BACKEND.lower()
-    return backend_type != _registry.default_backend and _registry.is_registered(
-        backend_type
+    if not _registry.is_registered(backend_type):
+        return False
+    return bool(
+        settings.ATTACHMENT_S3_ENDPOINT
+        and settings.ATTACHMENT_S3_ACCESS_KEY
+        and settings.ATTACHMENT_S3_SECRET_KEY
     )

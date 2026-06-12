@@ -7,7 +7,7 @@ Storage backend module for file attachments.
 
 This module provides:
 - StorageBackend: Abstract interface for pluggable storage backends
-- MySQLStorageBackend: Default MySQL-based storage implementation
+- S3StorageBackend: Default S3/MinIO object storage implementation
 - DocumentParser: Document parsing utilities
 - Registry-based storage backend factory for extensibility
 
@@ -35,7 +35,6 @@ Storage Backend Registration:
     ```
 """
 
-from app.services.attachment.mysql_storage import MySQLStorageBackend
 from app.services.attachment.parser import DocumentParser
 from app.services.attachment.s3_storage import S3StorageBackend
 from app.services.attachment.storage_backend import (
@@ -59,7 +58,6 @@ __all__ = [
     # Core classes
     "StorageBackend",
     "StorageError",
-    "MySQLStorageBackend",
     "S3StorageBackend",
     "DocumentParser",
     # Factory functions

@@ -194,10 +194,12 @@ class Settings(BaseSettings):
 
     # Subtask executor cleanup configuration
     # After a subtask is COMPLETED or FAILED, if executor_name/executor_namespace are set
-    # and updated_at exceeds this threshold, the executor task will be deleted automatically.
-    CHAT_TASK_EXECUTOR_DELETE_AFTER_HOURS: int = 2
-    CODE_TASK_EXECUTOR_DELETE_AFTER_HOURS: int = 24
-    STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_HOURS: int = 24
+    # and updated_at exceeds this threshold (in minutes), the executor task will be
+    # deleted automatically. Expressed in minutes so deployments can use sub-hour values
+    # (e.g. 20) for faster container release.
+    CHAT_TASK_EXECUTOR_DELETE_AFTER_MINUTES: int = 120
+    CODE_TASK_EXECUTOR_DELETE_AFTER_MINUTES: int = 1440
+    STALE_NON_TERMINAL_TASK_EXECUTOR_DELETE_AFTER_MINUTES: int = 1440
     TASK_EXECUTOR_CLEANUP_PRIMARY_SCAN_BATCH_SIZE: int = 2000
     TASK_EXECUTOR_CLEANUP_LOOKBACK_HOURS: int = 96
     TASK_EXECUTOR_CLEANUP_LOOKBACK_SCAN_LIMIT: int = 500
@@ -210,6 +212,20 @@ class Settings(BaseSettings):
     WORKSPACE_ARCHIVE_BUCKET: str = "wegent-archives"
     WORKSPACE_ARCHIVE_ENABLED: bool = True
     WORKSPACE_ARCHIVE_TIMEZONE: str = "Asia/Shanghai"
+
+    # Workspace file sync configuration
+    # When enabled, executor-produced workspace files are incrementally synced
+    # to object storage on each subtask checkpoint, and "view task files"
+    # lists/downloads directly from S3 (through the encrypt/decrypt gateway).
+    WORKSPACE_SYNC_ENABLED: bool = True
+    # Dedicated bucket for synced workspace files (object keys are
+    # ``workspace/{task_id}/{relative_path}``). Kept separate from attachments
+    # so it can have its own lifecycle/ACL policy.
+    WORKSPACE_FILES_BUCKET: str = "wegent-workspace-files"
+    # Skip syncing individual files larger than this (megabytes).
+    WORKSPACE_SYNC_MAX_FILE_SIZE_MB: int = 100
+    # Presigned URL lifetime (seconds) for workspace file upload/download.
+    WORKSPACE_SYNC_PRESIGN_EXPIRE_SECONDS: int = 3600
 
     # Publish storage configuration
     PUBLISH_PRESIGNED_UPLOAD_EXPIRE_SECONDS: int = 3600
@@ -473,9 +489,10 @@ class Settings(BaseSettings):
     MAX_SKILL_SIZE: int = 10
 
     # Attachment storage backend configuration
-    # Supported backends: "mysql" (default), "s3", "minio"
-    # If not configured or set to "mysql", binary data is stored in MySQL database
-    ATTACHMENT_STORAGE_BACKEND: str = "mysql"
+    # Supported backends: "s3" (default), "minio"
+    # Attachment binary data is stored exclusively in S3-compatible object
+    # storage; configure the ATTACHMENT_S3_* settings below.
+    ATTACHMENT_STORAGE_BACKEND: str = "s3"
     # S3/MinIO configuration (only used when ATTACHMENT_STORAGE_BACKEND is "s3" or "minio")
     ATTACHMENT_S3_ENDPOINT: str = (
         ""  # e.g., "https://s3.amazonaws.com" or "http://minio:9000"

@@ -86,7 +86,7 @@ def test_user_download_presign_skipped_for_encrypted_attachments() -> None:
     assert response is None
 
 
-def test_user_download_presign_skipped_for_mysql_storage() -> None:
+def test_user_download_presign_skipped_when_storage_unconfigured() -> None:
     context = _attachment_context()
 
     with patch.object(

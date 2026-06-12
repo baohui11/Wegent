@@ -192,6 +192,26 @@ class TestS3StorageBackendUrls:
         )
         backend._client.presigned_put_object.assert_not_called()
 
+    def test_get_upload_url_internal_uses_in_cluster_client(self, backend, monkeypatch):
+        from app.core import config
+
+        monkeypatch.setattr(
+            config.settings, "ATTACHMENT_S3_PUBLIC_ENDPOINT", "http://localhost:9000"
+        )
+        public_client = MagicMock()
+        backend._public_presign_client = public_client
+        backend._client.presigned_put_object.return_value = (
+            "http://minio:9000/attachments/k?X-Amz-Signature=put"
+        )
+
+        url = backend.get_upload_url("attachments/k", expires=120, public=False)
+
+        assert "minio:9000" in url
+        backend._client.presigned_put_object.assert_called_once_with(
+            "attachments", "attachments/k", expires=timedelta(seconds=120)
+        )
+        public_client.presigned_put_object.assert_not_called()
+
     def test_get_upload_url_returns_presigned_url(self, backend):
         backend._client.presigned_put_object.return_value = (
             "http://minio:9000/attachments/k?X-Amz-Signature=put"
