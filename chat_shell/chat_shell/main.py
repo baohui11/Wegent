@@ -151,6 +151,12 @@ def create_app(
     Returns:
         Configured FastAPI application
     """
+    from chat_shell.compat.langchain_anthropic_patch import (
+        apply_langchain_anthropic_stream_patch,
+    )
+
+    apply_langchain_anthropic_stream_patch()
+
     # Override settings if provided
     if storage_type:
         settings.STORAGE_TYPE = storage_type
