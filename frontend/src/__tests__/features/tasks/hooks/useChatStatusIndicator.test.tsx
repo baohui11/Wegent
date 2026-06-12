@@ -62,6 +62,18 @@ describe('useChatStatusIndicator', () => {
     })
   })
 
+  test('enables context remaining by default when preference is unset', () => {
+    useUser.mockReturnValue({
+      user: {
+        preferences: {},
+      },
+    })
+
+    render(<Harness />)
+
+    expect(screen.getByTestId('enabled')).toHaveTextContent('true')
+  })
+
   test('formats the latest snapshot for the current task', () => {
     render(<Harness />)
 

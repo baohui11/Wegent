@@ -11,8 +11,16 @@ import { useOptionalTaskSession } from '@/features/tasks/session/TaskSession'
 import type { UnifiedMessage } from '@/features/tasks/state/TaskStateMachine'
 import type { ChatStatusUpdatedPayload } from '@/types/socket'
 
-const CONTEXT_REMAINING_STATUS_ITEM = 'context-remaining'
+export const CONTEXT_REMAINING_STATUS_ITEM = 'context-remaining'
 const PERSISTED_PHASE = 'persisted'
+
+/** Default on when the user has never saved a preference (null/undefined). */
+export function isContextRemainingStatusEnabled(chatStatusItems?: string[] | null): boolean {
+  if (chatStatusItems == null) {
+    return true
+  }
+  return chatStatusItems.includes(CONTEXT_REMAINING_STATUS_ITEM)
+}
 
 function formatTokenCount(value: number): string {
   return new Intl.NumberFormat().format(value)
@@ -71,8 +79,7 @@ export function useChatStatusIndicator(): ChatStatusIndicatorState {
     taskSession?.selectedTask?.id ??
     null
 
-  const enabledItems = user?.preferences?.chat_status_items ?? []
-  const enabled = enabledItems.includes(CONTEXT_REMAINING_STATUS_ITEM)
+  const enabled = isContextRemainingStatusEnabled(user?.preferences?.chat_status_items)
   const liveStatus = currentTaskId ? statusByTaskId[currentTaskId] : null
 
   const fallbackStatus = useMemo<ChatStatusUpdatedPayload | null>(() => {

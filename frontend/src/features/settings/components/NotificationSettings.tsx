@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
+import { isContextRemainingStatusEnabled } from '@/features/tasks/hooks/useChatStatusIndicator'
 import { useUser } from '@/features/common/UserContext'
 import { userApis, type FeatureFlags } from '@/apis/user'
 import type { UserPreferences } from '@/types/api'
@@ -34,7 +35,7 @@ export default function NotificationSettings() {
   const [sendKey, setSendKey] = useState<'enter' | 'cmd_enter'>('enter')
   const [searchKey, setSearchKey] = useState<'cmd_k' | 'cmd_f' | 'disabled'>('cmd_k')
   const [memoryEnabled, setMemoryEnabled] = useState(false)
-  const [chatStatusItems, setChatStatusItems] = useState<string[]>([])
+  const [chatStatusItems, setChatStatusItems] = useState<string[] | null>(null)
   const [toolOutputGuardEnabled, setToolOutputGuardEnabled] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   // Feature flags from backend
@@ -78,7 +79,7 @@ export default function NotificationSettings() {
       setSendKey(userSendKey)
       setSearchKey(userSearchKey)
       setMemoryEnabled(userMemoryEnabled)
-      setChatStatusItems(user.preferences?.chat_status_items || [])
+      setChatStatusItems(user.preferences?.chat_status_items ?? null)
       setToolOutputGuardEnabled(user.preferences?.tool_output_guard_enabled ?? false)
     }
   }, [user, featureFlags])
@@ -211,7 +212,7 @@ export default function NotificationSettings() {
         variant: 'destructive',
         title: t('common:chat_status.save_failed'),
       })
-      setChatStatusItems(user?.preferences?.chat_status_items || [])
+      setChatStatusItems(user?.preferences?.chat_status_items ?? null)
     } finally {
       setIsSaving(false)
     }
@@ -370,7 +371,7 @@ export default function NotificationSettings() {
           >
             <Checkbox
               id="chat-status-context-remaining"
-              checked={chatStatusItems.includes('context-remaining')}
+              checked={isContextRemainingStatusEnabled(chatStatusItems)}
               onCheckedChange={checked => handleChatStatusItemToggle(Boolean(checked))}
               disabled={isSaving}
               data-testid="chat-status-context-remaining-checkbox"
