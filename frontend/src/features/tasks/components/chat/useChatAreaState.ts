@@ -151,7 +151,7 @@ export interface ChatAreaState {
 
   // UI state
   isMobile: boolean
-  shouldHideQuotaUsage: boolean
+  shouldHideToolbarStatus: boolean
   shouldHideChatInput: boolean
   hasRestoredPreferences: boolean
   setHasRestoredPreferences: (value: boolean) => void
@@ -189,7 +189,7 @@ export interface ChatAreaState {
  * - Toggle states (deep thinking, clarification)
  * - External API parameters (for Dify teams)
  * - Welcome config and random slogan/tip
- * - UI state (mobile, quota visibility)
+ * - UI state (mobile, toolbar status visibility)
  *
  * This hook extracts all useState calls and related initialization logic
  * from ChatArea to reduce the component size and improve maintainability.
@@ -536,7 +536,7 @@ export function useChatAreaState({
   ])
 
   // Compute UI flags
-  const shouldHideQuotaUsage = useMemo(() => {
+  const shouldHideToolbarStatus = useMemo(() => {
     if (!isMobile || !selectedTeam?.name) return false
 
     if (selectedTeam.share_status === 2 && selectedTeam.user?.user_name) {
@@ -632,7 +632,7 @@ export function useChatAreaState({
 
     // UI state
     isMobile,
-    shouldHideQuotaUsage,
+    shouldHideToolbarStatus,
     shouldHideChatInput,
     hasRestoredPreferences,
     setHasRestoredPreferences,

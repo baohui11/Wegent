@@ -257,6 +257,7 @@
     "tool_input": "Input",
     "tool_output": "Output",
     "tool_executing": "Executing...",
+    "no_output": "No output",
     "downloadable": "Downloadable",
     "processing": "Processing...",
     "tools": {
