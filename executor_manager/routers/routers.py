@@ -1438,6 +1438,32 @@ class RestoreExecutorRequest(BaseModel):
     runtime_type: str = "executor"
 
 
+class WorkspaceManifestExecutorRequest(BaseModel):
+    """Request model for /executor/workspace/manifest endpoint."""
+
+    task_id: int
+    executor_name: str
+    executor_namespace: str = ""
+    runtime_type: str = "executor"
+
+
+class WorkspaceSyncUploadItem(BaseModel):
+    """A single file the backend asked the executor to upload to S3."""
+
+    path: str
+    url: str
+
+
+class WorkspaceSyncExecutorRequest(BaseModel):
+    """Request model for /executor/workspace/sync endpoint."""
+
+    task_id: int
+    executor_name: str
+    executor_namespace: str = ""
+    runtime_type: str = "executor"
+    uploads: list[WorkspaceSyncUploadItem] = []
+
+
 @api_router.post("/executor/archive")
 async def archive_executor_workspace(
     request: ArchiveExecutorRequest,
@@ -1586,6 +1612,90 @@ async def restore_executor_workspace(
     except Exception as e:
         logger.error(f"[Restore] Error restoring task {request.task_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Workspace incremental S3 sync proxies
+# =============================================================================
+# Forward manifest/sync requests to the executor pod so the backend can drive
+# event-driven incremental syncing of workspace files into object storage.
+# =============================================================================
+
+
+@api_router.post("/executor/workspace/manifest")
+async def get_executor_workspace_manifest(
+    request: WorkspaceManifestExecutorRequest,
+):
+    """Forward a workspace manifest request to the executor pod."""
+    base_url = await _resolve_workspace_runtime_base_url(
+        request.task_id, request.executor_name
+    )
+    manifest_url = f"{base_url}/api/workspace/manifest"
+    params = {
+        "task_id": request.task_id,
+        "runtime_type": request.runtime_type,
+    }
+    logger.info(
+        "[workspace_sync] manifest proxy task_id=%s executor_name=%s url=%s",
+        request.task_id,
+        request.executor_name,
+        manifest_url,
+    )
+    try:
+        async with traced_async_client(timeout=120.0) as client:
+            response = await client.get(manifest_url, params=params)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"[workspace_sync] manifest HTTP error task_id={request.task_id} "
+            f"status={e.response.status_code} body={e.response.text[:500]}"
+        )
+        raise HTTPException(status_code=502, detail="Workspace manifest failed")
+    except httpx.HTTPError as e:
+        logger.error(f"[workspace_sync] manifest error task_id={request.task_id}: {e}")
+        raise HTTPException(status_code=502, detail="Workspace manifest failed")
+
+
+@api_router.post("/executor/workspace/sync")
+async def post_executor_workspace_sync(
+    request: WorkspaceSyncExecutorRequest,
+):
+    """Forward a workspace sync (upload) request to the executor pod."""
+    base_url = await _resolve_workspace_runtime_base_url(
+        request.task_id, request.executor_name
+    )
+    sync_url = f"{base_url}/api/workspace/sync"
+    payload = {
+        "task_id": request.task_id,
+        "runtime_type": request.runtime_type,
+        "uploads": [{"path": u.path, "url": u.url} for u in request.uploads],
+    }
+    logger.info(
+        "[workspace_sync] sync proxy task_id=%s executor_name=%s url=%s upload_count=%s",
+        request.task_id,
+        request.executor_name,
+        sync_url,
+        len(payload["uploads"]),
+    )
+    try:
+        async with traced_async_client(timeout=120.0) as client:
+            response = await client.post(
+                sync_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"[workspace_sync] sync HTTP error task_id={request.task_id} "
+            f"status={e.response.status_code} body={e.response.text[:500]}"
+        )
+        raise HTTPException(status_code=502, detail="Workspace sync failed")
+    except httpx.HTTPError as e:
+        logger.error(f"[workspace_sync] sync error task_id={request.task_id}: {e}")
+        raise HTTPException(status_code=502, detail="Workspace sync failed")
 
 
 # Mount api_router to app

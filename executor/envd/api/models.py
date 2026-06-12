@@ -5,7 +5,7 @@
 Pydantic models for envd REST API
 """
 
-from typing import Dict, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -81,3 +81,44 @@ class RestoreResponse(BaseModel):
     success: bool
     session_restored: bool  # Whether .claude_session_id was restored
     git_restored: bool  # Whether .git directory was restored
+
+
+# Workspace incremental S3 sync models
+class WorkspaceManifestEntry(BaseModel):
+    """A single workspace file descriptor used for diffing against S3."""
+
+    path: str  # POSIX relative path from the sync root
+    size: int
+    mtime: float
+    sha256: str
+
+
+class WorkspaceManifestResponse(BaseModel):
+    """Response model for GET /api/workspace/manifest."""
+
+    task_id: int
+    runtime_type: Literal["executor", "sandbox"] = "executor"
+    entries: List[WorkspaceManifestEntry] = []
+
+
+class WorkspaceSyncUpload(BaseModel):
+    """A single file the backend asked the executor to upload to S3."""
+
+    path: str  # POSIX relative path from the sync root
+    url: str  # Presigned PUT URL
+
+
+class WorkspaceSyncRequest(BaseModel):
+    """Request model for POST /api/workspace/sync."""
+
+    task_id: int
+    runtime_type: Literal["executor", "sandbox"] = "executor"
+    uploads: List[WorkspaceSyncUpload] = []
+
+
+class WorkspaceSyncResponse(BaseModel):
+    """Response model for POST /api/workspace/sync."""
+
+    task_id: int
+    uploaded: List[str] = []
+    failed: List[str] = []

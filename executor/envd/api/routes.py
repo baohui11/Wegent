@@ -28,31 +28,19 @@ from .models import (
     MetricsResponse,
     RestoreRequest,
     RestoreResponse,
+    WorkspaceManifestResponse,
+    WorkspaceSyncRequest,
+    WorkspaceSyncResponse,
 )
 from .state import AccessTokenAlreadySetError, get_state_manager
 from .utils import resolve_path, verify_access_token, verify_signature
+from .workspace_files import (
+    build_workspace_manifest,
+    should_exclude_workspace_path,
+    sync_files_to_urls,
+)
 
 logger = setup_logger("envd_api_routes")
-
-# Exclusion patterns for workspace archive
-ARCHIVE_EXCLUDE_PATTERNS = [
-    "node_modules",
-    "__pycache__",
-    "*.pyc",
-    ".venv",
-    "venv",
-    "target",
-    "build",
-    "dist",
-    "*.log",
-    ".next",
-    ".nuxt",
-    ".npm",
-    ".pnpm-store",
-    ".yarn",
-    "vendor",
-    ".cache",
-]
 
 HOME_ARCHIVE_PREFIX = "home"
 WORKSPACE_ARCHIVE_PREFIX = "workspace"
@@ -81,6 +69,19 @@ def get_runtime_home_path(runtime_type: str) -> Path:
     return get_home_path()
 
 
+def get_sync_root(task_id: int, runtime_type: str) -> Path:
+    """Resolve the root directory used for incremental S3 workspace sync.
+
+    Mirrors the backend ``remote_workspace_service`` root resolution so the
+    file paths shown in the UI map cleanly onto S3 object keys:
+    - sandbox runtime: the sandbox user's home (``/home/user``)
+    - executor runtime: the task workspace (``/workspace/{task_id}``)
+    """
+    if runtime_type == "sandbox":
+        return get_sandbox_home_path()
+    return get_workspace_path(task_id)
+
+
 def extract_tar_members(
     tar: tarfile.TarFile,
     path: str,
@@ -95,18 +96,6 @@ def extract_tar_members(
         tar.extractall(filter="data", **extract_kwargs)
     except TypeError:
         tar.extractall(**extract_kwargs)
-
-
-def should_exclude_archive_path(name: str) -> bool:
-    """Check if a file or directory should be excluded from workspace archives."""
-    parts = Path(name).parts
-    for pattern in ARCHIVE_EXCLUDE_PATTERNS:
-        if pattern.startswith("*"):
-            if name.endswith(pattern[1:]):
-                return True
-        elif pattern in parts:
-            return True
-    return False
 
 
 def is_session_archive_member(name: str) -> bool:
@@ -154,7 +143,7 @@ def add_directory_children_to_archive(
 
     for item in source_path.iterdir():
         arcname = f"{arc_prefix}/{item.name}" if arc_prefix else item.name
-        if should_exclude_archive_path(arcname):
+        if should_exclude_workspace_path(arcname):
             logger.debug(f"[archive] Excluding: {arcname}")
             continue
 
@@ -608,6 +597,71 @@ def register_rest_api(app: FastAPI):
             logger.exception(f"[restore] Error restoring workspace: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.get("/api/workspace/manifest", response_model=WorkspaceManifestResponse)
+    async def workspace_manifest(
+        task_id: int = Query(...),
+        runtime_type: str = Query("executor"),
+        x_access_token: Optional[str] = Header(None),
+    ):
+        """Return a manifest of syncable workspace files for incremental S3 sync.
+
+        The backend diffs this manifest against the previous sync snapshot to
+        decide which files to upload (presigned PUT) or delete from S3.
+        """
+        verify_access_token(x_access_token)
+
+        root = get_sync_root(task_id, runtime_type)
+        logger.info(
+            "[workspace_sync] manifest task_id=%s runtime_type=%s root=%s",
+            task_id,
+            runtime_type,
+            root,
+        )
+        try:
+            entries = build_workspace_manifest(root)
+        except Exception as e:
+            logger.exception(f"[workspace_sync] manifest error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+        return WorkspaceManifestResponse(
+            task_id=task_id,
+            runtime_type=runtime_type,
+            entries=entries,
+        )
+
+    @app.post("/api/workspace/sync", response_model=WorkspaceSyncResponse)
+    async def workspace_sync(
+        request: WorkspaceSyncRequest,
+        x_access_token: Optional[str] = Header(None),
+    ):
+        """Upload the requested workspace files to S3 using presigned PUT URLs.
+
+        The executor never holds object-storage credentials: the backend mints
+        the presigned URLs and this endpoint only streams the bytes.
+        """
+        verify_access_token(x_access_token)
+
+        root = get_sync_root(request.task_id, request.runtime_type)
+        uploads = [{"path": u.path, "url": u.url} for u in request.uploads]
+        logger.info(
+            "[workspace_sync] sync task_id=%s runtime_type=%s root=%s upload_count=%s",
+            request.task_id,
+            request.runtime_type,
+            root,
+            len(uploads),
+        )
+        try:
+            uploaded, failed = await sync_files_to_urls(root, uploads)
+        except Exception as e:
+            logger.exception(f"[workspace_sync] sync error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+        return WorkspaceSyncResponse(
+            task_id=request.task_id,
+            uploaded=uploaded,
+            failed=failed,
+        )
+
     logger.info("Registered envd REST API routes:")
     logger.info("  GET /health")
     logger.info("  GET /metrics")
@@ -617,3 +671,5 @@ def register_rest_api(app: FastAPI):
     logger.info("  POST /files")
     logger.info("  POST /api/archive")
     logger.info("  POST /api/restore")
+    logger.info("  GET /api/workspace/manifest")
+    logger.info("  POST /api/workspace/sync")

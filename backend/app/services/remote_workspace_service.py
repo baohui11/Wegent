@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -20,6 +20,10 @@ from app.schemas.remote_workspace import (
     RemoteWorkspaceTreeResponse,
 )
 from app.services.adapters.task_kinds import task_kinds_service
+from app.services.workspace_sync import (
+    workspace_files_storage,
+    workspace_sync_service,
+)
 
 WORKSPACE_ROOT = "/workspace"
 SANDBOX_HOME_ROOT = "/home/user"
@@ -117,6 +121,23 @@ class RemoteWorkspaceService:
             normalized_path,
             root_path,
         )
+
+        # Prefer object storage: when workspace files have been synced to S3,
+        # list directly from S3 so downloads/listing share one unified path.
+        s3_response = self._list_tree_from_s3(
+            task_id=task_id,
+            normalized_path=normalized_path,
+            root_path=root_path,
+        )
+        if s3_response is not None:
+            logger.info(
+                "[remote_workspace] list_tree served from S3 task_id=%s path=%s entry_count=%s",
+                task_id,
+                normalized_path,
+                len(s3_response.entries),
+            )
+            return s3_response
+
         if self._is_sandbox_available(sandbox_payload):
             sandbox_base_url = str(sandbox_payload.get("base_url", "")).rstrip("/")
             entries_payload = self._list_directory_via_sandbox(
@@ -185,6 +206,22 @@ class RemoteWorkspaceService:
             disposition,
             root_path,
         )
+
+        # Prefer object storage: redirect to a presigned URL (through the
+        # encrypt/decrypt gateway) when the file has been synced to S3.
+        redirect = self._redirect_file_to_s3(
+            task_id=task_id,
+            normalized_path=normalized_path,
+            root_path=root_path,
+        )
+        if redirect is not None:
+            logger.info(
+                "[remote_workspace] stream_file redirected to S3 task_id=%s path=%s",
+                task_id,
+                normalized_path,
+            )
+            return redirect
+
         if self._is_sandbox_available(sandbox_payload):
             sandbox_base_url = str(sandbox_payload.get("base_url", "")).rstrip("/")
             content, content_type = self._download_file_via_sandbox(
@@ -222,6 +259,120 @@ class RemoteWorkspaceService:
             sandbox_payload.get("base_url") if sandbox_payload else None,
         )
         return response
+
+    def _relative_path(self, normalized_path: str, root_path: str) -> str:
+        """Return the path relative to the sync root (POSIX, no leading slash)."""
+        normalized_root = posixpath.normpath(root_path)
+        if normalized_path == normalized_root:
+            return ""
+        prefix = f"{normalized_root}/"
+        if normalized_path.startswith(prefix):
+            return normalized_path[len(prefix) :]
+        return normalized_path.lstrip("/")
+
+    def _list_tree_from_s3(
+        self,
+        task_id: int,
+        normalized_path: str,
+        root_path: str,
+    ) -> Optional[RemoteWorkspaceTreeResponse]:
+        """Build a depth-1 directory listing from synced S3 objects.
+
+        Returns None when sync is disabled or the task has no synced files yet,
+        so the caller can fall back to the live executor proxy.
+        """
+        if not workspace_sync_service.is_enabled():
+            return None
+
+        files = workspace_files_storage.list_files(task_id)
+        if not files:
+            return None
+
+        rel_dir = self._relative_path(normalized_path, root_path)
+        dir_prefix = f"{rel_dir}/" if rel_dir else ""
+
+        child_dirs: dict[str, Any] = {}
+        child_files: list[RemoteWorkspaceTreeEntry] = []
+
+        for item in files:
+            rel_path = str(item.get("path", ""))
+            if dir_prefix and not rel_path.startswith(dir_prefix):
+                continue
+            remainder = rel_path[len(dir_prefix) :] if dir_prefix else rel_path
+            if not remainder:
+                continue
+
+            if "/" in remainder:
+                # Nested under a subdirectory: surface the immediate dir only.
+                dir_name = remainder.split("/", 1)[0]
+                if dir_name and dir_name not in child_dirs:
+                    dir_rel = f"{dir_prefix}{dir_name}" if dir_prefix else dir_name
+                    child_dirs[dir_name] = posixpath.join(root_path, dir_rel)
+            else:
+                file_rel = f"{dir_prefix}{remainder}" if dir_prefix else remainder
+                child_files.append(
+                    RemoteWorkspaceTreeEntry(
+                        name=remainder,
+                        path=posixpath.join(root_path, file_rel),
+                        is_directory=False,
+                        size=int(item.get("size", 0) or 0),
+                        modified_at=self._format_last_modified(
+                            item.get("last_modified")
+                        ),
+                    )
+                )
+
+        entries: list[RemoteWorkspaceTreeEntry] = [
+            RemoteWorkspaceTreeEntry(
+                name=name,
+                path=full_path,
+                is_directory=True,
+                size=0,
+                modified_at=None,
+            )
+            for name, full_path in sorted(child_dirs.items())
+        ]
+        entries.extend(sorted(child_files, key=lambda entry: entry.name))
+
+        return RemoteWorkspaceTreeResponse(path=normalized_path, entries=entries)
+
+    def _redirect_file_to_s3(
+        self,
+        task_id: int,
+        normalized_path: str,
+        root_path: str,
+    ) -> Optional[RedirectResponse]:
+        """Return a 302 to a presigned S3 URL when the file is synced.
+
+        Returns None when sync is disabled or the object is absent, so the
+        caller can fall back to streaming from the live executor.
+        """
+        if not workspace_sync_service.is_enabled():
+            return None
+
+        rel_path = self._relative_path(normalized_path, root_path)
+        if not rel_path:
+            return None
+
+        key = workspace_files_storage.build_object_key(task_id, rel_path)
+        if not workspace_files_storage.exists(key):
+            return None
+
+        presigned_url = workspace_files_storage.generate_download_url(key)
+        if not presigned_url:
+            return None
+
+        return RedirectResponse(url=presigned_url, status_code=302)
+
+    @staticmethod
+    def _format_last_modified(value: Any) -> Optional[str]:
+        """Normalise an S3 last-modified value to an ISO 8601 string."""
+        if value is None:
+            return None
+        try:
+            return value.isoformat()
+        except AttributeError:
+            return str(value)
 
     def _build_content_disposition(self, disposition: str, filename: str) -> str:
         try:
