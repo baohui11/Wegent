@@ -8,7 +8,8 @@ Wegent is an open-source AI-native operating system for defining, organizing, an
 
 **Multi-module architecture:**
 - **Backend** (FastAPI + SQLAlchemy + MySQL): RESTful API and business logic
-- **Frontend** (Next.js 15 + TypeScript + React 19): Web UI with shadcn/ui components
+- **Frontend (`frontend/`)** (Next.js 15 + TypeScript + React 19): Wegent main web frontend, focused on AI coding and chat experiences with shadcn/ui components
+- **Wework (`wework/`)** (Tauri + Vite + React + TypeScript): Office/work scenario frontend for the desktop app, currently covering workplace workflows while also supporting coding scenarios
 - **Executor**: Task execution engine (Claude Code, Agno, Dify, ImageValidator)
 - **Executor Manager**: Task orchestration via Docker
 - **Chat Shell**: Lightweight AI chat engine for Chat Shell type (LangGraph + multi-LLM)
@@ -139,6 +140,8 @@ Task = Team + Workspace (代码仓库)
 
 10. **Avoid backward compatibility - design for the ideal state**: When implementing changes, design as if there is no legacy burden - consider "what would be the best approach if we were starting fresh". Avoid writing compatibility shims or workarounds for old logic. If backward compatibility is absolutely unavoidable, consult with the user before proceeding.
 
+11. **Do not implement features in fallback paths**: The primary path should be efficient, elegant, and safe. Avoid adding excessive fallback logic as a substitute for a well-designed main flow; it makes code harder to understand and can eventually create a confusing dual-track structure where both the main path and fallback path behave like first-class implementations. Use fallbacks only for truly exceptional recovery or compatibility cases.
+
 ### Python (Backend, Executor, Shared)
 
 **Standards:** PEP 8, Black formatter (line length: 88), isort, type hints required
@@ -156,7 +159,7 @@ black . && isort .
 **Standards:** TypeScript strict mode, functional components, Prettier, ESLint, single quotes, no semicolons
 
 ```bash
-npm run format && npm run lint
+pnpm --filter wecode-ai-assistant format && pnpm --filter wecode-ai-assistant lint
 ```
 
 **Guidelines:**
@@ -672,11 +675,12 @@ cd chat_shell && uv run pytest
 cd knowledge_runtime && uv run pytest
 cd knowledge_doc_converter && uv run pytest
 cd shared && uv run pytest
-cd frontend && npm test
+pnpm --filter @wegent/chat-core test
+pnpm --dir frontend test
 
 # Format code
 cd backend && black . && isort .
-cd frontend && npm run format
+pnpm --dir frontend run format
 
 # Database migration
 cd backend && uv run alembic revision --autogenerate -m "msg" && uv run alembic upgrade head

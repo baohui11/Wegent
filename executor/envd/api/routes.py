@@ -36,11 +36,37 @@ from .state import AccessTokenAlreadySetError, get_state_manager
 from .utils import resolve_path, verify_access_token, verify_signature
 from .workspace_files import (
     build_workspace_manifest,
-    should_exclude_workspace_path,
     sync_files_to_urls,
 )
 
 logger = setup_logger("envd_api_routes")
+
+# Exclusion patterns for workspace archive
+ARCHIVE_EXCLUDE_PATTERNS = [
+    "node_modules",
+    "__pycache__",
+    "*.pyc",
+    ".venv",
+    "venv",
+    "target",
+    "build",
+    "dist",
+    "*.log",
+    ".next",
+    ".nuxt",
+    ".npm",
+    ".pnpm-store",
+    ".yarn",
+    "vendor",
+    ".cache",
+]
+ARCHIVE_EXCLUDE_SUBPATHS = [
+    ".local/share/code-server",
+]
+EXECUTOR_HOME_ARCHIVE_ALLOWLIST = {
+    ".claude",
+    ".claude.json",
+}
 
 HOME_ARCHIVE_PREFIX = "home"
 WORKSPACE_ARCHIVE_PREFIX = "workspace"
@@ -98,6 +124,38 @@ def extract_tar_members(
         tar.extractall(**extract_kwargs)
 
 
+
+def should_exclude_archive_path(name: str) -> bool:
+    """Check if a file or directory should be excluded from workspace archives."""
+    normalized_name = name.strip("/")
+    for archive_prefix in (HOME_ARCHIVE_PREFIX, WORKSPACE_ARCHIVE_PREFIX):
+        prefix = f"{archive_prefix}/"
+        if normalized_name.startswith(prefix):
+            normalized_name = normalized_name[len(prefix) :]
+            break
+
+    parts = Path(name).parts
+    for subpath in ARCHIVE_EXCLUDE_SUBPATHS:
+        if normalized_name == subpath or normalized_name.startswith(f"{subpath}/"):
+            return True
+
+    for pattern in ARCHIVE_EXCLUDE_PATTERNS:
+        if pattern.startswith("*"):
+            if name.endswith(pattern[1:]):
+                return True
+        elif pattern in parts:
+            return True
+    return False
+
+
+def filter_archive_tar_info(tar_info: tarfile.TarInfo) -> Optional[tarfile.TarInfo]:
+    """Filter tar members during recursive archive creation."""
+    if should_exclude_archive_path(tar_info.name):
+        logger.debug(f"[archive] Excluding: {tar_info.name}")
+        return None
+    return tar_info
+
+
 def is_session_archive_member(name: str) -> bool:
     """Check if an archive member is a Claude session marker."""
     return Path(name).name.startswith(".claude_session_id")
@@ -128,10 +186,33 @@ def strip_tar_member_prefix(
     return stripped_members
 
 
+def filter_restorable_tar_members(
+    members: list[tarfile.TarInfo],
+    include_names: Optional[set[str]] = None,
+) -> list[tarfile.TarInfo]:
+    """Drop archive members that should not be restored into runtime paths."""
+    restorable_members = []
+    for member in members:
+        if should_exclude_archive_path(member.name):
+            logger.info(f"[restore] Skipping excluded archive member: {member.name}")
+            continue
+        if (
+            include_names is not None
+            and Path(member.name).parts[0] not in include_names
+        ):
+            logger.info(
+                f"[restore] Skipping non-allowlisted archive member: {member.name}"
+            )
+            continue
+        restorable_members.append(member)
+    return restorable_members
+
+
 def add_directory_children_to_archive(
     tar: tarfile.TarFile,
     source_path: Path,
     arc_prefix: str = "",
+    include_names: Optional[set[str]] = None,
 ) -> tuple[bool, bool]:
     """Add direct children of source_path to a tar archive.
 
@@ -143,7 +224,10 @@ def add_directory_children_to_archive(
 
     for item in source_path.iterdir():
         arcname = f"{arc_prefix}/{item.name}" if arc_prefix else item.name
-        if should_exclude_workspace_path(arcname):
+        if include_names is not None and item.name not in include_names:
+            logger.debug(f"[archive] Excluding non-allowlisted path: {arcname}")
+            continue
+        if should_exclude_archive_path(arcname):
             logger.debug(f"[archive] Excluding: {arcname}")
             continue
 
@@ -152,7 +236,7 @@ def add_directory_children_to_archive(
         if item.name == ".git":
             git_included = True
 
-        tar.add(str(item), arcname=arcname)
+        tar.add(str(item), arcname=arcname, filter=filter_archive_tar_info)
         logger.debug(f"[archive] Added: {arcname}")
 
     return session_file_included, git_included
@@ -401,6 +485,11 @@ def register_rest_api(app: FastAPI):
                 with tarfile.open(tmp_path, "w:gz") as tar:
                     home_path = get_runtime_home_path(runtime_type)
                     if home_path.exists():
+                        home_include_names = (
+                            EXECUTOR_HOME_ARCHIVE_ALLOWLIST
+                            if runtime_type == "executor"
+                            else None
+                        )
                         (
                             home_session_included,
                             home_git_included,
@@ -408,6 +497,7 @@ def register_rest_api(app: FastAPI):
                             tar,
                             home_path,
                             HOME_ARCHIVE_PREFIX,
+                            include_names=home_include_names,
                         )
                         session_file_included = (
                             session_file_included or home_session_included
@@ -554,6 +644,15 @@ def register_rest_api(app: FastAPI):
                         home_members,
                         HOME_ARCHIVE_PREFIX,
                     )
+                    home_include_names = (
+                        EXECUTOR_HOME_ARCHIVE_ALLOWLIST
+                        if runtime_type == "executor"
+                        else None
+                    )
+                    stripped_home_members = filter_restorable_tar_members(
+                        stripped_home_members,
+                        include_names=home_include_names,
+                    )
                     if stripped_home_members:
                         home_path = get_runtime_home_path(runtime_type)
                         home_path.mkdir(parents=True, exist_ok=True)
@@ -566,6 +665,9 @@ def register_rest_api(app: FastAPI):
                     stripped_workspace_members = strip_tar_member_prefix(
                         workspace_members,
                         WORKSPACE_ARCHIVE_PREFIX,
+                    )
+                    stripped_workspace_members = filter_restorable_tar_members(
+                        stripped_workspace_members
                     )
                     if stripped_workspace_members:
                         extract_tar_members(

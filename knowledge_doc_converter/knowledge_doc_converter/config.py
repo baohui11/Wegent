@@ -74,6 +74,16 @@ class ConverterSettings(BaseSettings):
     MINERU_POLL_INTERVAL_SECONDS: int = 3
     MINERU_MAX_WAIT_SECONDS: int = 600
 
+    # ---- MinerU HTTP Request ----
+    # Timeout in seconds for MinerU API HTTP requests
+    MINERU_SUBMIT_TIMEOUT_SECONDS: int = 60  # Task submission request timeout
+    MINERU_STATUS_TIMEOUT_SECONDS: int = 10  # Status polling request timeout
+    MINERU_DOWNLOAD_TIMEOUT_SECONDS: int = 120  # Result download request timeout
+    # Maximum consecutive errors before aborting the polling loop
+    MINERU_MAX_CONSECUTIVE_ERRORS: int = 5
+    # Seconds to wait before retrying after a transient polling error
+    MINERU_ERROR_RETRY_INTERVAL_SECONDS: int = 3
+
     # ---- PaddleOCR (Baidu AI Studio cloud API) ----
     PADDLEOCR_JOB_URL: str = "https://paddleocr.aistudio-app.com/api/v2/ocr/jobs"
     PADDLEOCR_TOKEN: str = ""
@@ -141,8 +151,12 @@ class ConverterSettings(BaseSettings):
     def build_s3_config(self) -> S3Config:
         """Resolve S3 settings, reusing backend attachment MinIO config when unset."""
         endpoint = self.WORKER_CONVERSION_S3_ENDPOINT or self.ATTACHMENT_S3_ENDPOINT
-        access_key = self.WORKER_CONVERSION_S3_ACCESS_KEY or self.ATTACHMENT_S3_ACCESS_KEY
-        secret_key = self.WORKER_CONVERSION_S3_SECRET_KEY or self.ATTACHMENT_S3_SECRET_KEY
+        access_key = (
+            self.WORKER_CONVERSION_S3_ACCESS_KEY or self.ATTACHMENT_S3_ACCESS_KEY
+        )
+        secret_key = (
+            self.WORKER_CONVERSION_S3_SECRET_KEY or self.ATTACHMENT_S3_SECRET_KEY
+        )
         bucket_name = self.WORKER_CONVERSION_S3_BUCKET_NAME or self.ATTACHMENT_S3_BUCKET
         region_name = self.WORKER_CONVERSION_S3_REGION_NAME or self.ATTACHMENT_S3_REGION
         public_endpoint = self.ATTACHMENT_S3_PUBLIC_ENDPOINT or endpoint

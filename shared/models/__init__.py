@@ -50,6 +50,7 @@ from .blocks import (
 
 # Unified execution protocol
 from .execution import EventType, ExecutionEvent, ExecutionRequest
+from .knowledge import KnowledgeBaseScope
 from .knowledge_runtime_protocol import (
     BackendAttachmentStreamContentRef,
     ContentRef,
@@ -140,6 +141,7 @@ __all__ = [
     "EventType",
     "ExecutionEvent",
     "ExecutionRequest",
+    "KnowledgeBaseScope",
     "BackendAttachmentStreamContentRef",
     "ContentRef",
     "PresignedUrlContentRef",

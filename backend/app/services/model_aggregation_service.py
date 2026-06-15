@@ -120,7 +120,7 @@ class UnifiedModel:
 
     @property
     def runtime(self) -> Dict[str, Optional[str]]:
-        return {"family": self.runtime_family}
+        return {"family": self.runtime_family, "provider": self.provider}
 
     def to_dict(self) -> Dict[str, Any]:
         """

@@ -326,20 +326,18 @@ export interface Subtask {
   role: string
   prompt?: string
   result?: unknown
+  error_message?: string | null
   status: string
   message_id?: number
   created_at: string
   updated_at?: string
+  completed_at?: string | null
   contexts?: TaskContextData[]
   attachments?: Attachment[]
   sender_user_name?: string
 }
 
-export type TurnFileChangesStatus =
-  | 'active'
-  | 'reverted'
-  | 'conflicted'
-  | 'artifact_missing'
+export type TurnFileChangesStatus = 'active' | 'reverted' | 'conflicted' | 'artifact_missing'
 
 export interface TurnFileChangeItem {
   old_path?: string | null
@@ -489,6 +487,7 @@ export interface ChatErrorPayload {
   task_id?: number
   subtask_id: number
   error: string
+  type?: string
   message_id?: number
 }
 
@@ -911,6 +910,7 @@ export type ModelCompatibilityDisabledReason =
 
 export interface ModelRuntime {
   family?: string | null
+  provider?: string | null
 }
 
 export interface UnifiedModel {

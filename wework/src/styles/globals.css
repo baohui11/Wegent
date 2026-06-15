@@ -28,6 +28,7 @@
   --appearance-contrast: 50;
   --radius: 0.5rem;
   --z-chrome: 20;
+  --z-titlebar: 15;
   --z-popover: 40;
   --z-modal: 80;
   --z-critical: 100;
@@ -72,14 +73,14 @@ html,
 body,
 #root {
   min-height: 100%;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 body {
   font-family: var(--font-ui);
   background-color: rgb(var(--color-bg-base));
   color: rgb(var(--color-text-primary));
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 button,
@@ -122,6 +123,10 @@ button:disabled {
 
   .z-chrome {
     z-index: var(--z-chrome);
+  }
+
+  .z-titlebar {
+    z-index: var(--z-titlebar);
   }
 
   .z-popover {
