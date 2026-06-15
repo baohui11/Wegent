@@ -30,6 +30,8 @@ const ALLOWED_EXTERNAL_PATHS = [
   '/api/auth/oidc/callback', // OIDC callback from identity provider
   '/api/auth/oidc/cli-callback', // CLI OIDC callback
   '/api/auth/oauth/callback', // OAuth callback
+  '/api/auth/sso/fastgpt', // FastGPT SSO browser redirect
+  '/api/auth/sso/check', // FastGPT SSO existence check (secured by shared secret)
   '/api/flows/webhook/', // Flow webhook triggers from external systems
 ]
 

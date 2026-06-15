@@ -233,6 +233,11 @@ class Settings(BaseSettings):
     # Frontend URL configuration
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # FastGPT SSO configuration
+    # Shared secret used to verify signed login assertions coming from FastGPT.
+    # Must match FastGPT's WEGENT_SSO_SECRET. Empty disables FastGPT SSO.
+    FASTGPT_SSO_SECRET: str = ""
+
     # OIDC configuration
     OIDC_CLIENT_ID: str = "wegent"
     OIDC_CLIENT_SECRET: str = "test"

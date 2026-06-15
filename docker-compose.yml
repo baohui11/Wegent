@@ -212,6 +212,8 @@ services:
       # OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4317"
       # OTEL_TRACES_SAMPLER_ARG: "1.0"
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # FastGPT SSO shared secret (must match FastGPT WEGENT_SSO_SECRET)
+      FASTGPT_SSO_SECRET: ${FASTGPT_SSO_SECRET:-}
       # Knowledge base document conversion dispatch
       KNOWLEDGE_CONVERSION_ENABLED: ${KNOWLEDGE_CONVERSION_ENABLED:-false}
       KNOWLEDGE_CONVERSION_FILE_TYPES: ${KNOWLEDGE_CONVERSION_FILE_TYPES:-}

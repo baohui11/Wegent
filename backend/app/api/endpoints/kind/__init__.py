@@ -12,8 +12,8 @@ from app.api.endpoints.kind.batch import router as batch_router
 from app.api.endpoints.kind.kinds import router as kinds_router
 from app.api.endpoints.kind.skills import router as skills_router
 
-# Create main kind API router
-k_router = APIRouter(prefix="/v1")
+# Create main kind API router (/v1 prefix is applied at include_router in api.py)
+k_router = APIRouter()
 
 # Include batch router first to avoid path conflicts
 k_router.include_router(batch_router, tags=["kinds-batch"])

@@ -29,6 +29,7 @@ from app.api.endpoints import (
     share,
     skill_identity,
     skill_market,
+    sso,
     subtasks,
     system_skills,
     tables,
@@ -95,6 +96,7 @@ from app.api.router import api_router
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(oidc.router, prefix="/auth/oidc", tags=["auth", "oidc"])
+api_router.include_router(sso.router, prefix="/auth/sso", tags=["auth", "sso"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(pet.router, prefix="/users/me/pet", tags=["pet"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
@@ -244,7 +246,7 @@ api_router.include_router(
     prefix="/prompt-optimization",
     tags=["prompt-optimization"],
 )
-api_router.include_router(k_router)
+api_router.include_router(k_router, prefix="/v1")
 
 # Internal API endpoints (for service-to-service communication)
 api_router.include_router(
