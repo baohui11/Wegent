@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { extractWebSearchSessions } from '@/features/tasks/components/web-search/extractWebSearchSessions'
-import type { UnifiedMessage } from '@/features/tasks/state'
+import type { UnifiedMessage } from '@wegent/chat-core'
 
 describe('extractWebSearchSessions', () => {
   it('extracts sessions from Tavily MCP tool blocks', () => {

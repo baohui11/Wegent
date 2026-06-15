@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import type { UnifiedMessage } from '@/features/tasks/state'
+import type { UnifiedMessage } from '@wegent/chat-core'
 import type { MessageBlock } from '@/features/tasks/components/message/thinking/types'
 import type { WebSearchSession, WebSearchSessionStatus } from './types'
 import { parseWebSearchOutput } from './parseWebSearchOutput'
