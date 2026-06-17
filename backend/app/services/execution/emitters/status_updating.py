@@ -253,9 +253,22 @@ class StatusUpdatingEmitter(ResultEmitter):
                 f"[StatusUpdatingEmitter] Set task streaming status: "
                 f"task_id={self._task_id}, subtask_id={self._subtask_id}"
             )
-        elif event.type in STREAM_CONTENT_EVENT_TYPES:
+        elif event.type == EventType.THINKING.value:
+            content = event.content or ""
+            if content:
+                block, is_new = await session_manager.add_thinking_content(
+                    subtask_id=self._subtask_id,
+                    content=content,
+                )
+                if block:
+                    event.data = {
+                        **(event.data or {}),
+                        "thinking_block": block,
+                        "thinking_block_is_new": is_new,
+                    }
+        elif event.type == EventType.CHUNK.value:
             await self._buffer_stream_content(
-                STREAM_CONTENT_EVENT_TYPES[event.type],
+                StreamContentType.TEXT,
                 event.content or "",
             )
         elif event.type in STREAM_BOUNDARY_EVENT_TYPES:
@@ -321,10 +334,6 @@ class StatusUpdatingEmitter(ResultEmitter):
                 if render_payload is not None:
                     update_kwargs["render_payload"] = render_payload
                 await session_manager.update_tool_block_status(**update_kwargs)
-        elif event.type in STREAM_CONTENT_EVENT_TYPES:
-            # Content is persisted by the 1s stream storage buffer.
-            pass
-
         # Handle terminal events - update status before forwarding
         if event.type in STREAM_TERMINAL_EVENT_TYPES:
             await self._flush_stream_storage()

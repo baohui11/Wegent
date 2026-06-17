@@ -99,6 +99,45 @@ def _service_tier_from_model_options(payload: Any) -> Optional[str]:
     return SERVICE_TIER_ALIASES.get(str(speed).strip().lower())
 
 
+def _resolve_reasoning_config(
+    *,
+    request: Any,
+    reasoning_config: Optional[Dict[str, Any]],
+    payload: Any,
+    enable_reasoning: Optional[bool],
+) -> Optional[Dict[str, Any]]:
+    """Apply reasoning config and optional per-message thinking toggle to model_config."""
+    from shared.utils.thinking_config import apply_thinking_toggle
+
+    base_config = (
+        reasoning_config
+        or _reasoning_from_model_options(payload)
+        or request.model_config.get("think_config")
+    )
+
+    if enable_reasoning is not None and request.model_config.get("dynamic_thinking"):
+        toggled = apply_thinking_toggle(base_config or {}, enable_reasoning)
+        request.model_config["reasoning"] = toggled
+        request.model_config["think_config"] = toggled
+        logger.info(
+            "[build_execution_request] Applied enable_reasoning=%s via thinking toggle: %s",
+            enable_reasoning,
+            toggled,
+        )
+        return toggled
+
+    if base_config:
+        request.model_config["reasoning"] = base_config
+        request.model_config["think_config"] = base_config
+        logger.info(
+            "[build_execution_request] Applied reasoning config: %s",
+            base_config,
+        )
+        return base_config
+
+    return None
+
+
 def _is_codex_model_config(model_config: Dict[str, Any]) -> bool:
     model_type = str(model_config.get("model") or "").lower()
     api_format = str(
@@ -348,6 +387,9 @@ async def build_execution_request(
 
         # Extract feature flags from payload if provided
         if payload is not None:
+            enable_deep_thinking = getattr(
+                payload, "enable_deep_thinking", enable_deep_thinking
+            )
             enable_web_search = getattr(payload, "enable_web_search", enable_web_search)
             enable_clarification = getattr(
                 payload, "enable_clarification", enable_clarification
@@ -398,22 +440,16 @@ async def build_execution_request(
 
         # Merge reasoning config from API/model selection into model_config.
         # Priority: explicit API reasoning_config > UI model_options > model think_config.
-        selected_reasoning_config = reasoning_config or _reasoning_from_model_options(
-            payload
+        enable_reasoning = (
+            getattr(payload, "enable_reasoning", None) if payload is not None else None
         )
-        if selected_reasoning_config:
-            request.model_config["reasoning"] = selected_reasoning_config
-            logger.info(
-                "[build_execution_request] Applied selected reasoning config: %s",
-                selected_reasoning_config,
-            )
-        elif request.model_config.get("think_config"):
-            # If no API reasoning_config but model has think_config, use it
-            request.model_config["reasoning"] = request.model_config["think_config"]
-            logger.info(
-                "[build_execution_request] Applied reasoning config from model think_config: %s",
-                request.model_config["think_config"],
-            )
+        selected_reasoning_config = _resolve_reasoning_config(
+            request=request,
+            reasoning_config=reasoning_config,
+            payload=payload,
+            enable_reasoning=enable_reasoning,
+        )
+        request.reasoning_config = selected_reasoning_config
 
         selected_service_tier = _service_tier_from_model_options(payload)
         if selected_service_tier:
@@ -424,11 +460,6 @@ async def build_execution_request(
             )
 
         _apply_user_runtime_config(db, request, user)
-
-        # Store reasoning_config in ExecutionRequest for downstream access
-        request.reasoning_config = (
-            selected_reasoning_config or request.model_config.get("reasoning")
-        )
 
         if payload is not None:
             interactive_form_answer = getattr(payload, "interactive_form_answer", None)

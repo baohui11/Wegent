@@ -394,7 +394,6 @@ async def test_interactive_form_tool_result_persists_render_payload_on_real_tool
 
 @pytest.mark.asyncio
 async def test_thinking_events_persist_thinking_blocks():
-    from app.services.chat.storage.session import StreamContentType
     from app.services.execution.emitters import StatusUpdatingEmitter
 
     wrapped = AsyncMock()
@@ -408,12 +407,26 @@ async def test_thinking_events_persist_thinking_blocks():
         content="Reasoning chunk.",
     )
 
+    thinking_block = {
+        "id": "thinking-test",
+        "type": "thinking",
+        "content": "Reasoning chunk.",
+        "status": "streaming",
+    }
+    mock_session_manager.add_thinking_content = AsyncMock(
+        return_value=(thinking_block, True)
+    )
+
     with patch("app.services.chat.storage.session_manager", mock_session_manager):
         await emitter.emit(thinking_event)
         await emitter.close()
 
-    mock_session_manager.add_stream_content.assert_awaited_once_with(
+    mock_session_manager.add_thinking_content.assert_awaited_once_with(
         subtask_id=202,
-        content_type=StreamContentType.THINKING,
         content="Reasoning chunk.",
     )
+    mock_session_manager.add_stream_content.assert_not_awaited()
+    wrapped.emit.assert_awaited_once()
+    forwarded = wrapped.emit.await_args.args[0]
+    assert forwarded.data["thinking_block"] == thinking_block
+    assert forwarded.data["thinking_block_is_new"] is True

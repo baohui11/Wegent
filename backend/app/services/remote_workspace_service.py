@@ -55,7 +55,12 @@ class RemoteWorkspaceService:
     ) -> RemoteWorkspaceStatusResponse:
         task_detail = self._get_task_detail(db=db, task_id=task_id, user_id=user_id)
         sandbox_payload = self._get_sandbox_payload(task_id=task_id)
-        connected = self._has_executor_binding(task_detail) or bool(sandbox_payload)
+        has_synced_files = self._has_synced_workspace_files(task_id)
+        connected = (
+            self._has_executor_binding(task_detail)
+            or bool(sandbox_payload)
+            or has_synced_files
+        )
 
         if not connected:
             logger.info(
@@ -75,7 +80,9 @@ class RemoteWorkspaceService:
             task_detail=task_detail,
             sandbox_payload=sandbox_payload,
         )
-        available = bool(base_url)
+        # Available when a live container can serve files, or when files were
+        # already synced to object storage (browsable without the container).
+        available = bool(base_url) or has_synced_files
         reason = None if available else "sandbox_not_running"
         root_path = self._resolve_root_path(
             task_id=task_id, sandbox_payload=sandbox_payload
@@ -437,6 +444,25 @@ class RemoteWorkspaceService:
 
     def _has_executor_binding(self, task_detail: dict[str, Any]) -> bool:
         return self._get_connected_executor_binding(task_detail) is not None
+
+    def _has_synced_workspace_files(self, task_id: int) -> bool:
+        """Whether the task has workspace files persisted in object storage.
+
+        When files have been synced, listing/downloading can be served entirely
+        from S3, so the workspace is browsable even after the executor container
+        has been destroyed.
+        """
+        if not workspace_sync_service.is_enabled():
+            return False
+        try:
+            return bool(workspace_files_storage.list_files(task_id))
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "[remote_workspace] failed to probe synced files task_id=%s: %s",
+                task_id,
+                exc,
+            )
+            return False
 
     def _resolve_workspace_base_url(
         self,

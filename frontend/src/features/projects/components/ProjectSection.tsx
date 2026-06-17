@@ -160,22 +160,19 @@ export function ProjectSection({ onTaskSelect, variant = 'all' }: ProjectSection
             <ChevronUp className="h-3.5 w-3.5 flex-shrink-0" />
           )}
         </button>
-        <Button
-          data-testid={
-            isUnifiedSection || isWorkspaceSection
-              ? 'create-workspace-project-button'
-              : 'create-group-button'
-          }
-          variant="ghost"
-          size="sm"
-          className="ml-1 h-5 w-5 p-0 text-text-muted hover:text-text-primary transition-colors rounded"
-          onClick={() => setCreateDialogOpen(true)}
-          title={t(
-            isUnifiedSection || isWorkspaceSection ? 'workspaceCreate.title' : 'create.title'
-          )}
-        >
-          <FolderPlus className="w-3.5 h-3.5" />
-        </Button>
+        {/* Workspace/local-device project creation is hidden; only group projects expose the create button. */}
+        {isGroupSection && (
+          <Button
+            data-testid="create-group-button"
+            variant="ghost"
+            size="sm"
+            className="ml-1 h-5 w-5 p-0 text-text-muted hover:text-text-primary transition-colors rounded"
+            onClick={() => setCreateDialogOpen(true)}
+            title={t('create.title')}
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Project List */}

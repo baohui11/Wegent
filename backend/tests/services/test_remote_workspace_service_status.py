@@ -200,6 +200,49 @@ def test_status_connected_and_available_via_sandbox_without_executor_binding():
     assert status.reason is None
 
 
+def test_status_available_from_synced_files_without_container():
+    service = RemoteWorkspaceService(executor_manager_url="http://executor-manager")
+    task_detail = {
+        "subtasks": [
+            {"executor_name": "", "executor_namespace": ""},
+        ]
+    }
+
+    with (
+        patch.object(service, "_get_task_detail", return_value=task_detail),
+        patch.object(service, "_get_sandbox_payload", return_value=None),
+        patch.object(service, "_has_synced_workspace_files", return_value=True),
+    ):
+        status = service.get_status(db=Mock(), task_id=1, user_id=100)
+
+    assert status.connected is True
+    assert status.available is True
+    assert status.root_path == "/workspace/1"
+    assert status.reason is None
+
+
+def test_status_available_from_synced_files_when_container_destroyed():
+    service = RemoteWorkspaceService(executor_manager_url="http://executor-manager")
+    task_detail = {
+        "subtasks": [
+            {"executor_name": "executor-1", "executor_namespace": "default"},
+        ]
+    }
+
+    with (
+        patch.object(service, "_get_task_detail", return_value=task_detail),
+        patch.object(service, "_get_sandbox_payload", return_value=None),
+        patch.object(service, "_get_executor_payload", return_value=None),
+        patch.object(service, "_has_synced_workspace_files", return_value=True),
+    ):
+        status = service.get_status(db=Mock(), task_id=1, user_id=100)
+
+    assert status.connected is True
+    assert status.available is True
+    assert status.root_path == "/workspace/1"
+    assert status.reason is None
+
+
 def test_status_not_connected_without_executor_and_sandbox():
     service = RemoteWorkspaceService(executor_manager_url="http://executor-manager")
     task_detail = {

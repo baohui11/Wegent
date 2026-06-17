@@ -243,6 +243,14 @@ class WebSocketResultEmitter(BaseResultEmitter):
         data = event.data or {}
         block = data.get("thinking_block")
         if not isinstance(block, dict):
+            if event.content:
+                await ws_emitter.emit_chat_chunk(
+                    task_id=event.task_id,
+                    subtask_id=event.subtask_id,
+                    content="",
+                    offset=event.offset or 0,
+                    result={"reasoning_chunk": event.content},
+                )
             return
 
         is_new = data.get("thinking_block_is_new", False)
