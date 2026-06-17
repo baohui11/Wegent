@@ -66,30 +66,30 @@ services:
       retries: 5
       start_period: 15s
 
-  minio-init:
-    image: minio/mc:latest
-    container_name: wegent-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    networks:
-      - wegent-network
-    entrypoint:
-      - sh
-      - -c
-      - |
-        set -eu
-        mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}"
-        for bucket in "${ATTACHMENT_S3_BUCKET:-attachments}" "${ATTACHMENT_S3_SKILL_BUCKET:-skills}" "${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}" "${WORKSPACE_FILES_BUCKET:-wegent-workspace-files}"; do
-          mc mb --ignore-existing "local/$$bucket"
-        done
+  # minio-init:
+  #   image: minio/mc:latest
+  #   container_name: wegent-minio-init
+  #   depends_on:
+  #     minio:
+  #       condition: service_healthy
+  #   networks:
+  #     - wegent-network
+  #   entrypoint:
+  #     - sh
+  #     - -c
+  #     - |
+  #       set -eu
+  #       mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}"
+  #       for bucket in "${ATTACHMENT_S3_BUCKET:-attachments}" "${ATTACHMENT_S3_SKILL_BUCKET:-skills}" "${WORKSPACE_ARCHIVE_BUCKET:-wegent-archives}" "${WORKSPACE_FILES_BUCKET:-wegent-workspace-files}"; do
+  #         mc mb --ignore-existing "local/$$bucket"
+  #       done
 
   elasticsearch:
     image: elastic/elasticsearch:8.18.8
     container_name: wegent-elasticsearch
     restart: always
-    profiles:
-      - rag
+    # profiles:
+    #   - rag
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -217,6 +217,8 @@ services:
       # Knowledge base document conversion dispatch
       KNOWLEDGE_CONVERSION_ENABLED: ${KNOWLEDGE_CONVERSION_ENABLED:-false}
       KNOWLEDGE_CONVERSION_FILE_TYPES: ${KNOWLEDGE_CONVERSION_FILE_TYPES:-}
+      # Persist chunk content to knowledge_documents.chunks for frontend viewing (default false)
+      CHUNK_STORAGE_ENABLED: "${BACKEND_CHUNK_STORAGE_ENABLED:-False}"
     depends_on:
       mysql:
         condition: service_healthy
@@ -391,8 +393,8 @@ services:
     pull_policy: ${DOCKER_PULL_POLICY:-always}
     container_name: wegent-knowledge-runtime
     restart: always
-    profiles:
-      - rag
+    # profiles:
+    #   - rag
     ports:
       - "${KNOWLEDGE_RUNTIME_PORT:-8200}:8200"
     environment:
@@ -427,9 +429,8 @@ services:
       start_period: 10s
 
   knowledge_doc_converter:
-    build:
-      context: .
-      dockerfile: docker/knowledge_doc_converter/Dockerfile
+    image: ghcr.io/wecode-ai/wegent-knowledge-doc-converter:latest
+    pull_policy: ${DOCKER_PULL_POLICY:-never}
     container_name: wegent-knowledge-doc-converter
     restart: always
     depends_on:
