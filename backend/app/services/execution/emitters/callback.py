@@ -19,6 +19,12 @@ from .base import BaseResultEmitter
 
 logger = logging.getLogger(__name__)
 
+_STREAM_IMMEDIATE_FLUSH_TYPES = {
+    EventType.CHUNK.value,
+    EventType.THINKING.value,
+    EventType.TOOL_ARGUMENT_DELTA.value,
+}
+
 
 class CallbackResultEmitter(BaseResultEmitter):
     """HTTP Callback result emitter.
@@ -133,11 +139,12 @@ class BatchCallbackEmitter(CallbackResultEmitter):
         """
         self._buffer.append(event)
 
-        # Terminal events flush immediately
+        # Terminal and high-frequency stream events flush immediately
         if event.type in (
             EventType.DONE.value,
             EventType.ERROR.value,
             EventType.CANCELLED.value,
+            *_STREAM_IMMEDIATE_FLUSH_TYPES,
         ):
             await self._flush()
             return

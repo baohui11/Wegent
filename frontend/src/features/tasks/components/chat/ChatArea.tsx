@@ -27,6 +27,7 @@ import { useChatStreamHandlers } from './useChatStreamHandlers'
 import { allBotsHavePredefinedModel } from '../selector/ModelSelector'
 import { QuoteProvider, SelectionTooltip, useQuote } from '../text-selection'
 import type { InteractiveFormAnswerPayload, Team, SubtaskContextBrief, TaskType } from '@/types/api'
+import type { PipelineContextPassing } from '@/types/api'
 import type { Model } from '../../hooks/useModelSelection'
 import type { ContextItem, QueueMessageContext } from '@/types/context'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -104,6 +105,14 @@ function getPipelineNextStepContexts(contexts: unknown): SubtaskContextBrief[] |
 
   const validContexts = contexts.filter(isPipelineNextStepContext)
   return validContexts.length > 0 ? validContexts : undefined
+}
+
+function getPipelineContextPassingForStage(
+  team: Team | null | undefined,
+  stageInfo: PipelineStageInfo | null
+): PipelineContextPassing {
+  const stageIndex = stageInfo?.current_stage ?? 0
+  return team?.bots?.[stageIndex]?.contextPassing ?? 'none'
 }
 
 interface ChatAreaProps {
@@ -700,9 +709,18 @@ function ChatAreaContent({
     }))
   }, [taskState?.messages])
 
+  const pipelineContextPassing = useMemo(
+    () =>
+      getPipelineContextPassingForStage(
+        chatState.selectedTeam ?? selectedTaskDetail?.team,
+        pipelineStageInfo
+      ),
+    [chatState.selectedTeam, pipelineStageInfo, selectedTaskDetail?.team]
+  )
+
   const pipelineNextStepDraft = useMemo(
-    () => buildPipelineNextStepDraft(pipelineNextStepMessages),
-    [pipelineNextStepMessages]
+    () => buildPipelineNextStepDraft(pipelineNextStepMessages, pipelineContextPassing),
+    [pipelineContextPassing, pipelineNextStepMessages]
   )
 
   useEffect(() => {
@@ -1487,7 +1505,7 @@ function ChatAreaContent({
             selectedTaskDetail.team?.workflow?.mode || chatState.selectedTeam?.workflow?.mode
           }
           onStageInfoChange={setPipelineStageInfo}
-          canContinueToNextStage={pipelineNextStepDraft.canSubmit}
+          canContinueToNextStage={pipelineNextStepDraft.hasSelectableContext}
           onNextStepClick={handlePipelineNextStepClick}
         />
       )}
@@ -1671,6 +1689,7 @@ function ChatAreaContent({
         <PipelineNextStepDialog
           open={isPipelineNextStepOpen}
           messages={pipelineNextStepMessages}
+          contextPassing={pipelineContextPassing}
           isConfirming={isPipelineNextStepConfirming}
           onOpenChange={setIsPipelineNextStepOpen}
           onConfirm={handlePipelineNextStepConfirm}

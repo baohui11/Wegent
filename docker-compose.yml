@@ -240,6 +240,7 @@ services:
       - "${WEGENT_FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - RUNTIME_APP_VERSION=${RUNTIME_APP_VERSION:-dev}
       # API Configuration
       - RUNTIME_INTERNAL_API_URL=${RUNTIME_INTERNAL_API_URL:-http://backend:8000}
       - RUNTIME_PUBLIC_API_URL=${RUNTIME_PUBLIC_API_URL:-${WEGENT_SOCKET_URL:-http://localhost:8000}}
@@ -433,6 +434,8 @@ services:
     pull_policy: ${DOCKER_PULL_POLICY:-never}
     container_name: wegent-knowledge-doc-converter
     restart: always
+    profiles:
+      - rag
     depends_on:
       redis:
         condition: service_healthy

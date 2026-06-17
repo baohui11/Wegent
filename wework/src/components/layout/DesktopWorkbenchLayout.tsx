@@ -23,6 +23,7 @@ import type {
 } from '@/types/api'
 import type { EnvironmentInfo } from '@/types/environment'
 import type { DeviceUpgradeState } from '@/types/device-events'
+import type { CodeCommentContext } from '@/types/workspace-files'
 import { stripAppBasePath } from '@/config/runtime'
 import { isSettingsRoute, navigateTo } from '@/lib/navigation'
 import { findProjectForTask } from '@/lib/workbench-device'
@@ -38,6 +39,7 @@ interface DesktopWorkbenchLayoutProps {
   messages: WorkbenchMessage[]
   queuedMessages?: QueuedWorkbenchMessage[]
   guidanceMessages?: GuidanceWorkbenchMessage[]
+  codeCommentContexts?: CodeCommentContext[]
   runningTaskIds: Set<number>
   upgradingDevices?: Record<string, DeviceUpgradeState>
   activeItem?: 'chat' | 'plugins' | 'automation'
@@ -80,6 +82,7 @@ interface DesktopWorkbenchLayoutProps {
     project: ProjectWithTasks | null,
     message: string,
   ) => Promise<void>
+  onLoadEnvironmentDiff?: (project: ProjectWithTasks | null) => Promise<string>
   onListEnvironmentBranches: (project: ProjectWithTasks | null) => Promise<string[]>
   onCheckoutEnvironmentBranch: (
     project: ProjectWithTasks | null,
@@ -102,6 +105,8 @@ interface DesktopWorkbenchLayoutProps {
   onRevertFileChanges?: (
     subtaskId: number,
   ) => Promise<TurnFileChangesSummary>
+  onAddCodeComment?: (context: CodeCommentContext) => void
+  onClearCodeComments?: () => void
   onRefreshWorkLists?: () => Promise<void>
   onLogout: () => void
 }
@@ -111,6 +116,7 @@ export function DesktopWorkbenchLayout({
   messages,
   queuedMessages = [],
   guidanceMessages = [],
+  codeCommentContexts = [],
   runningTaskIds,
   upgradingDevices = {},
   activeItem = 'chat',
@@ -148,6 +154,7 @@ export function DesktopWorkbenchLayout({
   onCreateDeviceDirectory,
   onLoadEnvironmentInfo,
   onCommitEnvironmentChanges,
+  onLoadEnvironmentDiff,
   onListEnvironmentBranches,
   onCheckoutEnvironmentBranch,
   onCreateEnvironmentBranch,
@@ -162,6 +169,8 @@ export function DesktopWorkbenchLayout({
   onCancelGuidanceMessage = () => {},
   onLoadFileChangesDiff,
   onRevertFileChanges,
+  onAddCodeComment = () => {},
+  onClearCodeComments,
   onRefreshWorkLists,
   onLogout,
 }: DesktopWorkbenchLayoutProps) {
@@ -355,11 +364,13 @@ export function DesktopWorkbenchLayout({
           isBootstrapping={state.isBootstrapping}
           currentTask={state.currentTask}
           currentProject={activeConversationProject}
+          workspaceProject={state.currentProject}
           devices={state.devices}
           upgradingDevices={upgradingDevices}
           messages={messages}
           queuedMessages={queuedMessages}
           guidanceMessages={guidanceMessages}
+          codeCommentContexts={codeCommentContexts}
           projectChat={projectChat}
           projectWork={projectWorkWithCreation}
           input={state.input}
@@ -367,6 +378,11 @@ export function DesktopWorkbenchLayout({
           environmentInfo={environmentInfo}
           onRefreshEnvironmentInfo={refreshEnvironmentInfo}
           onCommitEnvironmentChanges={handleCommitEnvironmentChanges}
+          onLoadEnvironmentDiff={
+            onLoadEnvironmentDiff
+              ? () => onLoadEnvironmentDiff(environmentProject)
+              : undefined
+          }
           onListEnvironmentBranches={() => onListEnvironmentBranches(environmentProject)}
           onCheckoutEnvironmentBranch={handleCheckoutEnvironmentBranch}
           onCreateEnvironmentBranch={handleCreateEnvironmentBranch}
@@ -387,6 +403,8 @@ export function DesktopWorkbenchLayout({
           onCancelGuidanceMessage={onCancelGuidanceMessage}
           onLoadFileChangesDiff={onLoadFileChangesDiff}
           onRevertFileChanges={onRevertFileChanges}
+          onAddCodeComment={onAddCodeComment}
+          onClearCodeComments={onClearCodeComments}
           topBarLeftActions={
             sidebarCollapsed ? (
               <DesktopWindowControls

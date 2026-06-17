@@ -7,6 +7,7 @@ import {
   createAndCheckoutProjectBranch,
   listProjectBranches,
   loadProjectEnvironment,
+  loadProjectEnvironmentDiff,
 } from '@/api/environment'
 import { createGitApi } from '@/api/git'
 import { ApiError, createHttpClient } from '@/api/http'
@@ -17,8 +18,10 @@ import { createTaskApi } from '@/api/tasks'
 import { createTeamApi } from '@/api/teams'
 import { createUserApi } from '@/api/users'
 import { getRuntimeConfig, stripAppBasePath } from '@/config/runtime'
+import i18n from '@/i18n'
 import { createChatStream } from '@/stream/chatStream'
 import { createSocketClient } from '@/stream/socketClient'
+import { appendCodeCommentContexts } from '@/lib/code-comment-context'
 import { getPreferredStandaloneDeviceId } from '@/lib/device-selection'
 import {
   WEWORK_MIN_EXECUTOR_VERSION,
@@ -62,6 +65,7 @@ import type {
 } from '@/types/api'
 import type { DeviceUpgradeState, DeviceUpgradeStatusPayload } from '@/types/device-events'
 import type { EnvironmentInfo } from '@/types/environment'
+import type { CodeCommentContext } from '@/types/workspace-files'
 import type {
   GuidanceWorkbenchMessage,
   ProcessingBlock,
@@ -137,6 +141,7 @@ interface QueuedWorkbenchSend extends QueuedWorkbenchMessage {
   payload: ChatSendPayload
   activeDeviceId?: string
   attachments?: Attachment[]
+  codeComments?: CodeCommentContext[]
 }
 
 function isTerminalDeviceUpgradeStatus(status: string): boolean {
@@ -168,7 +173,17 @@ export interface WorkbenchServices {
     getTurnFileChangesDiff?: ReturnType<typeof createTaskApi>['getTurnFileChangesDiff']
     revertTurnFileChanges?: ReturnType<typeof createTaskApi>['revertTurnFileChanges']
   }
-  deviceApi: ReturnType<typeof createDeviceApi>
+  deviceApi: Pick<
+    ReturnType<typeof createDeviceApi>,
+    | 'listDevices'
+    | 'getHomeDirectory'
+    | 'getProjectWorkspaceRoot'
+    | 'listDirectories'
+    | 'createDirectory'
+    | 'executeCommand'
+    | 'upgradeDevice'
+    | 'listSkills'
+  >
   userApi?: ReturnType<typeof createUserApi>
   chatStream: ReturnType<typeof createChatStream>
 }
@@ -178,6 +193,7 @@ export interface WorkbenchContextValue {
   messages: WorkbenchMessage[]
   queuedMessages: QueuedWorkbenchMessage[]
   guidanceMessages: GuidanceWorkbenchMessage[]
+  codeCommentContexts: CodeCommentContext[]
   projectChat: {
     models: UnifiedModel[]
     skills: UnifiedSkill[]
@@ -204,6 +220,8 @@ export interface WorkbenchContextValue {
   upgradingDevices: Record<string, DeviceUpgradeState>
   projectExecutionMode: ProjectExecutionMode
   setProjectExecutionMode: (mode: ProjectExecutionMode) => void
+  projectWorktreeBaseBranch: string | null
+  setProjectWorktreeBaseBranch: (branchName: string | null) => void
   selectProject: (projectId: number | null) => void
   selectStandaloneDevice: (deviceId: string | null) => void
   startNewChat: () => void
@@ -236,11 +254,15 @@ export interface WorkbenchContextValue {
   listDeviceDirectories: (deviceId: string, path: string) => Promise<string[]>
   createDeviceDirectory: (deviceId: string, path: string) => Promise<void>
   loadEnvironmentInfo: (project: ProjectWithTasks | null) => Promise<EnvironmentInfo>
+  loadEnvironmentDiff: (project: ProjectWithTasks | null) => Promise<string>
   commitEnvironmentChanges: (project: ProjectWithTasks | null, message: string) => Promise<void>
   listEnvironmentBranches: (project: ProjectWithTasks | null) => Promise<string[]>
   checkoutEnvironmentBranch: (project: ProjectWithTasks | null, branchName: string) => Promise<void>
   createEnvironmentBranch: (project: ProjectWithTasks | null, branchName: string) => Promise<void>
   setInput: (input: string) => void
+  addCodeCommentContext: (context: CodeCommentContext) => void
+  removeCodeCommentContext: (contextId: string) => void
+  clearCodeCommentContexts: () => void
   sendCurrentInput: () => Promise<void>
   retryFailedMessage: (messageId: string) => Promise<void>
   pauseCurrentResponse: () => Promise<void>
@@ -367,6 +389,24 @@ function normalizeProcessingBlock(
       subtaskId,
       type: 'thinking',
       content: typeof block.content === 'string' ? block.content : '',
+      status,
+      createdAt: timestamp,
+    }
+  }
+
+  if (block.type === 'text') {
+    const id = typeof block.id === 'string' ? block.id : `text-${subtaskId}-${index}`
+    const content =
+      typeof block.content === 'string'
+        ? block.content
+        : typeof block.text === 'string'
+          ? block.text
+          : ''
+    return {
+      id,
+      subtaskId,
+      type: 'text',
+      content,
       status,
       createdAt: timestamp,
     }
@@ -630,12 +670,16 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
   )
   const [queuedSends, setQueuedSends] = useState<QueuedWorkbenchSend[]>([])
   const [guidanceMessages, setGuidanceMessages] = useState<GuidanceWorkbenchMessage[]>([])
+  const [codeCommentContexts, setCodeCommentContexts] = useState<CodeCommentContext[]>([])
   const [upgradingDevices, setUpgradingDevices] = useState<Record<string, DeviceUpgradeState>>({})
   const [isAwaitingAssistantStart, setIsAwaitingAssistantStart] = useState(false)
   const [liveRunningTaskIds, setLiveRunningTaskIds] = useState<Set<number>>(() => new Set())
   const [routePath, setRoutePath] = useState(getCurrentAppPath)
   const [projectExecutionMode, setProjectExecutionMode] =
     useState<ProjectExecutionMode>('current_workspace')
+  const [projectWorktreeBaseBranch, setProjectWorktreeBaseBranchState] = useState<string | null>(
+    null
+  )
   const guidanceSendInFlightRef = useRef(false)
   const upgradeClearTimersRef = useRef<Record<string, ReturnType<typeof window.setTimeout>>>({})
   const localSkillsCacheRef = useRef<
@@ -712,6 +756,18 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     state.currentProject,
     state.currentTask,
   ])
+  const setProjectWorktreeBaseBranch = useCallback((branchName: string | null) => {
+    const normalizedBranch = branchName?.trim() || null
+    setProjectWorktreeBaseBranchState(normalizedBranch)
+  }, [])
+  useEffect(() => {
+    setProjectWorktreeBaseBranchState(null)
+  }, [state.currentProject?.id, state.currentTask?.id])
+  useEffect(() => {
+    if (projectExecutionMode !== 'git_worktree') {
+      setProjectWorktreeBaseBranchState(null)
+    }
+  }, [projectExecutionMode])
   const modelSelectionConfig = useMemo(
     () => getTaskModelSelection(state.currentTask) ?? getNewChatModelSelection(currentUser) ?? null,
     [currentUser, state.currentTask]
@@ -766,6 +822,15 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     locked: isOptionsLocked,
   })
   const attachmentSelection = useWorkbenchAttachments()
+  const addCodeCommentContext = useCallback((context: CodeCommentContext) => {
+    setCodeCommentContexts(items => [...items.filter(item => item.id !== context.id), context])
+  }, [])
+  const removeCodeCommentContext = useCallback((contextId: string) => {
+    setCodeCommentContexts(items => items.filter(item => item.id !== contextId))
+  }, [])
+  const clearCodeCommentContexts = useCallback(() => {
+    setCodeCommentContexts([])
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1142,6 +1207,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
         dispatchMessages({ type: 'reset', messages: [] })
         setQueuedSends([])
         setGuidanceMessages([])
+        setCodeCommentContexts([])
         handledTaskRouteRef.current = null
         navigateTo('/')
         return
@@ -1153,6 +1219,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
         dispatchMessages({ type: 'reset', messages: [] })
         setQueuedSends([])
         setGuidanceMessages([])
+        setCodeCommentContexts([])
         handledTaskRouteRef.current = null
         navigateTo('/')
       }
@@ -1177,6 +1244,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       dispatchMessages({ type: 'reset', messages: [] })
       setQueuedSends([])
       setGuidanceMessages([])
+      setCodeCommentContexts([])
       handledTaskRouteRef.current = null
       navigateTo('/')
     },
@@ -1201,6 +1269,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     dispatchMessages({ type: 'reset', messages: [] })
     setQueuedSends([])
     setGuidanceMessages([])
+    setCodeCommentContexts([])
     handledTaskRouteRef.current = null
     navigateTo(`/?projectId=${STANDALONE_PROJECT_ID}`)
   }, [state.devices, state.standaloneDeviceId, user])
@@ -1218,6 +1287,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     dispatchMessages({ type: 'reset', messages: [] })
     setQueuedSends([])
     setGuidanceMessages([])
+    setCodeCommentContexts([])
     handledTaskRouteRef.current = null
     navigateTo(`/?projectId=${STANDALONE_PROJECT_ID}`)
   }, [state.devices, state.standaloneDeviceId, user])
@@ -1263,16 +1333,22 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       })
       setQueuedSends([])
       setGuidanceMessages([])
+      setCodeCommentContexts([])
       const joinResponse = await resolvedServices.chatStream.joinTask(taskId)
       if (
         joinResponse?.streaming &&
         shouldRestoreCachedStreaming(detailTask, detail.subtasks, joinResponse.streaming.subtask_id)
       ) {
+        const cachedBlocks = normalizeProcessingBlocks(
+          joinResponse.streaming.subtask_id,
+          joinResponse.streaming.blocks
+        )
         dispatchMessages({
           type: 'assistant_cached',
           taskId,
           subtaskId: joinResponse.streaming.subtask_id,
           content: joinResponse.streaming.cached_content,
+          blocks: cachedBlocks.length > 0 ? cachedBlocks : undefined,
         })
       }
       const routeProjectId = resolvedProjectId === undefined ? undefined : resolvedProjectId
@@ -1364,6 +1440,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       dispatchMessages({ type: 'reset', messages: [] })
       setQueuedSends([])
       setGuidanceMessages([])
+      setCodeCommentContexts([])
       return project
     },
     [refreshWorkLists, rememberExecutionDevice, resolvedServices, user.id]
@@ -1386,6 +1463,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       dispatchMessages({ type: 'reset', messages: [] })
       setQueuedSends([])
       setGuidanceMessages([])
+      setCodeCommentContexts([])
       return project
     },
     [refreshWorkLists, rememberExecutionDevice, resolvedServices, user.id]
@@ -1531,6 +1609,12 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     [resolvedServices]
   )
 
+  const loadEnvironmentDiff = useCallback(
+    (project: ProjectWithTasks | null) =>
+      loadProjectEnvironmentDiff(resolvedServices.deviceApi, project),
+    [resolvedServices]
+  )
+
   const commitEnvironmentChanges = useCallback(
     (project: ProjectWithTasks | null, message: string) =>
       commitProjectChanges(resolvedServices.deviceApi, project, message),
@@ -1600,9 +1684,11 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
         projectExecutionMode === 'git_worktree' &&
         supportsGitWorktreeExecution(activeProject)
       ) {
+        const branch = projectWorktreeBaseBranch?.trim()
         payload.execution = {
           workspace: {
             source: 'git_worktree',
+            ...(branch ? { branch } : {}),
           },
         }
       }
@@ -1635,6 +1721,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       modelSelection.selectedModel,
       modelSelection.selectedModelOptions,
       skillSelection.selectedSkills,
+      projectWorktreeBaseBranch,
       projectExecutionMode,
       state.currentProject,
       state.currentTask,
@@ -1739,8 +1826,11 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
   const sendCurrentInput = useCallback(async () => {
     const trimmedMessage = state.input.trim()
     const hasAttachments = attachmentSelection.attachments.length > 0
-    if (!trimmedMessage && !hasAttachments) return
-    const payloadMessage = trimmedMessage
+    const hasCodeComments = codeCommentContexts.length > 0
+    if (!trimmedMessage && !hasAttachments && !hasCodeComments) return
+    const message =
+      trimmedMessage || (hasCodeComments ? i18n.t('workbench.code_comment_fallback') : '')
+    const payloadMessage = appendCodeCommentContexts(message, codeCommentContexts)
     const prepared = buildSendPayload(payloadMessage)
     if (!prepared) return
     if (prepared.activeDeviceId) {
@@ -1777,6 +1867,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       }
     }
     const attachmentsSnapshot = hasAttachments ? [...attachmentSelection.attachments] : undefined
+    const codeCommentsSnapshot = hasCodeComments ? [...codeCommentContexts] : undefined
 
     dispatch({ type: 'input_changed', input: '' })
 
@@ -1785,30 +1876,35 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
         ...items,
         {
           id: `queued-${state.currentTask?.id}-${Date.now()}`,
-          content: payloadMessage,
+          content: message,
           status: 'queued',
           createdAt: new Date().toISOString(),
           payload: prepared.payload,
           activeDeviceId: prepared.activeDeviceId,
           attachments: attachmentsSnapshot,
+          codeComments: codeCommentsSnapshot,
         },
       ])
       attachmentSelection.resetAttachments()
+      clearCodeCommentContexts()
       return
     }
 
     const sent = await sendPreparedMessage(
-      payloadMessage,
+      message,
       prepared.payload,
       prepared.activeDeviceId,
       attachmentsSnapshot
     )
     if (sent) {
       attachmentSelection.resetAttachments()
+      clearCodeCommentContexts()
     }
   }, [
     attachmentSelection,
     buildSendPayload,
+    clearCodeCommentContexts,
+    codeCommentContexts,
     hasActiveTurn,
     sendPreparedMessage,
     state.devices,
@@ -1914,6 +2010,7 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
       if (!item || item.status === 'sending') return
 
       dispatch({ type: 'input_changed', input: item.content })
+      setCodeCommentContexts(item.codeComments ?? [])
       for (const attachment of item.attachments ?? []) {
         attachmentSelection.addExistingAttachment(attachment)
       }
@@ -2142,10 +2239,13 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     messages,
     queuedMessages: queuedSends,
     guidanceMessages,
+    codeCommentContexts,
     runningTaskIds,
     upgradingDevices,
     projectExecutionMode,
     setProjectExecutionMode: selectProjectExecutionMode,
+    projectWorktreeBaseBranch,
+    setProjectWorktreeBaseBranch,
     projectChat: {
       models: modelSelection.models,
       skills: skillSelection.skills,
@@ -2200,11 +2300,15 @@ export function WorkbenchProvider({ children, user, services }: WorkbenchProvide
     listDeviceDirectories,
     createDeviceDirectory,
     loadEnvironmentInfo,
+    loadEnvironmentDiff,
     commitEnvironmentChanges,
     listEnvironmentBranches,
     checkoutEnvironmentBranch,
     createEnvironmentBranch,
     setInput,
+    addCodeCommentContext,
+    removeCodeCommentContext,
+    clearCodeCommentContexts,
     sendCurrentInput,
     retryFailedMessage,
     pauseCurrentResponse,

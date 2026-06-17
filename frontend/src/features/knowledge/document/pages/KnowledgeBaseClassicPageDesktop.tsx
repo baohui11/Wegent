@@ -250,6 +250,7 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
                   onBack={handleBack}
                   canUpload={canUploadDocuments}
                   canManageAllDocuments={canManageKb}
+                  paginationEnabled={true}
                   onRefreshKnowledgeBase={refreshKnowledgeBase}
                   initialDocPath={initialDocPath}
                 />
@@ -267,6 +268,7 @@ export function KnowledgeBaseClassicPageDesktop({ knowledgeBaseId, initialDocPat
               onBack={handleBack}
               canUpload={canUploadDocuments}
               canManageAllDocuments={canManageKb}
+              paginationEnabled={true}
               initialDocPath={initialDocPath}
             />
           )}

@@ -33,6 +33,7 @@ import type {
 } from '@/types/api'
 import type { EnvironmentInfo } from '@/types/environment'
 import type { DeviceUpgradeState } from '@/types/device-events'
+import type { CodeCommentContext } from '@/types/workspace-files'
 import type {
   GuidanceWorkbenchMessage,
   QueuedWorkbenchMessage,
@@ -48,6 +49,7 @@ interface MobileWorkbenchLayoutProps {
   messages: WorkbenchMessage[]
   queuedMessages?: QueuedWorkbenchMessage[]
   guidanceMessages?: GuidanceWorkbenchMessage[]
+  codeCommentContexts?: CodeCommentContext[]
   runningTaskIds?: Set<number>
   upgradingDevices?: Record<string, DeviceUpgradeState>
   activeItem?: 'chat' | 'plugins' | 'automation'
@@ -86,6 +88,7 @@ interface MobileWorkbenchLayoutProps {
   onLoadEnvironmentInfo?: (
     project: ProjectWithTasks | null,
   ) => Promise<EnvironmentInfo>
+  onLoadEnvironmentDiff?: (project: ProjectWithTasks | null) => Promise<string>
   onCommitEnvironmentChanges?: (
     project: ProjectWithTasks | null,
     message: string,
@@ -115,6 +118,8 @@ interface MobileWorkbenchLayoutProps {
   onRevertFileChanges?: (
     subtaskId: number,
   ) => Promise<TurnFileChangesSummary>
+  onAddCodeComment?: (context: CodeCommentContext) => void
+  onClearCodeComments?: () => void
   onRefreshWorkLists?: () => Promise<void>
   onLogout: () => void
 }
@@ -124,6 +129,7 @@ export function MobileWorkbenchLayout({
   messages,
   queuedMessages = [],
   guidanceMessages = [],
+  codeCommentContexts = [],
   runningTaskIds,
   upgradingDevices = {},
   activeItem,
@@ -163,6 +169,7 @@ export function MobileWorkbenchLayout({
   onCancelGuidanceMessage = () => {},
   onLoadFileChangesDiff,
   onRevertFileChanges,
+  onClearCodeComments,
   onRefreshWorkLists,
 }: MobileWorkbenchLayoutProps) {
   const { t } = useTranslation('common')
@@ -398,12 +405,14 @@ export function MobileWorkbenchLayout({
                   projectWork={projectWork}
                   queuedMessages={queuedMessages}
                   guidanceMessages={guidanceMessages}
+                  codeComments={codeCommentContexts}
                   isStreaming={isResponseStreaming}
                   onPause={onPauseResponse}
                   onCancelQueuedMessage={onCancelQueuedMessage}
                   onSendQueuedAsGuidance={onSendQueuedAsGuidance}
                   onEditQueuedMessage={onEditQueuedMessage}
                   onCancelGuidanceMessage={onCancelGuidanceMessage}
+                  onClearCodeComments={onClearCodeComments}
                 />
               </div>
             </div>
@@ -489,12 +498,14 @@ export function MobileWorkbenchLayout({
                 projectWork={projectWork}
                 queuedMessages={queuedMessages}
                 guidanceMessages={guidanceMessages}
+                codeComments={codeCommentContexts}
                 isStreaming={isResponseStreaming}
                 onPause={onPauseResponse}
                 onCancelQueuedMessage={onCancelQueuedMessage}
                 onSendQueuedAsGuidance={onSendQueuedAsGuidance}
                 onEditQueuedMessage={onEditQueuedMessage}
                 onCancelGuidanceMessage={onCancelGuidanceMessage}
+                onClearCodeComments={onClearCodeComments}
               />
             </div>
           </div>

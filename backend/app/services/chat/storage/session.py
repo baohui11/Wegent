@@ -16,8 +16,10 @@ supporting page refresh recovery during streaming.
 import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from app.core.cache import cache_manager
@@ -48,6 +50,16 @@ CONTEXT_METRICS_KEY_PREFIX = "chat:context_metrics:"
 CALLBACK_CHANNEL_PREFIX = "callback:channel:"
 # Unified TTL for all streaming-related data (1 hour)
 STREAMING_TTL = 3600
+# Internal field stored in Redis block metadata. It is stripped before returning
+# blocks to callers so API consumers still see the existing block shape.
+BLOCK_CONTENT_KEY_FIELD = "_content_key"
+
+
+class StreamContentType(str, Enum):
+    """Content-bearing streaming event types persisted in Redis."""
+
+    TEXT = "text"
+    THINKING = "thinking"
 
 
 class SessionManager:
@@ -797,12 +809,83 @@ class SessionManager:
         """Generate Redis key for current thinking block ID."""
         return f"{STREAMING_KEY_PREFIX}thinking_block:{subtask_id}"
 
+    def _get_block_content_key(self, subtask_id: int, block_id: str) -> str:
+        """Generate Redis key for high-frequency stream block content."""
+        return f"{STREAMING_KEY_PREFIX}block_content:{subtask_id}:{block_id}"
+
     @staticmethod
-    def _decode_redis_value(value: Any) -> str:
-        """Decode Redis value to string."""
+    def _decode_redis_text(value: Any) -> str:
+        """Decode a Redis value into text."""
+        if value is None:
+            return ""
         if isinstance(value, bytes):
-            return value.decode()
+            return value.decode("utf-8")
         return str(value)
+
+    @staticmethod
+    def _decode_block_id(value: Any) -> str:
+        """Decode a Redis block id value."""
+        return value.decode("utf-8") if isinstance(value, bytes) else str(value)
+
+    @staticmethod
+    def _extract_block_content_keys(blocks_raw: List[Any]) -> List[str]:
+        """Extract internal block content keys from serialized block metadata."""
+        content_keys: List[str] = []
+        for block_json in blocks_raw:
+            try:
+                block = json.loads(block_json)
+            except Exception:
+                continue
+            content_key = block.get(BLOCK_CONTENT_KEY_FIELD)
+            if isinstance(content_key, str):
+                content_keys.append(content_key)
+        return content_keys
+
+    async def _load_blocks_from_client(
+        self, redis_client: Any, blocks_key: str
+    ) -> List[Dict[str, Any]]:
+        """Load block metadata and hydrate content from per-block content keys."""
+        blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
+        if not blocks_raw:
+            return []
+
+        blocks: List[Dict[str, Any]] = []
+        content_refs: List[tuple[int, str]] = []
+        for block_json in blocks_raw:
+            block = json.loads(block_json)
+            content_key = block.get(BLOCK_CONTENT_KEY_FIELD)
+            if isinstance(content_key, str):
+                content_refs.append((len(blocks), content_key))
+            blocks.append(block)
+
+        if content_refs:
+            content_values = await redis_client.mget([key for _, key in content_refs])
+            for (block_index, _), content_value in zip(content_refs, content_values):
+                blocks[block_index]["content"] = self._decode_redis_text(content_value)
+
+        for block in blocks:
+            block.pop(BLOCK_CONTENT_KEY_FIELD, None)
+        return blocks
+
+    async def add_stream_content(
+        self,
+        subtask_id: int,
+        content_type: StreamContentType,
+        content: str,
+    ) -> None:
+        """Add buffered stream content by explicit content type."""
+        if content_type == StreamContentType.TEXT:
+            await self.add_text_content(subtask_id, content)
+            return
+        if content_type == StreamContentType.THINKING:
+            await self.add_thinking_content(subtask_id, content)
+            return
+
+        logger.warning(
+            "[SessionManager] Unsupported stream content type for subtask %s: %s",
+            subtask_id,
+            content_type,
+        )
 
     async def add_tool_block(
         self,
@@ -964,30 +1047,43 @@ class SessionManager:
                 # Check if block with this id already exists (upsert logic)
                 blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
                 existing_index = None
+                existing_block = None
                 for i, block_json in enumerate(blocks_raw):
-                    existing_block = json.loads(block_json)
-                    if existing_block.get("id") == block_id:
+                    candidate = json.loads(block_json)
+                    if candidate.get("id") == block_id:
                         existing_index = i
+                        existing_block = candidate
                         break
 
                 if existing_index is not None:
                     # Update existing block
-                    await redis_client.lset(
-                        blocks_key, existing_index, json.dumps(block)
-                    )
+                    block_to_store = block.copy()
+                    content_key = (existing_block or {}).get(BLOCK_CONTENT_KEY_FIELD)
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        if isinstance(content_key, str):
+                            content_value = block_to_store.get("content", "")
+                            block_to_store[BLOCK_CONTENT_KEY_FIELD] = content_key
+                            block_to_store["content"] = ""
+                            pipe.set(content_key, content_value, ex=STREAMING_TTL)
+                        pipe.lset(
+                            blocks_key, existing_index, json.dumps(block_to_store)
+                        )
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        await pipe.execute()
                     logger.debug(
                         f"[SessionManager] Updated block for subtask {subtask_id}: "
                         f"id={block_id}, type={block.get('type')}"
                     )
                 else:
                     # Append new block
-                    await redis_client.rpush(blocks_key, json.dumps(block))
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        pipe.rpush(blocks_key, json.dumps(block))
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        await pipe.execute()
                     logger.info(
                         f"[SessionManager] Added block for subtask {subtask_id}: "
                         f"id={block_id}, type={block.get('type')}"
                     )
-
-                await redis_client.expire(blocks_key, STREAMING_TTL)
             finally:
                 await redis_client.aclose()
 
@@ -1000,7 +1096,8 @@ class SessionManager:
         """Add text content to the current text block.
 
         Creates a new text block if there isn't one currently active.
-        Uses Redis APPEND for O(1) content addition.
+        Uses Redis APPEND for O(1) content addition and keeps block metadata
+        separate from high-frequency content updates.
 
         Args:
             subtask_id: Subtask ID
@@ -1024,43 +1121,37 @@ class SessionManager:
 
             redis_client = await self._cache._get_client()
             try:
-                # Append content to streaming cache
-                new_len = await redis_client.append(streaming_key, content)
-                await redis_client.expire(streaming_key, STREAMING_TTL)
-                logger.debug(
-                    f"[SessionManager] add_text_content: appended to Redis, "
-                    f"subtask_id={subtask_id}, new_total_len={new_len}"
-                )
-
-                # Check if we have a current text block
                 current_block_id = await redis_client.get(text_block_key)
 
                 if current_block_id:
-                    # Update existing text block's content
-                    # We need to find and update the last text block
-                    blocks_raw = await redis_client.lrange(blocks_key, -1, -1)
-                    if blocks_raw:
-                        last_block = json.loads(blocks_raw[0])
-                        if (
-                            last_block.get("id") == current_block_id.decode()
-                            if isinstance(current_block_id, bytes)
-                            else current_block_id
-                        ):
-                            last_block["content"] = (
-                                last_block.get("content", "") + content
-                            )
-                            await redis_client.lset(
-                                blocks_key, -1, json.dumps(last_block)
-                            )
-                else:
-                    # Create new text block (finalize any active thinking block first)
-                    await self._finalize_current_thinking_block(subtask_id)
-                    block = create_text_block(content=content)
-                    await redis_client.rpush(blocks_key, json.dumps(block))
-                    await redis_client.set(
-                        text_block_key, block["id"], ex=STREAMING_TTL
+                    block_id = self._decode_block_id(current_block_id)
+                    content_key = self._get_block_content_key(subtask_id, block_id)
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        pipe.append(streaming_key, content)
+                        pipe.expire(streaming_key, STREAMING_TTL)
+                        pipe.append(content_key, content)
+                        pipe.expire(content_key, STREAMING_TTL)
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        pipe.expire(text_block_key, STREAMING_TTL)
+                        results = await pipe.execute()
+                    logger.debug(
+                        f"[SessionManager] add_text_content: appended to Redis, "
+                        f"subtask_id={subtask_id}, new_total_len={results[0]}"
                     )
-                    await redis_client.expire(blocks_key, STREAMING_TTL)
+                else:
+                    # Create new text block
+                    block = create_text_block(content="")
+                    content_key = self._get_block_content_key(subtask_id, block["id"])
+                    block[BLOCK_CONTENT_KEY_FIELD] = content_key
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        pipe.rpush(blocks_key, json.dumps(block))
+                        pipe.set(text_block_key, block["id"], ex=STREAMING_TTL)
+                        pipe.append(streaming_key, content)
+                        pipe.expire(streaming_key, STREAMING_TTL)
+                        pipe.append(content_key, content)
+                        pipe.expire(content_key, STREAMING_TTL)
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        await pipe.execute()
                     logger.info(
                         f"[SessionManager] Created text block for subtask {subtask_id}: "
                         f"id={block['id']}"
@@ -1091,7 +1182,7 @@ class SessionManager:
             finally:
                 await redis_client.aclose()
             if current_block_id:
-                block_id = self._decode_redis_value(current_block_id)
+                block_id = self._decode_block_id(current_block_id)
                 for block in blocks:
                     if block.get("id") == block_id:
                         return block, False
@@ -1109,34 +1200,44 @@ class SessionManager:
                 is_new = False
 
                 if current_block_id:
-                    block_id = self._decode_redis_value(current_block_id)
-                    blocks_raw = await redis_client.lrange(blocks_key, -1, -1)
-                    if blocks_raw:
-                        last_block = json.loads(blocks_raw[0])
-                        if last_block.get("id") == block_id:
-                            last_block["content"] = (
-                                last_block.get("content", "") + content
-                            )
-                            await redis_client.lset(
-                                blocks_key, -1, json.dumps(last_block)
-                            )
-                            await redis_client.expire(blocks_key, STREAMING_TTL)
-                            return last_block, is_new
+                    block_id = self._decode_block_id(current_block_id)
+                    content_key = self._get_block_content_key(subtask_id, block_id)
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        pipe.append(content_key, content)
+                        pipe.expire(content_key, STREAMING_TTL)
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        pipe.expire(thinking_block_key, STREAMING_TTL)
+                        await pipe.execute()
+                else:
+                    is_new = True
+                    ts = int(time.time() * 1000)
+                    block_id = f"thinking-{uuid.uuid4().hex[:12]}"
+                    content_key = self._get_block_content_key(subtask_id, block_id)
+                    block = {
+                        "id": block_id,
+                        "type": "thinking",
+                        "content": "",
+                        "status": BlockStatus.STREAMING.value,
+                        "timestamp": ts,
+                        BLOCK_CONTENT_KEY_FIELD: content_key,
+                    }
+                    async with redis_client.pipeline(transaction=False) as pipe:
+                        pipe.rpush(blocks_key, json.dumps(block))
+                        pipe.set(thinking_block_key, block["id"], ex=STREAMING_TTL)
+                        pipe.append(content_key, content)
+                        pipe.expire(content_key, STREAMING_TTL)
+                        pipe.expire(blocks_key, STREAMING_TTL)
+                        await pipe.execute()
+                    logger.info(
+                        f"[SessionManager] Created thinking block for subtask {subtask_id}: "
+                        f"id={block['id']}"
+                    )
 
-                block = create_thinking_block(
-                    content=content,
-                    block_id=f"thinking-{uuid.uuid4().hex[:12]}",
-                )
-                await redis_client.rpush(blocks_key, json.dumps(block))
-                await redis_client.set(
-                    thinking_block_key, block["id"], ex=STREAMING_TTL
-                )
-                await redis_client.expire(blocks_key, STREAMING_TTL)
-                logger.info(
-                    f"[SessionManager] Created thinking block for subtask {subtask_id}: "
-                    f"id={block['id']}"
-                )
-                return block, True
+                blocks = await self._load_blocks_from_client(redis_client, blocks_key)
+                for block in reversed(blocks):
+                    if block.get("type") == "thinking":
+                        return block, is_new
+                return {}, is_new
             finally:
                 await redis_client.aclose()
         except Exception as e:
@@ -1157,23 +1258,25 @@ class SessionManager:
                 if not current_block_id:
                     return
 
-                block_id = (
-                    current_block_id.decode()
-                    if isinstance(current_block_id, bytes)
-                    else current_block_id
-                )
+                block_id = self._decode_block_id(current_block_id)
 
                 # Find and update the text block
                 blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
+                block_found = False
                 for i, block_json in enumerate(blocks_raw):
                     block = json.loads(block_json)
                     if block.get("id") == block_id:
                         block["status"] = BlockStatus.DONE.value
-                        await redis_client.lset(blocks_key, i, json.dumps(block))
+                        async with redis_client.pipeline(transaction=False) as pipe:
+                            pipe.lset(blocks_key, i, json.dumps(block))
+                            pipe.delete(text_block_key)
+                            pipe.expire(blocks_key, STREAMING_TTL)
+                            await pipe.execute()
+                        block_found = True
                         break
 
-                # Clear current text block ID
-                await redis_client.delete(text_block_key)
+                if not block_found:
+                    await redis_client.delete(text_block_key)
             finally:
                 await redis_client.aclose()
         except Exception as e:
@@ -1193,17 +1296,24 @@ class SessionManager:
                 if not current_block_id:
                     return
 
-                block_id = self._decode_redis_value(current_block_id)
+                block_id = self._decode_block_id(current_block_id)
 
                 blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
+                block_found = False
                 for i, block_json in enumerate(blocks_raw):
                     block = json.loads(block_json)
                     if block.get("id") == block_id:
                         block["status"] = BlockStatus.DONE.value
-                        await redis_client.lset(blocks_key, i, json.dumps(block))
+                        async with redis_client.pipeline(transaction=False) as pipe:
+                            pipe.lset(blocks_key, i, json.dumps(block))
+                            pipe.delete(thinking_block_key)
+                            pipe.expire(blocks_key, STREAMING_TTL)
+                            await pipe.execute()
+                        block_found = True
                         break
 
-                await redis_client.delete(thinking_block_key)
+                if not block_found:
+                    await redis_client.delete(thinking_block_key)
             finally:
                 await redis_client.aclose()
         except Exception as e:
@@ -1227,8 +1337,7 @@ class SessionManager:
             blocks_key = self._get_blocks_key(subtask_id)
             redis_client = await self._cache._get_client()
             try:
-                blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
-                blocks = [json.loads(b) for b in blocks_raw] if blocks_raw else []
+                blocks = await self._load_blocks_from_client(redis_client, blocks_key)
                 logger.debug(
                     f"[SessionManager] get_blocks for subtask {subtask_id}: "
                     f"count={len(blocks)}"
@@ -1262,8 +1371,7 @@ class SessionManager:
             blocks_key = self._get_blocks_key(subtask_id)
             redis_client = await self._cache._get_client()
             try:
-                blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
-                blocks = [json.loads(b) for b in blocks_raw] if blocks_raw else []
+                blocks = await self._load_blocks_from_client(redis_client, blocks_key)
                 logger.info(
                     f"[SessionManager] Finalized blocks for subtask {subtask_id}: "
                     f"count={len(blocks)}"
@@ -1308,12 +1416,15 @@ class SessionManager:
 
             redis_client = await self._cache._get_client()
             try:
+                blocks_raw = await redis_client.lrange(blocks_key, 0, -1)
+                block_content_keys = self._extract_block_content_keys(blocks_raw)
                 await redis_client.delete(
                     streaming_key,
                     blocks_key,
                     text_block_key,
                     thinking_block_key,
                     context_metrics_key,
+                    *block_content_keys,
                 )
                 logger.debug(
                     f"[SessionManager] Cleaned up streaming state for subtask {subtask_id}"

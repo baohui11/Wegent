@@ -204,7 +204,13 @@ export type Event =
       syncAfterMessageId?: number
       syncUpdatedAt?: string
     }
-  | { type: 'CHAT_START'; subtaskId: number; shellType?: string; messageId?: number }
+  | {
+      type: 'CHAT_START'
+      subtaskId: number
+      shellType?: string
+      messageId?: number
+      botName?: string
+    }
   | {
       type: 'CHAT_CHUNK'
       subtaskId: number

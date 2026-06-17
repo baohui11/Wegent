@@ -206,6 +206,89 @@ async def test_codex_pre_execute_uses_project_workspace_path(tmp_path):
     assert status.name == "SUCCESS"
 
 
+def test_codex_project_task_marks_api_project_id():
+    request = ExecutionRequest(
+        task_id=1546,
+        subtask_id=1970,
+        project_id=42,
+        model_config={
+            "model": "openai",
+            "model_id": "gpt-5.5",
+            "base_url": "https://copilot.weibo.com/v1",
+            "api_key": "token",
+            "api_format": "responses",
+        },
+    )
+    agent = CodeXAgent(request, MagicMock())
+
+    status = agent.initialize()
+
+    assert status.name == "SUCCESS"
+    assert agent.codex_config is not None
+    assert (
+        'model_providers.wecode-openai.http_headers.wecode-project="42"'
+        in agent.codex_config.config_overrides
+    )
+    assert (
+        'model_providers.wecode-openai.http_headers.wecode-executor="codex"'
+        in agent.codex_config.config_overrides
+    )
+    assert not any(
+        item == 'model_providers.wecode-openai.http_headers.wecode-source="wework"'
+        for item in agent.codex_config.config_overrides
+    )
+
+
+async def test_initial_codex_standalone_chat_prepares_request_named_cwd(
+    tmp_path, monkeypatch
+):
+    workspace_root = tmp_path / "workspace"
+    task_dir = workspace_root / "1547"
+    task_dir.mkdir(parents=True)
+    (task_dir / "draft.txt").write_text("hello", encoding="utf-8")
+    chats_root = tmp_path / "chats"
+    request = ExecutionRequest(
+        task_id=1547,
+        subtask_id=1971,
+        project_id=0,
+        standalone_chat_workspace=True,
+        prompt="hello codex workspace",
+        model_config={
+            "model": "openai",
+            "model_id": "gpt-5.5",
+            "base_url": "https://copilot.weibo.com/v1",
+            "api_key": "token",
+            "api_format": "responses",
+        },
+    )
+    agent = CodeXAgent(request, MagicMock())
+
+    _enable_standalone_chats(monkeypatch)
+    monkeypatch.setenv("WEGENT_EXECUTOR_CHATS_DIR", str(chats_root))
+    with (
+        patch(
+            "executor.agents.base.config.get_workspace_root",
+            return_value=str(workspace_root),
+        ),
+        patch(
+            "executor.agents.claude_code.standalone_chat_workspace.config.get_workspace_root",
+            return_value=str(workspace_root),
+        ),
+    ):
+        status, error = await agent.pre_execute()
+
+    target = chats_root / datetime.now().strftime("%Y-%m-%d") / "hello-codex-workspac"
+    assert error is None
+    assert status.name == "SUCCESS"
+    assert request.workspace_source == "local_path"
+    assert request.project_workspace_path == str(target)
+    assert agent.project_path == str(target)
+    assert (target / "draft.txt").read_text(encoding="utf-8") == "hello"
+    agent.emitter.set_completion_fields_provider.assert_called_once()
+    provider = agent.emitter.set_completion_fields_provider.call_args.args[0]
+    assert provider() == {"standalone_chat_workspace_path": str(target)}
+
+
 def test_initial_standalone_chat_coordinate_mode_keeps_claude_out_of_chat_dir(
     tmp_path,
     monkeypatch,

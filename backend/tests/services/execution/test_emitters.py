@@ -42,6 +42,28 @@ class TestWebSocketResultEmitter:
             assert call_kwargs["shell_type"] == "Chat"
 
     @pytest.mark.asyncio
+    async def test_emit_start_forwards_bot_name(self):
+        """START events should expose the current bot name to the frontend."""
+        from app.services.execution.emitters import WebSocketResultEmitter
+
+        with patch(
+            "app.services.chat.webpage_ws_chat_emitter.get_webpage_ws_emitter"
+        ) as mock_get:
+            mock_ws = AsyncMock()
+            mock_get.return_value = mock_ws
+
+            emitter = WebSocketResultEmitter(task_id=1, subtask_id=1)
+            await emitter.emit_start(
+                task_id=1,
+                subtask_id=1,
+                message_id=100,
+                data={"shell_type": "ClaudeCode", "bot_name": "pipeline-bot"},
+            )
+
+            call_kwargs = mock_ws.emit_chat_start.call_args[1]
+            assert call_kwargs["bot_name"] == "pipeline-bot"
+
+    @pytest.mark.asyncio
     async def test_emit_chunk(self):
         """Test emitting chunk event."""
         from app.services.execution.emitters import WebSocketResultEmitter
@@ -504,7 +526,7 @@ class TestBatchCallbackEmitter:
 
     @pytest.mark.asyncio
     async def test_batch_emit(self):
-        """Test batching events."""
+        """Test batching non-stream events."""
         from app.services.execution.emitters import BatchCallbackEmitter
 
         emitter = BatchCallbackEmitter(
@@ -521,18 +543,51 @@ class TestBatchCallbackEmitter:
             mock_client.post.return_value = mock_response
             mock_get_client.return_value = mock_client
 
-            # Emit 2 events (less than batch size)
-            await emitter.emit_chunk(task_id=1, subtask_id=1, content="A", offset=0)
-            await emitter.emit_chunk(task_id=1, subtask_id=1, content="B", offset=1)
+            progress_event = ExecutionEvent.create(
+                EventType.PROGRESS,
+                task_id=1,
+                subtask_id=1,
+                progress=10,
+            )
+
+            # Emit 2 progress events (less than batch size)
+            await emitter.emit(progress_event)
+            await emitter.emit(progress_event)
 
             # Should not have sent yet
             mock_client.post.assert_not_called()
 
             # Emit 3rd event (reaches batch size)
-            await emitter.emit_chunk(task_id=1, subtask_id=1, content="C", offset=2)
+            await emitter.emit(progress_event)
 
             # Should have sent batch
             mock_client.post.assert_called_once()
+
+        await emitter.close()
+
+    @pytest.mark.asyncio
+    async def test_stream_events_flush_immediately(self):
+        """Streaming chunks should flush immediately for low-latency delivery."""
+        from app.services.execution.emitters import BatchCallbackEmitter
+
+        emitter = BatchCallbackEmitter(
+            task_id=1,
+            subtask_id=1,
+            callback_url="http://test.com/callback",
+            batch_size=10,
+        )
+
+        with patch.object(emitter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_client.post.return_value = mock_response
+            mock_get_client.return_value = mock_client
+
+            await emitter.emit_chunk(task_id=1, subtask_id=1, content="A", offset=0)
+            await emitter.emit_chunk(task_id=1, subtask_id=1, content="B", offset=1)
+
+            assert mock_client.post.call_count == 2
 
         await emitter.close()
 
@@ -558,8 +613,8 @@ class TestBatchCallbackEmitter:
             await emitter.emit_chunk(task_id=1, subtask_id=1, content="A", offset=0)
             await emitter.emit_done(task_id=1, subtask_id=1)
 
-            # Should have flushed on done event
-            mock_client.post.assert_called_once()
+            # Chunk and terminal events each flush immediately
+            assert mock_client.post.call_count == 2
 
         await emitter.close()
 
