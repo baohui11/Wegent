@@ -6,6 +6,7 @@ import {
   createAndCheckoutProjectBranch,
   listProjectBranches,
   loadProjectEnvironment,
+  loadProjectEnvironmentDiff,
   parseGitShortStat,
 } from './environment'
 
@@ -177,6 +178,53 @@ describe('loadProjectEnvironment', () => {
       args: ['HEAD', '--'],
       timeout_seconds: 10,
       max_output_bytes: 4096,
+    })
+  })
+
+  test('surfaces structured stdout from text device commands as an environment error', async () => {
+    const executeCommand = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: { branch: 'main' },
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: '',
+        stderr: '',
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        stdout: '',
+        stderr: '',
+      })
+
+    const info = await loadProjectEnvironment(
+      { executeCommand },
+      {
+        id: 2,
+        name: 'Wegent',
+        config: {
+          mode: 'workspace',
+          execution: {
+            targetType: 'local',
+            deviceId: 'device-123',
+          },
+          workspace: {
+            source: 'local_path',
+            localPath: '/workspace/Wegent',
+          },
+        },
+      },
+    )
+
+    expect(info).toEqual({
+      additions: '+0',
+      deletions: '-0',
+      executionTarget: 'local',
+      deviceId: 'device-123',
+      error: 'Expected text stdout from device command',
     })
   })
 
@@ -538,6 +586,42 @@ describe('loadProjectEnvironment', () => {
 })
 
 describe('commitProjectChanges', () => {
+  test('loads the full environment diff through the project device command API', async () => {
+    const executeCommand = vi.fn().mockResolvedValue({
+      success: true,
+      stdout: 'diff --git a/src/env.ts b/src/env.ts\n+new\n',
+      stderr: '',
+    })
+
+    await expect(
+      loadProjectEnvironmentDiff(
+        { executeCommand },
+        {
+          id: 1,
+          name: 'Wegent',
+          config: {
+            mode: 'workspace',
+            execution: {
+              targetType: 'local',
+              deviceId: 'device-123',
+            },
+            workspace: {
+              source: 'local_path',
+              localPath: '/workspace/Wegent',
+            },
+          },
+        },
+      ),
+    ).resolves.toBe('diff --git a/src/env.ts b/src/env.ts\n+new')
+
+    expect(executeCommand).toHaveBeenCalledWith('device-123', {
+      command_key: 'git_diff',
+      path: '/workspace/Wegent',
+      timeout_seconds: 30,
+      max_output_bytes: 5 * 1024 * 1024,
+    })
+  })
+
   test('stages all changes and commits with the provided message', async () => {
     const executeCommand = vi
       .fn()

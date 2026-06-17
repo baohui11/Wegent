@@ -43,6 +43,8 @@ Wegent is an open-source AI-native operating system for defining, organizing, an
 - English version: [`docs/en/developer-guide/sandbox-workspace-archive.md`](docs/en/developer-guide/sandbox-workspace-archive.md)
 - Workspace file sync (incremental sync of executor workspace files to S3 so "view task files" serves from object storage): [`docs/zh/developer-guide/workspace-file-sync.md`](docs/zh/developer-guide/workspace-file-sync.md)
 - English version: [`docs/en/developer-guide/workspace-file-sync.md`](docs/en/developer-guide/workspace-file-sync.md)
+- Shared skill directory (unify Claude and Codex local skills under `~/.agents/skills`): [`docs/zh/developer-guide/shared-skill-directory.md`](docs/zh/developer-guide/shared-skill-directory.md)
+- English version: [`docs/en/developer-guide/shared-skill-directory.md`](docs/en/developer-guide/shared-skill-directory.md)
 
 **📚 Documentation Writing Rules:**
 - All documentation files MUST include frontmatter with `sidebar_position` for ordering:

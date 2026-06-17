@@ -37,6 +37,164 @@ GIT_BRANCH_DIFF_SHORTSTAT_COMMAND = (
     'git diff --shortstat "$merge_base" --\''
 )
 
+GIT_WORKSPACE_DIFF_COMMAND = (
+    "bash -lc "
+    "'if git rev-parse --verify --quiet HEAD >/dev/null; then "
+    "git diff --binary HEAD --; "
+    "else "
+    "git diff --binary --; "
+    "fi; "
+    "git ls-files --others --exclude-standard -z | "
+    'while IFS= read -r -d "" file; do '
+    'git diff --binary --no-index -- /dev/null "$file" || true; '
+    "done'"
+)
+
+WORKSPACE_ROOT_GUARD_SCRIPT = """
+def fail(message, code=64):
+    print(json.dumps({"success": False, "error": message}, ensure_ascii=False))
+    raise SystemExit(code)
+
+
+def is_relative_to(path, root):
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def configured_workspace_roots():
+    roots = []
+    for raw_root in os.environ.get("WEGENT_WORKSPACE_ROOTS", "").split(os.pathsep):
+        raw_root = raw_root.strip()
+        if raw_root:
+            roots.append(Path(raw_root).expanduser().resolve())
+
+    raw_projects_root = os.environ.get("WEGENT_EXECUTOR_PROJECTS_DIR", "").strip()
+    if raw_projects_root:
+        projects_root = Path(raw_projects_root).expanduser().resolve()
+        roots.append(projects_root)
+        if projects_root.name == "projects":
+            roots.append(projects_root.parent / "worktrees")
+        else:
+            roots.append(projects_root / "worktrees")
+
+    wecode_home = Path(os.environ.get("WECODE_HOME", Path.home() / ".wecode"))
+    executor_workspace = wecode_home.expanduser() / "wegent-executor" / "workspace"
+    roots.extend(
+        [
+            executor_workspace / "projects",
+            executor_workspace / "worktrees",
+            Path("/workspace/projects"),
+            Path("/workspace/worktrees"),
+        ]
+    )
+    return tuple(dict.fromkeys(root.resolve() for root in roots))
+
+
+def require_workspace_root(path):
+    for allowed_root in configured_workspace_roots():
+        if is_relative_to(path, allowed_root):
+            return allowed_root
+
+    fail("workspace path is outside allowed workspace roots")
+""".strip()
+
+WORKSPACE_TREE_SCRIPT = """
+import json
+import os
+import stat as stat_module
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+__WORKSPACE_ROOT_GUARD_SCRIPT__
+
+
+def iso_mtime(path_stat):
+    return datetime.fromtimestamp(path_stat.st_mtime, timezone.utc).isoformat()
+
+
+root = Path.cwd().resolve()
+workspace_root = require_workspace_root(root)
+if not is_relative_to(root, workspace_root):
+    fail("workspace path is outside allowed workspace root")
+
+entries = []
+for child in sorted(root.iterdir(), key=lambda item: item.name.lower()):
+    if child.name in {'.', '..'}:
+        continue
+    try:
+        child_stat = child.lstat()
+    except OSError:
+        continue
+    is_directory = stat_module.S_ISDIR(child_stat.st_mode)
+    entries.append(
+        {
+            "name": child.name,
+            "path": str(child),
+            "is_directory": is_directory,
+            "size": 0 if is_directory else child_stat.st_size,
+            "modified_at": iso_mtime(child_stat),
+        }
+    )
+
+entries.sort(key=lambda item: (not item["is_directory"], item["name"].lower()))
+print(json.dumps({"path": str(root), "entries": entries}, ensure_ascii=False))
+""".replace(
+    "__WORKSPACE_ROOT_GUARD_SCRIPT__", WORKSPACE_ROOT_GUARD_SCRIPT
+).strip()
+
+WORKSPACE_READ_TEXT_FILE_SCRIPT = """
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+MAX_BYTES = 262144
+
+
+__WORKSPACE_ROOT_GUARD_SCRIPT__
+
+
+if len(sys.argv) != 2:
+    fail("file name is required")
+
+root = Path.cwd().resolve()
+workspace_root = require_workspace_root(root)
+target = (root / sys.argv[1]).resolve()
+if not is_relative_to(target, workspace_root):
+    fail("file path is outside workspace root")
+if not is_relative_to(target, root):
+    fail("file path is outside workspace")
+if not target.is_file():
+    fail("file does not exist")
+
+with target.open("rb") as target_file:
+    data = target_file.read(MAX_BYTES + 1)
+truncated = len(data) > MAX_BYTES
+content = data[:MAX_BYTES].decode("utf-8", errors="replace")
+stat = target.stat()
+print(
+    json.dumps(
+        {
+            "success": True,
+            "path": str(target),
+            "name": target.name,
+            "content": content,
+            "truncated": truncated,
+            "size": stat.st_size,
+            "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        },
+        ensure_ascii=False,
+    )
+)
+""".replace(
+    "__WORKSPACE_ROOT_GUARD_SCRIPT__", WORKSPACE_ROOT_GUARD_SCRIPT
+).strip()
+
 LS_SKILLS_SCRIPT = """
 import json
 import re
@@ -44,6 +202,7 @@ from pathlib import Path
 
 FRONTMATTER_PATTERN = re.compile(r"^---\\n(.*?)\\n---", re.S)
 SKILL_SOURCES = (
+    (Path.home() / ".agents" / "skills", "agents", "**/SKILL.md", "skill"),
     (Path.home() / ".claude" / "skills", "claude", "**/SKILL.md", "skill"),
     (Path.home() / ".codex" / "skills", "codex", "**/SKILL.md", "skill"),
     (
@@ -214,6 +373,130 @@ print(json.dumps(skills, ensure_ascii=False))
 """.strip()
 
 LS_SKILLS_COMMAND = f"python3 -c {shlex.quote(LS_SKILLS_SCRIPT)}"
+
+SETUP_SHARED_SKILLS_SCRIPT = """
+import json
+import shutil
+import sys
+from pathlib import Path
+
+
+def finish(payload, code=0):
+    print(json.dumps(payload, ensure_ascii=False))
+    sys.exit(code)
+
+
+def fail(message, code=64):
+    print(message, file=sys.stderr)
+    finish({"success": False, "status": "failed", "error": message}, code)
+
+
+def same_path(left, right):
+    try:
+        return left.resolve(strict=False) == right.resolve(strict=False)
+    except OSError:
+        return False
+
+
+def unique_target(path, source_name):
+    if not path.exists() and not path.is_symlink():
+        return path
+
+    base_name = f"{path.name}-{source_name}"
+    candidate = path.with_name(base_name)
+    if not candidate.exists() and not candidate.is_symlink():
+        return candidate
+
+    for index in range(2, 1000):
+        candidate = path.with_name(f"{base_name}-{index}")
+        if not candidate.exists() and not candidate.is_symlink():
+            return candidate
+    fail(f"could not find a free target name for {path.name}")
+
+
+def migrate_entries(source_dir, source_name, shared_dir):
+    if source_dir.is_symlink():
+        if same_path(source_dir, shared_dir):
+            return []
+        fail(f"{source_dir} is already a symlink to another location")
+
+    if not source_dir.exists():
+        return []
+    if not source_dir.is_dir():
+        fail(f"{source_dir} exists but is not a directory")
+
+    moved = []
+    for entry in sorted(source_dir.iterdir(), key=lambda item: item.name.lower()):
+        target = unique_target(shared_dir / entry.name, source_name)
+        shutil.move(str(entry), str(target))
+        moved.append(
+            {
+                "source": source_name,
+                "from": str(entry),
+                "to": str(target),
+                "renamed": target.name != entry.name,
+            }
+        )
+
+    try:
+        source_dir.rmdir()
+    except OSError as exc:
+        fail(f"failed to remove migrated directory {source_dir}: {exc}", code=74)
+    return moved
+
+
+def ensure_link(path, shared_dir):
+    if path.is_symlink():
+        if same_path(path, shared_dir):
+            return {
+                "path": str(path),
+                "target": str(shared_dir),
+                "status": "already_configured",
+            }
+        fail(f"{path} is already a symlink to another location")
+
+    if path.exists():
+        fail(f"{path} still exists after migration")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.symlink_to(shared_dir, target_is_directory=True)
+    return {"path": str(path), "target": str(shared_dir), "status": "created"}
+
+
+home = Path.home().resolve()
+shared_dir = home / ".agents" / "skills"
+legacy_dirs = (
+    (home / ".codex" / "skills", "codex"),
+    (home / ".claude" / "skills", "claude"),
+)
+
+if shared_dir.exists() and not shared_dir.is_dir():
+    fail(f"{shared_dir} exists but is not a directory")
+
+shared_created = not shared_dir.exists()
+shared_dir.mkdir(parents=True, exist_ok=True)
+
+moved = []
+for legacy_dir, source_name in legacy_dirs:
+    moved.extend(migrate_entries(legacy_dir, source_name, shared_dir))
+
+links = [ensure_link(legacy_dir, shared_dir) for legacy_dir, _ in legacy_dirs]
+
+finish(
+    {
+        "success": True,
+        "status": "configured",
+        "shared_path": str(shared_dir),
+        "shared_created": shared_created,
+        "legacy_paths": [str(path) for path, _ in legacy_dirs],
+        "moved_count": len(moved),
+        "moved": moved,
+        "links": links,
+    }
+)
+""".strip()
+
+SETUP_SHARED_SKILLS_COMMAND = f"python3 -c {shlex.quote(SETUP_SHARED_SKILLS_SCRIPT)}"
 
 SYNC_RUNTIME_AUTH_FILE_SCRIPT = """
 import json
@@ -503,6 +786,21 @@ TURN_FILE_CHANGES_REVERT_COMMAND = (
     f"python3 -c {shlex.quote(TURN_FILE_CHANGES_SCRIPT)} revert"
 )
 
+OPEN_TERMINAL_COMMAND = (
+    "sh -c "
+    "'target=${1:-$PWD}; "
+    'case "$(uname -s)" in '
+    'Darwin) open -a Terminal "$target" ;; '
+    "Linux) "
+    "if command -v x-terminal-emulator >/dev/null 2>&1; then "
+    'x-terminal-emulator --working-directory="$target" >/dev/null 2>&1 & '
+    "elif command -v gnome-terminal >/dev/null 2>&1; then "
+    'gnome-terminal --working-directory="$target" >/dev/null 2>&1 & '
+    'else echo "No supported graphical terminal found" >&2; exit 69; fi ;; '
+    '*) echo "Opening a graphical terminal is unsupported on this device" >&2; exit 69 ;; '
+    "esac' --"
+)
+
 
 DEFAULT_LOCAL_DEVICE_COMMANDS: dict[str, LocalDeviceCommandDefinition] = {
     "pwd": LocalDeviceCommandDefinition(command="pwd"),
@@ -522,6 +820,14 @@ DEFAULT_LOCAL_DEVICE_COMMANDS: dict[str, LocalDeviceCommandDefinition] = {
         command="ls -a -p",
         post_processor="directory_list",
     ),
+    "workspace_tree": LocalDeviceCommandDefinition(
+        command=f"python3 -c {shlex.quote(WORKSPACE_TREE_SCRIPT)}",
+        post_processor="json",
+    ),
+    "workspace_read_text_file": LocalDeviceCommandDefinition(
+        command=f"python3 -c {shlex.quote(WORKSPACE_READ_TEXT_FILE_SCRIPT)}",
+        post_processor="json",
+    ),
     "mkdir_p": LocalDeviceCommandDefinition(command="mkdir -p"),
     "path_exists": LocalDeviceCommandDefinition(command="test -e"),
     "git_clone": LocalDeviceCommandDefinition(command="git clone"),
@@ -540,7 +846,13 @@ DEFAULT_LOCAL_DEVICE_COMMANDS: dict[str, LocalDeviceCommandDefinition] = {
         command="sh -c 'git -C \"$1\" rev-parse --is-inside-work-tree' --"
     ),
     "git_worktree_add": LocalDeviceCommandDefinition(
-        command='sh -c \'git -C "$1" worktree add --detach "$2"\' --'
+        command=(
+            "sh -c '"
+            'if [ -n "$3" ]; then '
+            'git -C "$1" worktree add --detach "$2" "$3"; '
+            'else git -C "$1" worktree add --detach "$2"; fi'
+            "' --"
+        )
     ),
     "git_worktree_remove": LocalDeviceCommandDefinition(
         command='sh -c \'git -C "$1" worktree remove --force "$2"\' --'
@@ -567,6 +879,7 @@ DEFAULT_LOCAL_DEVICE_COMMANDS: dict[str, LocalDeviceCommandDefinition] = {
     "git_checkout": LocalDeviceCommandDefinition(command="git checkout"),
     "git_checkout_new": LocalDeviceCommandDefinition(command="git checkout -b"),
     "git_diff_shortstat": LocalDeviceCommandDefinition(command="git diff --shortstat"),
+    "git_diff": LocalDeviceCommandDefinition(command=GIT_WORKSPACE_DIFF_COMMAND),
     "git_branch_diff_shortstat": LocalDeviceCommandDefinition(
         command=GIT_BRANCH_DIFF_SHORTSTAT_COMMAND
     ),
@@ -580,6 +893,11 @@ DEFAULT_LOCAL_DEVICE_COMMANDS: dict[str, LocalDeviceCommandDefinition] = {
         command=LS_SKILLS_COMMAND,
         post_processor="json",
     ),
+    "setup_shared_skills": LocalDeviceCommandDefinition(
+        command=SETUP_SHARED_SKILLS_COMMAND,
+        post_processor="json",
+    ),
+    "open_terminal": LocalDeviceCommandDefinition(command=OPEN_TERMINAL_COMMAND),
     "sync_runtime_auth_file": LocalDeviceCommandDefinition(
         command=SYNC_RUNTIME_AUTH_FILE_COMMAND,
         post_processor="json",

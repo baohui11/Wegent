@@ -298,10 +298,40 @@ export interface LocalDeviceSkill {
   mtime?: number
 }
 
+export interface SkillDirectoryMove {
+  source: string
+  from: string
+  to: string
+  renamed: boolean
+}
+
+export interface SkillDirectoryLink {
+  path: string
+  target: string
+  status: 'created' | 'already_configured' | string
+}
+
+export interface SkillDirectorySetupResult {
+  success: boolean
+  status: 'configured' | 'failed' | string
+  shared_path: string
+  shared_created: boolean
+  legacy_paths: string[]
+  moved_count: number
+  moved: SkillDirectoryMove[]
+  links: SkillDirectoryLink[]
+  error?: string
+}
+
 export interface DeviceCommandResponse {
   success: boolean
   exit_code?: number | null
-  stdout: string | string[] | LocalDeviceSkill[]
+  stdout:
+    | string
+    | string[]
+    | LocalDeviceSkill[]
+    | SkillDirectorySetupResult
+    | Record<string, unknown>
   stderr: string
   error?: string
   duration?: number
@@ -415,6 +445,7 @@ export interface ChatSendPayload {
   execution?: {
     workspace?: {
       source: 'git_worktree'
+      branch?: string
     }
   }
 }

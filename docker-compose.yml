@@ -433,6 +433,8 @@ services:
     pull_policy: ${DOCKER_PULL_POLICY:-never}
     container_name: wegent-knowledge-doc-converter
     restart: always
+    profiles:
+      - rag
     depends_on:
       redis:
         condition: service_healthy

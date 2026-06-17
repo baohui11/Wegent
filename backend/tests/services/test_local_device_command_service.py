@@ -216,6 +216,9 @@ def test_local_device_command_registry_default_includes_diagnostic_commands():
     git_diff_shortstat_definition = resolve_local_device_command(
         "git_diff_shortstat", settings.LOCAL_DEVICE_COMMANDS
     )
+    git_diff_definition = resolve_local_device_command(
+        "git_diff", settings.LOCAL_DEVICE_COMMANDS
+    )
     git_branch_diff_shortstat_definition = resolve_local_device_command(
         "git_branch_diff_shortstat", settings.LOCAL_DEVICE_COMMANDS
     )
@@ -230,6 +233,12 @@ def test_local_device_command_registry_default_includes_diagnostic_commands():
     )
     ls_skills_definition = resolve_local_device_command(
         "ls_skills", settings.LOCAL_DEVICE_COMMANDS
+    )
+    setup_shared_skills_definition = resolve_local_device_command(
+        "setup_shared_skills", settings.LOCAL_DEVICE_COMMANDS
+    )
+    open_terminal_definition = resolve_local_device_command(
+        "open_terminal", settings.LOCAL_DEVICE_COMMANDS
     )
     sync_runtime_auth_file_definition = resolve_local_device_command(
         "sync_runtime_auth_file", settings.LOCAL_DEVICE_COMMANDS
@@ -292,6 +301,10 @@ def test_local_device_command_registry_default_includes_diagnostic_commands():
     assert git_diff_shortstat_definition is not None
     assert git_diff_shortstat_definition.command == "git diff --shortstat"
     assert git_diff_shortstat_definition.post_processor is None
+    assert git_diff_definition is not None
+    assert "git diff --binary HEAD --" in git_diff_definition.command
+    assert "git ls-files --others --exclude-standard" in git_diff_definition.command
+    assert git_diff_definition.post_processor is None
     assert git_branch_diff_shortstat_definition is not None
     assert "git merge-base" in git_branch_diff_shortstat_definition.command
     assert "git diff --shortstat" in git_branch_diff_shortstat_definition.command
@@ -312,8 +325,19 @@ def test_local_device_command_registry_default_includes_diagnostic_commands():
     assert "python3 -c" in ls_skills_definition.command
     assert ".claude" in ls_skills_definition.command
     assert ".codex" in ls_skills_definition.command
+    assert ".agents" in ls_skills_definition.command
     assert "plugins" in ls_skills_definition.command
     assert ls_skills_definition.post_processor == "json"
+    assert setup_shared_skills_definition is not None
+    assert "python3 -c" in setup_shared_skills_definition.command
+    assert ".agents" in setup_shared_skills_definition.command
+    assert ".codex" in setup_shared_skills_definition.command
+    assert ".claude" in setup_shared_skills_definition.command
+    assert setup_shared_skills_definition.post_processor == "json"
+    assert open_terminal_definition is not None
+    assert "open -a Terminal" in open_terminal_definition.command
+    assert "x-terminal-emulator" in open_terminal_definition.command
+    assert open_terminal_definition.post_processor is None
     assert sync_runtime_auth_file_definition is not None
     assert "WEGENT_RUNTIME_CONFIG_CONTENT" in sync_runtime_auth_file_definition.command
     assert sync_runtime_auth_file_definition.post_processor == "json"
@@ -322,6 +346,308 @@ def test_local_device_command_registry_default_includes_diagnostic_commands():
         "WEGENT_RUNTIME_CONFIG_TARGET_PATH" in read_runtime_auth_file_definition.command
     )
     assert read_runtime_auth_file_definition.post_processor == "json"
+
+
+def test_local_device_command_registry_default_includes_workspace_file_commands():
+    """Workspace file commands should be narrow JSON-producing commands."""
+    from app.services.device.command_registry import resolve_local_device_command
+
+    tree_definition = resolve_local_device_command("workspace_tree", {})
+    read_definition = resolve_local_device_command("workspace_read_text_file", {})
+
+    assert tree_definition is not None
+    assert tree_definition.post_processor == "json"
+    assert "json.dumps" in tree_definition.command
+
+    assert read_definition is not None
+    assert read_definition.post_processor == "json"
+    assert "MAX_BYTES = 262144" in read_definition.command
+
+
+def test_workspace_tree_script_lists_files_and_directories(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_tree should emit stable JSON metadata for direct children."""
+    import json
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "README.md").write_text("hello", encoding="utf-8")
+    monkeypatch.setenv("WEGENT_WORKSPACE_ROOTS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["path"] == str(tmp_path.resolve())
+    assert output["entries"][0]["name"] == "backend"
+    assert output["entries"][0]["is_directory"] is True
+    assert output["entries"][1]["name"] == "README.md"
+    assert output["entries"][1]["is_directory"] is False
+    assert output["entries"][1]["size"] == 5
+
+
+def test_workspace_tree_script_allows_configured_executor_projects_dir(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_tree should allow the same custom projects root as project_workspace_root."""
+    import json
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    projects_root = tmp_path / "custom-projects"
+    project_dir = projects_root / "Wegent"
+    project_dir.mkdir(parents=True)
+    (project_dir / "README.md").write_text("hello", encoding="utf-8")
+    monkeypatch.delenv("WEGENT_WORKSPACE_ROOTS", raising=False)
+    monkeypatch.setenv("WEGENT_EXECUTOR_PROJECTS_DIR", str(projects_root))
+    monkeypatch.chdir(project_dir)
+
+    exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["path"] == str(project_dir.resolve())
+    assert [entry["name"] for entry in output["entries"]] == ["README.md"]
+
+
+def test_workspace_tree_script_does_not_classify_symlinked_directory_as_directory(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_tree should not expose symlinked directories as traversable."""
+    import json
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    external_dir = tmp_path.parent / "external"
+    external_dir.mkdir()
+    (tmp_path / "linked-dir").symlink_to(external_dir, target_is_directory=True)
+    monkeypatch.setenv("WEGENT_WORKSPACE_ROOTS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    linked_entry = next(
+        entry for entry in output["entries"] if entry["name"] == "linked-dir"
+    )
+    assert linked_entry["is_directory"] is False
+
+
+def test_workspace_tree_script_rejects_non_workspace_cwd(tmp_path, monkeypatch, capsys):
+    """workspace_tree should reject arbitrary directories outside workspace roots."""
+    import json
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    monkeypatch.delenv("WEGENT_WORKSPACE_ROOTS", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    try:
+        exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    except SystemExit as exc:
+        assert exc.code == 64
+    else:
+        raise AssertionError("workspace_tree should reject non-workspace cwd")
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "success": False,
+        "error": "workspace path is outside allowed workspace roots",
+    }
+
+
+def test_workspace_tree_script_rejects_external_git_repository(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_tree should not treat arbitrary Git repositories as workspaces."""
+    import json
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    repository_dir = tmp_path / "external-repo"
+    repository_dir.mkdir()
+    (repository_dir / ".git").mkdir()
+    (repository_dir / "README.md").write_text("hello", encoding="utf-8")
+    monkeypatch.delenv("WEGENT_WORKSPACE_ROOTS", raising=False)
+    monkeypatch.delenv("WEGENT_EXECUTOR_PROJECTS_DIR", raising=False)
+    monkeypatch.setenv("WECODE_HOME", str(tmp_path / "wecode-home"))
+    monkeypatch.chdir(repository_dir)
+
+    try:
+        exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    except SystemExit as exc:
+        assert exc.code == 64
+    else:
+        raise AssertionError("workspace_tree should reject external git repositories")
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "success": False,
+        "error": "workspace path is outside allowed workspace roots",
+    }
+
+
+def test_workspace_tree_script_keeps_lstat_operations_guarded(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_tree should skip lstat failures without unguarded stat calls."""
+    import json
+    from pathlib import Path
+
+    from app.services.device.command_registry import WORKSPACE_TREE_SCRIPT
+
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "README.md").write_text("hello", encoding="utf-8")
+    (tmp_path / "blocked.txt").write_text("skip", encoding="utf-8")
+    monkeypatch.setenv("WEGENT_WORKSPACE_ROOTS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    workspace_root = tmp_path.resolve()
+    original_is_dir = Path.is_dir
+    original_lstat = Path.lstat
+    tracked_names = {"backend", "README.md"}
+    lstat_calls = {name: 0 for name in tracked_names}
+
+    def fail_for_workspace_children(self):
+        if self.parent == workspace_root and self.name in {
+            *tracked_names,
+            "blocked.txt",
+        }:
+            raise AssertionError("workspace_tree should not call Path.is_dir")
+        return original_is_dir(self)
+
+    def guarded_lstat(self):
+        if self.parent != workspace_root:
+            return original_lstat(self)
+        if self.name == "blocked.txt":
+            raise OSError("lstat is unavailable")
+        if self.name in lstat_calls:
+            lstat_calls[self.name] += 1
+            if lstat_calls[self.name] > 1:
+                raise OSError("workspace_tree should not lstat children twice")
+        return original_lstat(self)
+
+    monkeypatch.setattr(Path, "is_dir", fail_for_workspace_children)
+    monkeypatch.setattr(Path, "lstat", guarded_lstat)
+
+    exec(WORKSPACE_TREE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    assert [entry["name"] for entry in output["entries"]] == ["backend", "README.md"]
+    assert output["entries"][0]["is_directory"] is True
+    assert output["entries"][1]["is_directory"] is False
+    assert lstat_calls == {"backend": 1, "README.md": 1}
+
+
+def test_workspace_read_text_file_script_reads_text_and_reports_truncation(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_read_text_file should read only the first 256 KiB."""
+    import json
+    import sys
+
+    from app.services.device.command_registry import WORKSPACE_READ_TEXT_FILE_SCRIPT
+
+    content = "a" * (262144 + 8)
+    (tmp_path / "large.py").write_text(content, encoding="utf-8")
+    monkeypatch.setenv("WEGENT_WORKSPACE_ROOTS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["workspace_read_text_file", "large.py"])
+
+    exec(WORKSPACE_READ_TEXT_FILE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    assert output["path"] == str((tmp_path / "large.py").resolve())
+    assert output["content"] == "a" * 262144
+    assert output["truncated"] is True
+    assert output["size"] == 262152
+
+
+def test_workspace_read_text_file_script_reads_at_most_limit_plus_one(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_read_text_file should cap file I/O before decoding content."""
+    import json
+    import sys
+    from pathlib import Path
+
+    from app.services.device.command_registry import WORKSPACE_READ_TEXT_FILE_SCRIPT
+
+    file_path = tmp_path / "large.py"
+    file_path.write_text("a" * (262144 + 8), encoding="utf-8")
+    resolved_file_path = file_path.resolve()
+    monkeypatch.setenv("WEGENT_WORKSPACE_ROOTS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["workspace_read_text_file", "large.py"])
+
+    original_open = Path.open
+    original_read_bytes = Path.read_bytes
+    read_sizes = []
+
+    class RecordingFile:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __enter__(self):
+            self.handle.__enter__()
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return self.handle.__exit__(exc_type, exc, traceback)
+
+        def read(self, size=-1):
+            read_sizes.append(size)
+            return self.handle.read(size)
+
+    def fail_read_bytes(self):
+        if self == resolved_file_path:
+            raise AssertionError("workspace_read_text_file should not read all bytes")
+        return original_read_bytes(self)
+
+    def recording_open(self, *args, **kwargs):
+        handle = original_open(self, *args, **kwargs)
+        if self == resolved_file_path and args and args[0] == "rb":
+            return RecordingFile(handle)
+        return handle
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+    monkeypatch.setattr(Path, "open", recording_open)
+
+    exec(WORKSPACE_READ_TEXT_FILE_SCRIPT, {"__name__": "__main__"})
+    output = json.loads(capsys.readouterr().out)
+
+    assert read_sizes == [262145]
+    assert output["content"] == "a" * 262144
+    assert output["truncated"] is True
+
+
+def test_workspace_read_text_file_script_rejects_non_workspace_cwd(
+    tmp_path, monkeypatch, capsys
+):
+    """workspace_read_text_file should reject arbitrary directories."""
+    import json
+    import sys
+
+    from app.services.device.command_registry import WORKSPACE_READ_TEXT_FILE_SCRIPT
+
+    (tmp_path / "README.md").write_text("hello", encoding="utf-8")
+    monkeypatch.delenv("WEGENT_WORKSPACE_ROOTS", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["workspace_read_text_file", "README.md"])
+
+    try:
+        exec(WORKSPACE_READ_TEXT_FILE_SCRIPT, {"__name__": "__main__"})
+    except SystemExit as exc:
+        assert exc.code == 64
+    else:
+        raise AssertionError("workspace_read_text_file should reject non-workspace cwd")
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "success": False,
+        "error": "workspace path is outside allowed workspace roots",
+    }
 
 
 def test_local_device_command_registry_supports_inline_post_processor():
@@ -395,10 +721,38 @@ def test_local_device_command_registry_builds_git_worktree_add_argv():
     ) == [
         "sh",
         "-c",
-        'git -C "$1" worktree add --detach "$2"',
+        'if [ -n "$3" ]; then git -C "$1" worktree add --detach "$2" "$3"; else git -C "$1" worktree add --detach "$2"; fi',
         "--",
         "/workspace/projects/d837/Wegent",
         "/workspace/worktrees/1386/Wegent",
+    ]
+
+
+def test_local_device_command_registry_builds_git_worktree_add_argv_with_branch():
+    """git_worktree_add should accept an optional source branch ref."""
+    from app.services.device.command_registry import (
+        build_local_device_command_argv,
+        resolve_local_device_command,
+    )
+
+    definition = resolve_local_device_command("git_worktree_add")
+
+    assert definition is not None
+    assert build_local_device_command_argv(
+        definition.command,
+        [
+            "/workspace/projects/d837/Wegent",
+            "/workspace/worktrees/1386/Wegent",
+            "develop",
+        ],
+    ) == [
+        "sh",
+        "-c",
+        'if [ -n "$3" ]; then git -C "$1" worktree add --detach "$2" "$3"; else git -C "$1" worktree add --detach "$2"; fi',
+        "--",
+        "/workspace/projects/d837/Wegent",
+        "/workspace/worktrees/1386/Wegent",
+        "develop",
     ]
 
 
@@ -494,6 +848,28 @@ def test_json_post_processor_reports_parse_failure():
     assert "Failed to parse command JSON output" in processed["error"]
 
 
+def test_json_post_processor_promotes_failed_json_error():
+    """json post processor should expose JSON error payloads from failed commands."""
+    from app.services.device.command_post_processor import apply_command_post_processor
+
+    result = {
+        "success": False,
+        "exit_code": 64,
+        "stdout": '{"success": false, "error": "workspace path is outside allowed workspace roots"}',
+        "stderr": "",
+        "duration": 0.01,
+    }
+
+    processed = apply_command_post_processor(result, "json")
+
+    assert processed["success"] is False
+    assert processed["stdout"] == {
+        "success": False,
+        "error": "workspace path is outside allowed workspace roots",
+    }
+    assert processed["error"] == "workspace path is outside allowed workspace roots"
+
+
 def test_json_post_processor_reports_truncated_output():
     """json post processor should fail early when stdout was truncated."""
     from app.services.device.command_post_processor import apply_command_post_processor
@@ -562,6 +938,122 @@ metadata:
         }
     ]
     assert "|" not in skills[0]["description"]
+
+
+def test_ls_skills_command_prefers_shared_agents_source(tmp_path):
+    """ls_skills should expose unified shared skills as agents skills."""
+    from app.services.device.command_registry import LS_SKILLS_SCRIPT
+
+    skill_dir = tmp_path / ".agents" / "skills" / "shared-context"
+    skill_dir.mkdir(parents=True)
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".codex" / "skills").symlink_to(
+        tmp_path / ".agents" / "skills",
+        target_is_directory=True,
+    )
+    (tmp_path / ".claude" / "skills").symlink_to(
+        tmp_path / ".agents" / "skills",
+        target_is_directory=True,
+    )
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: shared-context
+description: Shared local context.
+---
+
+# Shared Context
+""",
+        encoding="utf-8",
+    )
+
+    env = {**os.environ, "HOME": str(tmp_path)}
+    result = subprocess.run(
+        ["python3", "-c", LS_SKILLS_SCRIPT],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    skills = json.loads(result.stdout)
+
+    assert len(skills) == 1
+    assert skills[0]["name"] == "shared-context"
+    assert skills[0]["source"] == "agents"
+    assert skills[0]["path"] == str(skill_dir / "SKILL.md")
+
+
+def test_setup_shared_skills_command_migrates_legacy_skill_dirs(tmp_path):
+    """setup_shared_skills should move existing skills and link legacy dirs."""
+    from app.services.device.command_registry import SETUP_SHARED_SKILLS_SCRIPT
+
+    codex_skill_dir = tmp_path / ".codex" / "skills" / "shared"
+    claude_skill_dir = tmp_path / ".claude" / "skills" / "shared"
+    codex_skill_dir.mkdir(parents=True)
+    claude_skill_dir.mkdir(parents=True)
+    (codex_skill_dir / "SKILL.md").write_text("# Codex\n", encoding="utf-8")
+    (claude_skill_dir / "SKILL.md").write_text("# Claude\n", encoding="utf-8")
+
+    env = {**os.environ, "HOME": str(tmp_path)}
+    result = subprocess.run(
+        ["python3", "-c", SETUP_SHARED_SKILLS_SCRIPT],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(result.stdout)
+    shared_dir = tmp_path / ".agents" / "skills"
+
+    assert payload["success"] is True
+    assert payload["status"] == "configured"
+    assert payload["shared_path"] == str(shared_dir)
+    assert payload["moved_count"] == 2
+    assert (shared_dir / "shared" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) == "# Codex\n"
+    assert (shared_dir / "shared-claude" / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) == "# Claude\n"
+    assert (tmp_path / ".codex" / "skills").is_symlink()
+    assert (tmp_path / ".claude" / "skills").is_symlink()
+    assert (tmp_path / ".codex" / "skills").resolve() == shared_dir
+    assert (tmp_path / ".claude" / "skills").resolve() == shared_dir
+
+
+def test_setup_shared_skills_command_is_idempotent(tmp_path):
+    """setup_shared_skills should be safe to run after links already exist."""
+    from app.services.device.command_registry import SETUP_SHARED_SKILLS_SCRIPT
+
+    shared_dir = tmp_path / ".agents" / "skills"
+    shared_dir.mkdir(parents=True)
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".codex" / "skills").symlink_to(
+        shared_dir,
+        target_is_directory=True,
+    )
+    (tmp_path / ".claude" / "skills").symlink_to(
+        shared_dir,
+        target_is_directory=True,
+    )
+
+    env = {**os.environ, "HOME": str(tmp_path)}
+    result = subprocess.run(
+        ["python3", "-c", SETUP_SHARED_SKILLS_SCRIPT],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(result.stdout)
+
+    assert payload["success"] is True
+    assert payload["moved_count"] == 0
+    assert {link["status"] for link in payload["links"]} == {"already_configured"}
 
 
 def test_sync_runtime_auth_file_command_writes_json_object(tmp_path):
@@ -1008,6 +1500,169 @@ async def test_execute_device_command_endpoint_maps_request_to_service(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_execute_device_command_endpoint_allows_wework_local_project_workspace(
+    monkeypatch,
+    test_db,
+):
+    """Workspace file commands should allow active Wework local-path project roots."""
+    from app.api.endpoints import devices
+    from app.core.constants import CLIENT_ORIGIN_WEWORK
+    from app.models.project import Project
+    from app.schemas.device import DeviceCommandRequest
+
+    test_db.add(
+        Project(
+            user_id=7,
+            name="Repo",
+            client_origin=CLIENT_ORIGIN_WEWORK,
+            is_active=True,
+            config={
+                "mode": "workspace",
+                "execution": {
+                    "targetType": "local",
+                    "deviceId": "device-abc",
+                },
+                "workspace": {
+                    "source": "local_path",
+                    "localPath": "/Users/test/projects/repo",
+                },
+            },
+        )
+    )
+    test_db.commit()
+    service_mock = AsyncMock(
+        return_value={
+            "success": True,
+            "exit_code": 0,
+            "stdout": {"path": "/Users/test/projects/repo/src", "entries": []},
+            "stderr": "",
+            "duration": 0.02,
+            "timed_out": False,
+        }
+    )
+    monkeypatch.setattr(devices, "execute_configured_device_command", service_mock)
+
+    response = await devices.execute_device_command(
+        device_id="device-abc",
+        request=DeviceCommandRequest(
+            command_key="workspace_tree",
+            path="/Users/test/projects/repo/src",
+            env={"EXISTING": "1"},
+        ),
+        db=test_db,
+        current_user=SimpleNamespace(id=7),
+    )
+
+    assert response.success is True
+    service_mock.assert_awaited_once()
+    _, kwargs = service_mock.await_args
+    assert kwargs["env"]["EXISTING"] == "1"
+    assert kwargs["env"]["WEGENT_WORKSPACE_ROOTS"] == "/Users/test/projects/repo"
+
+
+@pytest.mark.asyncio
+async def test_execute_device_command_endpoint_does_not_trust_client_workspace_roots(
+    monkeypatch,
+    test_db,
+):
+    """Workspace file commands should not accept client-provided workspace roots."""
+    from app.api.endpoints import devices
+    from app.schemas.device import DeviceCommandRequest
+
+    service_mock = AsyncMock(
+        return_value={
+            "success": False,
+            "exit_code": 64,
+            "stdout": {
+                "success": False,
+                "error": "workspace path is outside allowed workspace roots",
+            },
+            "stderr": "",
+            "error": "workspace path is outside allowed workspace roots",
+            "duration": 0.02,
+            "timed_out": False,
+        }
+    )
+    monkeypatch.setattr(devices, "execute_configured_device_command", service_mock)
+
+    response = await devices.execute_device_command(
+        device_id="device-abc",
+        request=DeviceCommandRequest(
+            command_key="workspace_tree",
+            path="/etc",
+            env={"WEGENT_WORKSPACE_ROOTS": "/", "EXISTING": "1"},
+        ),
+        db=test_db,
+        current_user=SimpleNamespace(id=7),
+    )
+
+    assert response.success is False
+    service_mock.assert_awaited_once()
+    _, kwargs = service_mock.await_args
+    assert kwargs["env"] == {"EXISTING": "1"}
+
+
+@pytest.mark.asyncio
+async def test_execute_device_command_endpoint_allows_explicit_root_project_workspace(
+    monkeypatch,
+    test_db,
+):
+    """Workspace file commands should allow root when the project explicitly uses it."""
+    from app.api.endpoints import devices
+    from app.core.constants import CLIENT_ORIGIN_WEWORK
+    from app.models.project import Project
+    from app.schemas.device import DeviceCommandRequest
+
+    test_db.add(
+        Project(
+            user_id=7,
+            name="Root",
+            client_origin=CLIENT_ORIGIN_WEWORK,
+            is_active=True,
+            config={
+                "mode": "workspace",
+                "execution": {
+                    "targetType": "local",
+                    "deviceId": "device-abc",
+                },
+                "workspace": {
+                    "source": "local_path",
+                    "localPath": "/",
+                },
+            },
+        )
+    )
+    test_db.commit()
+    service_mock = AsyncMock(
+        return_value={
+            "success": True,
+            "exit_code": 0,
+            "stdout": {"path": "/etc", "entries": []},
+            "stderr": "",
+            "duration": 0.02,
+            "timed_out": False,
+        }
+    )
+    monkeypatch.setattr(devices, "execute_configured_device_command", service_mock)
+
+    response = await devices.execute_device_command(
+        device_id="device-abc",
+        request=DeviceCommandRequest(
+            command_key="workspace_tree",
+            path="/etc",
+            env={"EXISTING": "1"},
+        ),
+        db=test_db,
+        current_user=SimpleNamespace(id=7),
+    )
+
+    assert response.success is True
+    service_mock.assert_awaited_once()
+    _, kwargs = service_mock.await_args
+    assert kwargs["env"] == {"EXISTING": "1", "WEGENT_WORKSPACE_ROOTS": "/"}
+
+
+@pytest.mark.asyncio
 async def test_execute_device_command_endpoint_applies_configured_post_processor(
     monkeypatch,
 ):
@@ -1075,6 +1730,36 @@ async def test_execute_device_command_endpoint_returns_structured_stdout(monkeyp
 
     assert response.success is True
     assert response.stdout == skills
+
+
+@pytest.mark.asyncio
+async def test_execute_device_command_endpoint_returns_dict_stdout(monkeypatch):
+    """Endpoint should allow JSON processors to return object stdout."""
+    from app.api.endpoints import devices
+    from app.schemas.device import DeviceCommandRequest
+
+    workspace_tree = {"path": "/workspace/project", "entries": []}
+    service_mock = AsyncMock(
+        return_value={
+            "success": True,
+            "exit_code": 0,
+            "stdout": workspace_tree,
+            "stderr": "",
+            "duration": 0.02,
+            "timed_out": False,
+        }
+    )
+    monkeypatch.setattr(devices, "execute_configured_device_command", service_mock)
+
+    response = await devices.execute_device_command(
+        device_id="device-abc",
+        request=DeviceCommandRequest(command_key="workspace_tree"),
+        db=object(),
+        current_user=SimpleNamespace(id=7),
+    )
+
+    assert response.success is True
+    assert response.stdout == workspace_tree
 
 
 @pytest.mark.asyncio
