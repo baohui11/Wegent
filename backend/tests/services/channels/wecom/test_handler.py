@@ -46,6 +46,20 @@ def test_parse_message_group_sets_group_type():
     assert ctx.conversation_id == "chat-9"
 
 
+def test_parse_message_group_strips_bot_mention():
+    # Real captured group content includes the bot @-mention prefix.
+    h = WeComChannelHandler(channel_id=3, bot_id="botZ")
+    ctx = h.parse_message(_msg_frame("@李惟夏的机器人 hello", chattype="group"))
+    assert ctx.content == "hello"
+
+
+def test_parse_message_single_keeps_leading_at():
+    # Single chats never carry a bot mention; do not strip a leading '@'.
+    h = WeComChannelHandler(channel_id=3, bot_id="botZ")
+    ctx = h.parse_message(_msg_frame("@alice hi", chattype="single"))
+    assert ctx.content == "@alice hi"
+
+
 def test_create_callback_info_carries_addressing():
     h = WeComChannelHandler(channel_id=3, bot_id="botZ")
     ctx = h.parse_message(_msg_frame("hello"))

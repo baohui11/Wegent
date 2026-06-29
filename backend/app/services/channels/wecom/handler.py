@@ -5,6 +5,7 @@
 """WeCom channel handler: parse frames and reply over the long connection."""
 
 import logging
+import re
 from typing import Any, Callable, Dict, Optional
 
 from sqlalchemy.orm import Session
@@ -22,6 +23,11 @@ from app.services.channels.wecom.reply_bus import publish_reply
 from app.services.channels.wecom.user_resolver import WeComUserResolver
 
 logger = logging.getLogger(__name__)
+
+# In group chats the inbound text always carries the bot @-mention prefix
+# (e.g. "@RobotName hello"); strip the leading mention so it doesn't pollute
+# the prompt. Only the first leading mention token is removed.
+_LEADING_MENTION_RE = re.compile(r"^@\S+\s+")
 
 
 class WeComChannelHandler(BaseChannelHandler[p.WeComFrame, WeComCallbackInfo]):
@@ -55,6 +61,8 @@ class WeComChannelHandler(BaseChannelHandler[p.WeComFrame, WeComCallbackInfo]):
         userid = (payload.get("from") or {}).get("userid", "") or ""
         chattype = payload.get("chattype", "single")
         is_group = chattype == "group"
+        if is_group and content.startswith("@"):
+            content = _LEADING_MENTION_RE.sub("", content, count=1).strip()
         conversation_id = payload.get("chatid") if is_group else userid
         stream_id = (payload.get("stream") or {}).get("id") or frame.req_id
 
