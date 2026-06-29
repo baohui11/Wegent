@@ -21,6 +21,9 @@ from app.services.channels.wecom.callback import (
 from app.services.channels.wecom.emitter import WeComStreamEmitter
 from app.services.channels.wecom.reply_bus import publish_reply
 from app.services.channels.wecom.user_resolver import WeComUserResolver
+from app.services.subscription.notification_service import (
+    subscription_notification_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,16 +89,32 @@ class WeComChannelHandler(BaseChannelHandler[p.WeComFrame, WeComCallbackInfo]):
     async def resolve_user(
         self, db: Session, message_context: MessageContext
     ) -> Optional[User]:
-        """Resolve a WeCom userid to a Wegent User."""
+        """Resolve a WeCom userid to a Wegent User and record the binding."""
         mapping = self.user_mapping_config
         resolver = WeComUserResolver(
             db,
             user_mapping_mode=mapping.mode,
             user_mapping_config=mapping.config,
         )
-        return await resolver.resolve_user(
+        user = await resolver.resolve_user(
             userid=message_context.sender_id, name=message_context.sender_name
         )
+        if user is not None:
+            # Record the inbound WeCom userid -> Wegent user binding so active
+            # push can address this user (used for non-staff_id mapping modes).
+            try:
+                subscription_notification_service.update_user_im_binding(
+                    db,
+                    user_id=user.id,
+                    channel_id=self._channel_id,
+                    channel_type="wecom",
+                    sender_id=message_context.sender_id,
+                    sender_staff_id=None,
+                    conversation_id=message_context.conversation_id,
+                )
+            except Exception:
+                self.logger.exception("[WeComHandler] Failed to record IM binding")
+        return user
 
     def _emitter_for(self, message_context: MessageContext) -> WeComStreamEmitter:
         """Build a WeComStreamEmitter from the context's extra_data."""

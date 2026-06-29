@@ -167,16 +167,17 @@ class FeishuChannelConfig(BaseModel):
 
 
 class WeChatChannelConfig(BaseModel):
-    """Configuration schema for WeChat Work (企业微信) smart-bot long-connection."""
+    """Configuration schema for WeChat Work (企业微信) smart-bot long-connection.
+
+    Inbound chat uses the smart bot (bot_id/connection_secret). Active push
+    (Phase 2) optionally uses a self-built app (corp_id/corp_secret/agent_id);
+    when those are absent the channel is chat-only and push is skipped.
+    """
 
     bot_id: str = Field(..., description="WeCom smart bot BotID")
     connection_secret: str = Field(
         ..., description="WeCom smart bot long-connection secret"
     )
-    # User mapping mode: how to map WeCom users to Wegent users
-    # - "select_user": Map all WeCom users to a specific Wegent user (default)
-    # - "staff_id": Use WeCom userid as username
-    # - "email": Match user by email address
     user_mapping_mode: UserMappingMode = Field(
         default="select_user",
         description="User mapping mode: select_user, staff_id, or email",
@@ -184,6 +185,14 @@ class WeChatChannelConfig(BaseModel):
     user_mapping_config: Optional[Dict[str, Any]] = Field(
         default=None,
         description="User mapping configuration. For select_user mode: {target_user_id: int}",
+    )
+    # Optional self-built app credentials for active push (message/send).
+    corp_id: Optional[str] = Field(None, description="Enterprise CorpID (active push)")
+    corp_secret: Optional[str] = Field(
+        None, description="Self-built app secret (active push); auto-encrypted at rest"
+    )
+    agent_id: Optional[str] = Field(
+        None, description="Self-built app AgentID (active push)"
     )
 
 
