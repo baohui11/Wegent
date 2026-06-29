@@ -161,7 +161,7 @@ class ChannelManager:
         return TelegramChannelProvider(channel)
 
     @staticmethod
-    def _create_wecom_provider(channel: "ChannelLike") -> "BaseChannelProvider":
+    def _create_wecom_provider(channel: ChannelLike) -> "BaseChannelProvider":
         """Create a WeCom (企业微信) provider instance."""
         from app.services.channels.wecom.service import WeComChannelProvider
 
