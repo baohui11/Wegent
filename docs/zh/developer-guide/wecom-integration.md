@@ -99,6 +99,17 @@ backend/app/services/channels/
 
 4. `ChannelType` 枚举与 `Literal` 已含 `wechat`，无需改动；`admin/im_channels.py` 通用，无需改动。
 
+#### Phase 1 部署约束：单副本
+
+> ⚠️ **第一期仅支持单副本部署。**
+
+企业微信智能机器人长连接协议规定：**每个 Bot 同一时刻只允许存在一条 WebSocket 连接**——新连接建立后，旧连接会被平台踢掉。此外，回复总线 `wecom:reply:{bot_id}` 会向所有订阅了该 Key 的消费者广播：
+
+- **连接争抢**：多副本各自执行 `start_all_enabled()`，每个副本都会向企业微信建立 WS 连接，平台持续踢出旧连接，导致长连接持续不稳定。
+- **回复重复发送**：回复总线向所有订阅副本广播，每个副本都会将同一条回复帧写入各自的 WS（其中只有最新连接是有效的），最终导致用户收到重复消息。
+
+**第二期计划**：引入基于 Redis 租约的单一 owner 选举——对每个 `bot_id` 仅允许一个副本持有 WS 连接，其余副本待机，实现多副本安全部署。
+
 ### 第二期：主动通知推送
 
 - 新建 `wecom/sender.py` `WeComAppSender`：封装 `gettoken`（access_token **必须集中缓存、单点刷新**，有效期 7200s，频繁调用触发 `45009`）+ `message/send`（`markdown` / `text` / `template_card`），供 `notification_dispatcher` 的 Messager 主动推送使用。

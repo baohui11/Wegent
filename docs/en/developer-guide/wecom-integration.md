@@ -99,6 +99,17 @@ Existing files to modify (very small changes):
 
 4. The `ChannelType` enum and `Literal` already include `wechat` — no change needed; `admin/im_channels.py` is generic — no change needed.
 
+#### Phase 1 deployment constraint: single replica
+
+> ⚠️ **Phase 1 supports single-replica deployments only.**
+
+WeCom's smart-bot long-connection protocol allows exactly **one active WebSocket connection per bot** at any point in time — opening a new connection from a second pod causes WeCom to kick the existing one. Additionally, the reply bus key `wecom:reply:{bot_id}` broadcasts to every pod that has subscribed to it:
+
+- **Connection contention**: With multiple replicas each running `start_all_enabled()`, every pod opens a competing WS connection. WeCom continuously kicks the older connection, making the link permanently unstable.
+- **Duplicated replies**: The reply bus broadcasts to all subscribed replicas; every replica writes the same reply frame to its own WS (only the most recently connected one is valid), resulting in duplicate messages delivered to the user.
+
+**Phase 2 plan**: introduce a Redis lease-based single-owner election — only one replica per `bot_id` holds the WS connection at a time; the others stand by. This will enable safe multi-replica deployments.
+
 ### Phase 2: Active Push Notifications
 
 - Add `wecom/sender.py` `WeComAppSender`: wraps `gettoken` (access_token **must be centrally cached and refreshed from a single point**, valid for 7200s, frequent calls trigger `45009`) + `message/send` (`markdown` / `text` / `template_card`), for use by the `notification_dispatcher` Messager active push.

@@ -94,6 +94,26 @@ class WeComChannelProvider(BaseChannelProvider):
     Lifecycle: start() spawns _connect_loop as a background asyncio task and
     returns True immediately.  _connect_loop handles auth, heartbeat, reply-bus
     subscription, and reconnection with capped exponential backoff.
+
+    PHASE 1 SINGLE-REPLICA CONSTRAINT
+    -----------------------------------
+    WeCom's smart-bot long-connection protocol allows exactly ONE active
+    WebSocket connection per bot at a time.  Opening a second connection from
+    another pod causes WeCom to kick the existing connection (the old pod loses
+    its WS), and the reply bus key ``wecom:reply:{bot_id}`` is consumed by every
+    pod that has subscribed — so both pods would receive incoming frames AND
+    attempt to write outbound reply frames, resulting in:
+
+    * connection contention — WeCom continuously kicks whichever pod was
+      connected last, making the link unstable;
+    * duplicated reply writes — the reply bus broadcasts to all subscribers, so
+      every pod sends the same reply frame to WeCom, producing duplicate
+      messages for the end user.
+
+    **Phase 1 therefore supports single-replica deployments only.**  Running
+    multiple backend replicas with WeCom channels enabled will cause the above
+    symptoms.  A Redis lease-based single-owner election (one pod per bot_id
+    holds the WS; others stand by) is deferred to Phase 2.
     """
 
     def __init__(self, channel: ChannelLike):
@@ -136,6 +156,15 @@ class WeComChannelProvider(BaseChannelProvider):
             return False
         if self._is_running:
             return True
+        # Phase 1: single-replica only.  Multiple replicas cause WeCom to kick
+        # competing connections and the reply bus to deliver duplicate frames.
+        logger.warning(
+            "[WeCom] Phase 1 single-replica mode: channel %s (bot_id=%s). "
+            "Running multiple backend replicas with WeCom enabled will cause "
+            "WebSocket connection contention and duplicated replies.",
+            self.channel_name,
+            self.bot_id,
+        )
         self._stopping = False
         self._connect_task = asyncio.create_task(self._connect_loop())
         self._set_running(True)
