@@ -6,7 +6,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import websockets
 
