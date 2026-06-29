@@ -30,9 +30,11 @@ from app.schemas.subscription import (
     NotificationWebhookType,
     SubscriptionFollowConfig,
 )
+from app.services.channels.wecom.sender import WeComAppSender, resolve_touser
 from app.services.subscription.notification_service import (
     subscription_notification_service,
 )
+from shared.utils.crypto import decrypt_sensitive_data
 
 logger = logging.getLogger(__name__)
 
@@ -267,17 +269,8 @@ class SubscriptionNotificationDispatcher:
         for channel_id in channel_ids:
             channel_id_str = str(channel_id)
 
-            # Check if user has binding for this channel
-            if channel_id_str not in user_bindings:
-                logger.warning(
-                    f"[SubscriptionNotificationDispatcher] User {user_id} has no binding "
-                    f"for channel {channel_id}"
-                )
-                continue
-
-            binding = user_bindings[channel_id_str]
-
-            # Get channel info
+            # Fetch the channel first so the binding requirement can be
+            # channel-type aware (WeCom active push does not need a binding).
             channel = (
                 db.query(Kind)
                 .filter(
@@ -287,7 +280,6 @@ class SubscriptionNotificationDispatcher:
                 )
                 .first()
             )
-
             if not channel:
                 logger.warning(
                     f"[SubscriptionNotificationDispatcher] Channel {channel_id} not found"
@@ -296,8 +288,33 @@ class SubscriptionNotificationDispatcher:
 
             spec = channel.json.get("spec", {})
             channel_type = spec.get("channelType", "")
+            binding = user_bindings.get(channel_id_str)
 
-            # Dispatch based on channel type
+            # WeCom: address the recipient directly (staff_id) or via binding;
+            # no prior interaction required.
+            if channel_type == "wecom":
+                tasks.append(
+                    self._send_wecom_notification(
+                        db=db,
+                        channel=channel,
+                        binding=binding,
+                        user_id=user_id,
+                        message=formatted_message,
+                        subscription_id=subscription_id,
+                        execution_id=execution_id,
+                        subscription_display_name=subscription_display_name,
+                    )
+                )
+                continue
+
+            # All other channels require a binding (unchanged behaviour).
+            if binding is None:
+                logger.warning(
+                    f"[SubscriptionNotificationDispatcher] User {user_id} has no binding "
+                    f"for channel {channel_id}"
+                )
+                continue
+
             if channel_type == "dingtalk":
                 binding_config = (
                     subscription_notification_service.get_subscription_channel_binding_config(
@@ -525,6 +542,62 @@ class SubscriptionNotificationDispatcher:
                 f"notification to user {user_id}: {e}"
             )
             raise
+
+    async def _send_wecom_notification(
+        self,
+        db: Session,
+        *,
+        channel: Kind,
+        binding: Optional[Any],
+        user_id: int,
+        message: str,
+        subscription_id: int,
+        execution_id: int,
+        subscription_display_name: str,
+    ) -> None:
+        """Send an active push to a WeCom user via the self-built app."""
+        spec = channel.json.get("spec", {})
+        config = spec.get("config", {})
+        corp_id = config.get("corp_id")
+        corp_secret_enc = config.get("corp_secret")
+        agent_id = config.get("agent_id")
+
+        if not (corp_id and corp_secret_enc and agent_id):
+            logger.info(
+                "[SubscriptionNotificationDispatcher] WeCom channel %s is chat-only "
+                "(no push credentials); skipping active push",
+                channel.id,
+            )
+            return
+
+        mapping_mode = config.get("user_mapping_mode", "select_user")
+        touser = resolve_touser(db, user_id, mapping_mode, binding)
+        if not touser:
+            logger.warning(
+                "[SubscriptionNotificationDispatcher] Could not resolve WeCom touser "
+                "for user %s (mapping_mode=%s, binding=%s); skipping",
+                user_id,
+                mapping_mode,
+                bool(binding),
+            )
+            return
+
+        try:
+            corp_secret = decrypt_sensitive_data(corp_secret_enc)
+            sender = WeComAppSender(
+                corp_id=corp_id, corp_secret=corp_secret, agent_id=agent_id
+            )
+            await sender.send_markdown(
+                touser=touser,
+                title=subscription_display_name,
+                content=message,
+            )
+        except Exception as e:
+            logger.warning(
+                "[SubscriptionNotificationDispatcher] WeCom push failed for user %s: %s",
+                user_id,
+                e,
+            )
 
     async def _send_telegram_notification(
         self,
