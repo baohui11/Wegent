@@ -69,6 +69,8 @@ class WeComStreamEmitter:
                 subtask_id=event.subtask_id,
                 error=event.error or "Unknown error",
             )
+        elif event.type == EventType.CANCELLED:
+            await self.emit_cancelled(task_id=event.task_id, subtask_id=event.subtask_id)
 
     async def emit_start(self, task_id: int, subtask_id: int, **kwargs) -> None:
         logger.info("[WeComEmitter] start task=%s subtask=%s", task_id, subtask_id)
