@@ -167,13 +167,24 @@ class FeishuChannelConfig(BaseModel):
 
 
 class WeChatChannelConfig(BaseModel):
-    """Configuration schema for WeChat Work channel."""
+    """Configuration schema for WeChat Work (企业微信) smart-bot long-connection."""
 
-    corp_id: str = Field(..., description="WeChat Work Corp ID")
-    secret: str = Field(..., description="WeChat Work application secret")
-    agent_id: int = Field(..., description="WeChat Work Agent ID")
-    token: Optional[str] = Field(None, description="Callback token")
-    encoding_aes_key: Optional[str] = Field(None, description="Callback EncodingAESKey")
+    bot_id: str = Field(..., description="WeCom smart bot BotID")
+    connection_secret: str = Field(
+        ..., description="WeCom smart bot long-connection secret"
+    )
+    # User mapping mode: how to map WeCom users to Wegent users
+    # - "select_user": Map all WeCom users to a specific Wegent user (default)
+    # - "staff_id": Use WeCom userid as username
+    # - "email": Match user by email address
+    user_mapping_mode: UserMappingMode = Field(
+        default="select_user",
+        description="User mapping mode: select_user, staff_id, or email",
+    )
+    user_mapping_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="User mapping configuration. For select_user mode: {target_user_id: int}",
+    )
 
 
 class TelegramChannelConfig(BaseModel):

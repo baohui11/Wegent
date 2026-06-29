@@ -45,6 +45,8 @@ Wegent is an open-source AI-native operating system for defining, organizing, an
 - English version: [`docs/en/developer-guide/workspace-file-sync.md`](docs/en/developer-guide/workspace-file-sync.md)
 - Shared skill directory (unify Claude and Codex local skills under `~/.agents/skills`): [`docs/zh/developer-guide/shared-skill-directory.md`](docs/zh/developer-guide/shared-skill-directory.md)
 - English version: [`docs/en/developer-guide/shared-skill-directory.md`](docs/en/developer-guide/shared-skill-directory.md)
+- WeCom (WeChat Work) integration design (smart-bot long-connection for chat, self-built app for active push): [`docs/zh/developer-guide/wecom-integration.md`](docs/zh/developer-guide/wecom-integration.md)
+- English version: [`docs/en/developer-guide/wecom-integration.md`](docs/en/developer-guide/wecom-integration.md)
 
 **📚 Documentation Writing Rules:**
 - All documentation files MUST include frontmatter with `sidebar_position` for ordering:

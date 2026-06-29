@@ -32,6 +32,7 @@ from app.models.task import TaskResource
 # the registry may be empty when /callback is handled by a different worker
 # than the one that processed the original IM message.
 from app.services.channels.dingtalk import callback as _dingtalk_cb  # noqa: F401
+from app.services.channels.wecom import callback as _wecom_cb  # noqa: F401
 from app.services.chat.storage import session_manager
 from app.services.execution.dispatcher import ResponsesAPIEventParser
 from app.services.execution.emitters.status_updating import StatusUpdatingEmitter
