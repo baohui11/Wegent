@@ -97,6 +97,11 @@ class ChannelManager:
             ChannelType.TELEGRAM.value,
             self._create_telegram_provider,
         )
+        # Register WeCom (企业微信) provider
+        self.register_provider_factory(
+            ChannelType.WECHAT.value,
+            self._create_wecom_provider,
+        )
         # Future providers can be registered here or via register_provider_factory()
 
     def register_provider_factory(
@@ -154,6 +159,13 @@ class ChannelManager:
         from app.services.channels.telegram.service import TelegramChannelProvider
 
         return TelegramChannelProvider(channel)
+
+    @staticmethod
+    def _create_wecom_provider(channel: "ChannelLike") -> "BaseChannelProvider":
+        """Create a WeCom (企业微信) provider instance."""
+        from app.services.channels.wecom.service import WeComChannelProvider
+
+        return WeComChannelProvider(channel)
 
     async def start_all_enabled(self, db: Session) -> int:
         """

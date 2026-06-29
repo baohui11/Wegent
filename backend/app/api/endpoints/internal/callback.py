@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+import app.services.channels.wecom.callback  # noqa: F401
 from app.api.dependencies import get_db
 from app.models.task import TaskResource
 
