@@ -110,6 +110,18 @@ backend/app/services/channels/
 
 **第二期计划**：引入基于 Redis 租约的单一 owner 选举——对每个 `bot_id` 仅允许一个副本持有 WS 连接，其余副本待机，实现多副本安全部署。
 
+#### Phase 1 真机联调结论（已验证）
+
+第一期已对真实智能机器人完成联调，修正了三处与设计假设不符的地方：
+
+1. **协议信封**：真实格式是 `{ "cmd": ..., "headers": { "req_id": ... }, "body": {...} }`，**不是** `{command, payload}`；`headers.req_id` 每帧必填，流式回复必须**透传**所回复回调帧的 `req_id`。服务器应答帧无 `cmd`、带 `errcode`（`0` 为成功）。信封错误时返回 `errcode 846628 / "invalid cmd"`。
+2. **传输层（关键）**：`websockets` 库会在约 25 秒后以 `incorrect masking` 断开——`openws` 服务端发送了不符合 RFC 的带掩码服务端帧。改用 **`aiohttp`**（容忍该行为），并移除 `websockets` 依赖；Provider 与探针均走 aiohttp。
+3. **去重键**：按 `body.msgid`（稳定的消息 ID）去重，而非每次投递都不同的 `headers.req_id`；非零 `errcode` 的应答帧记录告警。
+
+已验证项：订阅鉴权（`errcode:0`）、单聊 `aibot_msg_callback` 帧解析、流式打字机回复（每帧 `errcode:0` ack）、心跳 ping/pong。真机抓帧工具见 `backend/scripts/wecom_probe.py`。
+
+> 残留待确认：群聊 `aibot_msg_callback` 帧（多 `chattype:"group"` + `chatid`）尚未真机抓取，handler 已按调研结论处理；流式总时长上限（文档/SDK 称 10 分钟，超时 `846608`）未实测到边界。
+
 ### 第二期：主动通知推送
 
 - 新建 `wecom/sender.py` `WeComAppSender`：封装 `gettoken`（access_token **必须集中缓存、单点刷新**，有效期 7200s，频繁调用触发 `45009`）+ `message/send`（`markdown` / `text` / `template_card`），供 `notification_dispatcher` 的 Messager 主动推送使用。

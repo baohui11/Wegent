@@ -110,6 +110,18 @@ WeCom's smart-bot long-connection protocol allows exactly **one active WebSocket
 
 **Phase 2 plan**: introduce a Redis lease-based single-owner election — only one replica per `bot_id` holds the WS connection at a time; the others stand by. This will enable safe multi-replica deployments.
 
+#### Phase 1 real-bot verification (confirmed)
+
+Phase 1 was verified against a live smart bot, which corrected three deviations from the design assumptions:
+
+1. **Protocol envelope**: the real format is `{ "cmd": ..., "headers": { "req_id": ... }, "body": {...} }`, **not** `{command, payload}`; `headers.req_id` is required on every frame, and a streaming reply MUST **echo** the req_id of the callback it answers. Server ack frames carry no `cmd` and include `errcode` (`0` == success). A malformed envelope returns `errcode 846628 / "invalid cmd"`.
+2. **Transport (critical)**: the `websockets` library drops the connection after ~25s with `incorrect masking` — `openws` sends non-RFC masked server frames. Switched to **`aiohttp`** (which tolerates them) and removed the `websockets` dependency; both the provider and the probe use aiohttp.
+3. **Dedup key**: dedup on `body.msgid` (the stable per-message id) instead of the per-delivery `headers.req_id`; non-zero `errcode` ack frames are logged.
+
+Verified: subscribe auth (`errcode:0`), single-chat `aibot_msg_callback` parsing, streaming typewriter replies (each frame acked `errcode:0`), heartbeat ping/pong. The real-bot capture tool is `backend/scripts/wecom_probe.py`.
+
+> Still to confirm: the group `aibot_msg_callback` frame (adds `chattype:"group"` + `chatid`) was not captured live — the handler implements it per research; the streaming total-duration cap (docs/SDK state 10 minutes, timeout `846608`) was not exercised to the boundary.
+
 ### Phase 2: Active Push Notifications
 
 - Add `wecom/sender.py` `WeComAppSender`: wraps `gettoken` (access_token **must be centrally cached and refreshed from a single point**, valid for 7200s, frequent calls trigger `45009`) + `message/send` (`markdown` / `text` / `template_card`), for use by the `notification_dispatcher` Messager active push.
