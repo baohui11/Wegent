@@ -1,8 +1,12 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.channels.wecom.sender import WeComAppSender, WeComSendError
+from app.services.channels.wecom.sender import (
+    WeComAppSender,
+    WeComSendError,
+    resolve_touser,
+)
 
 
 def _sender():
@@ -104,3 +108,21 @@ async def test_send_markdown_retries_once_on_expired_token():
     assert result == {"errcode": 0}
     assert post.await_count == 2
     cdel.assert_awaited_once()
+
+
+def test_resolve_touser_staff_id_uses_username():
+    db = MagicMock()
+    user = MagicMock(user_name="LiWeiXia")
+    db.query.return_value.filter.return_value.first.return_value = user
+    assert resolve_touser(db, 7, "staff_id", binding=None) == "LiWeiXia"
+
+
+def test_resolve_touser_select_user_uses_binding():
+    db = MagicMock()
+    binding = MagicMock(sender_id="WC-USERID")
+    assert resolve_touser(db, 7, "select_user", binding=binding) == "WC-USERID"
+
+
+def test_resolve_touser_no_binding_returns_none():
+    db = MagicMock()
+    assert resolve_touser(db, 7, "select_user", binding=None) is None
