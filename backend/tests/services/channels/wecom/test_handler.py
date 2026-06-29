@@ -84,3 +84,29 @@ async def test_send_text_reply_publishes_finish_frame():
     frame = pub.await_args.args[1]
     assert frame.payload["stream"]["finish"] is True
     assert frame.payload["stream"]["content"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_resolve_user_records_binding():
+    h = WeComChannelHandler(channel_id=7, bot_id="botZ")
+    ctx = h.parse_message(_msg_frame("hello", userid="WC-1"))
+
+    db = MagicMock()
+    fake_user = MagicMock(id=42)
+
+    with (
+        patch("app.services.channels.wecom.handler.WeComUserResolver") as resolver_cls,
+        patch(
+            "app.services.channels.wecom.handler.subscription_notification_service"
+        ) as svc,
+    ):
+        resolver_cls.return_value.resolve_user = AsyncMock(return_value=fake_user)
+        result = await h.resolve_user(db, ctx)
+
+    assert result is fake_user
+    svc.update_user_im_binding.assert_called_once()
+    kwargs = svc.update_user_im_binding.call_args.kwargs
+    assert kwargs["user_id"] == 42
+    assert kwargs["channel_id"] == 7
+    assert kwargs["channel_type"] == "wecom"
+    assert kwargs["sender_id"] == "WC-1"
