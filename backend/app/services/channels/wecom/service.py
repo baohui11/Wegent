@@ -8,7 +8,7 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
-import websockets
+import aiohttp
 
 from app.core.cache import cache_manager
 from app.services.channels.base import BaseChannelProvider, ChannelLike
@@ -201,25 +201,33 @@ class WeComChannelProvider(BaseChannelProvider):
     async def _ws_send(self, frame: p.WeComFrame) -> None:
         """Encode and send a frame, serialising all writes behind a lock."""
         async with self._send_lock:
-            if self._ws:
-                await self._ws.send(p.encode_frame(frame))
+            if self._ws is not None and not self._ws.closed:
+                await self._ws.send_str(p.encode_frame(frame))
 
     async def _connect_loop(self) -> None:
-        """Connect, subscribe, receive, and reconnect with exponential backoff."""
+        """Connect, subscribe, receive, and reconnect with exponential backoff.
+
+        Uses aiohttp rather than the ``websockets`` library: WeCom's ``openws``
+        server sends frames that strict ``websockets`` rejects as "incorrect
+        masking" (dropping the connection after ~25s); aiohttp tolerates them.
+        """
         backoff = 1
         while not self._stopping:
             try:
-                async with websockets.connect(WECOM_WS_URL) as ws:
-                    self._ws = ws
-                    await self._ws_send(
-                        p.build_subscribe(self.bot_id, self.connection_secret)
-                    )
-                    self._reply_sub = await subscribe_replies(
-                        self.bot_id, self._on_reply_frame
-                    )
-                    self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-                    backoff = 1
-                    await self._recv_loop(ws)
+                async with aiohttp.ClientSession() as session:
+                    async with session.ws_connect(WECOM_WS_URL, heartbeat=None) as ws:
+                        self._ws = ws
+                        await self._ws_send(
+                            p.build_subscribe(self.bot_id, self.connection_secret)
+                        )
+                        self._reply_sub = await subscribe_replies(
+                            self.bot_id, self._on_reply_frame
+                        )
+                        self._heartbeat_task = asyncio.create_task(
+                            self._heartbeat_loop()
+                        )
+                        backoff = 1
+                        await self._recv_loop(ws)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -237,17 +245,33 @@ class WeComChannelProvider(BaseChannelProvider):
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, _MAX_BACKOFF)
 
-    async def _recv_loop(self, ws) -> None:
+    async def _recv_loop(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         """Read frames from the WebSocket and dispatch them."""
-        async for raw in ws:
-            try:
-                frame = p.decode_frame(raw)
-            except Exception:
-                logger.exception("[WeCom] Failed to decode frame")
-                continue
-            if frame.command == p.CMD_MSG_CALLBACK:
-                await self._handle_frame(frame)
-            # ping/pong and event frames are ignored in Phase 1
+        async for msg in ws:
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                try:
+                    frame = p.decode_frame(msg.data)
+                except Exception:
+                    logger.exception("[WeCom] Failed to decode frame")
+                    continue
+                if frame.command == p.CMD_MSG_CALLBACK:
+                    await self._handle_frame(frame)
+                elif frame.errcode not in (None, 0):
+                    # Server ack/response frames carry no cmd; a non-zero
+                    # errcode signals subscribe/reply failure or rate limiting.
+                    logger.warning(
+                        "[WeCom] server ack errcode=%s errmsg=%s req_id=%s",
+                        frame.errcode,
+                        frame.errmsg,
+                        frame.req_id,
+                    )
+                # Successful acks (errcode 0) and event frames are ignored.
+            elif msg.type in (
+                aiohttp.WSMsgType.CLOSED,
+                aiohttp.WSMsgType.CLOSING,
+                aiohttp.WSMsgType.ERROR,
+            ):
+                break
 
     async def _heartbeat_loop(self) -> None:
         """Send a ping frame every HEARTBEAT_INTERVAL seconds."""
@@ -261,17 +285,21 @@ class WeComChannelProvider(BaseChannelProvider):
             logger.exception("[WeCom] Heartbeat error")
 
     async def _handle_frame(self, frame: p.WeComFrame) -> None:
-        """Dedup by req_id (Redis setnx), then delegate to the handler."""
-        if frame.req_id:
+        """Dedup by msgid (Redis setnx), then delegate to the handler.
+
+        ``body.msgid`` is WeCom's stable per-message id and is the documented
+        dedup key; ``headers.req_id`` is a per-delivery id used to address the
+        reply. Fall back to req_id only if msgid is absent.
+        """
+        dedup_id = frame.payload.get("msgid") or frame.req_id
+        if dedup_id:
             is_new = await cache_manager.setnx(
-                f"{WECOM_MSG_DEDUP_PREFIX}{frame.req_id}",
+                f"{WECOM_MSG_DEDUP_PREFIX}{dedup_id}",
                 "1",
                 expire=WECOM_MSG_DEDUP_TTL,
             )
             if not is_new:
-                logger.warning(
-                    "[WeCom] Duplicate frame skipped: req_id=%s", frame.req_id
-                )
+                logger.warning("[WeCom] Duplicate message skipped: msgid=%s", dedup_id)
                 return
         await self._handler.handle_message(frame)
 
