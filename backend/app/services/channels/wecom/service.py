@@ -80,6 +80,7 @@ class WeComChannelProvider(BaseChannelProvider):
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._reply_sub: Optional[ReplySubscription] = None
         self._stopping = False
+        self._send_lock = asyncio.Lock()
         channel_id = self.channel_id
         self._handler = WeComChannelHandler(
             channel_id=channel_id,
@@ -123,16 +124,32 @@ class WeComChannelProvider(BaseChannelProvider):
         """Gracefully shut down the WebSocket connection and background tasks."""
         self._stopping = True
         self._set_running(False)
+        # Cancel the heartbeat first so it stops writing to _ws.
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
+            self._heartbeat_task = None
         if self._reply_sub:
             await self._reply_sub.close()
             self._reply_sub = None
         if self._ws:
             await self._ws.close()
             self._ws = None
+        # Cancel and await the connect task so its finally-block finishes
+        # before stop() returns, preventing it from clobbering a subsequent
+        # start() that may create fresh _ws / _reply_sub / _heartbeat_task.
         if self._connect_task:
             self._connect_task.cancel()
+            try:
+                await self._connect_task
+            except asyncio.CancelledError:
+                pass
+            self._connect_task = None
+
+    async def _ws_send(self, frame: p.WeComFrame) -> None:
+        """Encode and send a frame, serialising all writes behind a lock."""
+        async with self._send_lock:
+            if self._ws:
+                await self._ws.send(p.encode_frame(frame))
 
     async def _connect_loop(self) -> None:
         """Connect, subscribe, receive, and reconnect with exponential backoff."""
@@ -141,10 +158,8 @@ class WeComChannelProvider(BaseChannelProvider):
             try:
                 async with websockets.connect(WECOM_WS_URL) as ws:
                     self._ws = ws
-                    await ws.send(
-                        p.encode_frame(
-                            p.build_subscribe(self.bot_id, self.connection_secret)
-                        )
+                    await self._ws_send(
+                        p.build_subscribe(self.bot_id, self.connection_secret)
                     )
                     self._reply_sub = await subscribe_replies(
                         self.bot_id, self._on_reply_frame
@@ -186,8 +201,7 @@ class WeComChannelProvider(BaseChannelProvider):
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                if self._ws:
-                    await self._ws.send(p.encode_frame(p.build_ping()))
+                await self._ws_send(p.build_ping())
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -210,8 +224,7 @@ class WeComChannelProvider(BaseChannelProvider):
 
     async def _on_reply_frame(self, frame: p.WeComFrame) -> None:
         """Write a reply frame (from the Redis bus) to the live WS."""
-        if self._ws:
-            try:
-                await self._ws.send(p.encode_frame(frame))
-            except Exception:
-                logger.exception("[WeCom] Failed to write reply frame to WS")
+        try:
+            await self._ws_send(frame)
+        except Exception:
+            logger.exception("[WeCom] Failed to write reply frame to WS")
