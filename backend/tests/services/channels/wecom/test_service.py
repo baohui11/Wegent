@@ -59,14 +59,42 @@ async def test_handle_frame_dedups_and_delegates():
 
 
 @pytest.mark.asyncio
+async def test_handle_frame_dedups_by_msgid():
+    """Dedup key is body.msgid (stable), not the per-delivery req_id."""
+    provider = WeComChannelProvider(_channel())
+    provider._handler.handle_message = AsyncMock()
+    frame = p.WeComFrame(
+        command=p.CMD_MSG_CALLBACK,
+        req_id="delivery-1",
+        payload={"msgid": "MSG-1"},
+    )
+
+    captured = {}
+
+    async def fake_setnx(key, value, expire=None):
+        captured["key"] = key
+        return True
+
+    with patch(
+        "app.services.channels.wecom.service.cache_manager.setnx",
+        side_effect=fake_setnx,
+    ):
+        await provider._handle_frame(frame)
+
+    assert captured["key"].endswith("MSG-1")  # dedups on msgid, not req_id
+    provider._handler.handle_message.assert_awaited_once_with(frame)
+
+
+@pytest.mark.asyncio
 async def test_on_reply_frame_writes_to_ws():
     provider = WeComChannelProvider(_channel())
     fake_ws = AsyncMock()
+    fake_ws.closed = False
     provider._ws = fake_ws
     frame = p.build_stream_reply("r", "s", "hi", finish=True)
     await provider._on_reply_frame(frame)
-    fake_ws.send.assert_awaited_once()
-    assert "hi" in fake_ws.send.await_args.args[0]
+    fake_ws.send_str.assert_awaited_once()
+    assert "hi" in fake_ws.send_str.await_args.args[0]
 
 
 @pytest.mark.asyncio
@@ -102,11 +130,12 @@ async def test_ws_send_holds_lock_during_send():
     provider = WeComChannelProvider(_channel())
     lock_held_during_send: list[bool] = []
 
-    async def capturing_send(data: bytes) -> None:
+    async def capturing_send(data: str) -> None:
         lock_held_during_send.append(provider._send_lock.locked())
 
     fake_ws = AsyncMock()
-    fake_ws.send.side_effect = capturing_send
+    fake_ws.closed = False
+    fake_ws.send_str.side_effect = capturing_send
     provider._ws = fake_ws
 
     await provider._ws_send(p.build_ping())
@@ -134,14 +163,15 @@ async def test_ws_send_serializes_concurrent_writes():
     active: list[int] = []
     peak_concurrent: list[int] = []
 
-    async def slow_send(data: bytes) -> None:
+    async def slow_send(data: str) -> None:
         active.append(1)
         peak_concurrent.append(len(active))
         await asyncio.sleep(0)  # yield so a second waiter could sneak in
         active.pop()
 
     fake_ws = AsyncMock()
-    fake_ws.send.side_effect = slow_send
+    fake_ws.closed = False
+    fake_ws.send_str.side_effect = slow_send
     provider._ws = fake_ws
 
     await asyncio.gather(
