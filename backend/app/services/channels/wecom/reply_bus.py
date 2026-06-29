@@ -7,6 +7,10 @@
 In long-connection mode a bot has exactly one WebSocket connection, owned by a
 single pod. Any pod (e.g. one processing an executor callback) publishes reply
 frames here; the connection-owning pod subscribes and writes them to the WS.
+
+v1 limitation: an unhandled error inside the outer listen() loop ends the
+subscription silently (logged, but not re-raised). Automatic reconnection is
+future work; callers should monitor connection health independently.
 """
 
 import asyncio
@@ -46,10 +50,22 @@ class ReplySubscription:
         self._task: asyncio.Task | None = None
 
     async def start(self) -> "ReplySubscription":
-        self._client = await cache_manager._get_client()
-        self._pubsub = self._client.pubsub()
-        await self._pubsub.subscribe(reply_channel(self._bot_id))
-        self._task = asyncio.create_task(self._run())
+        client = await cache_manager._get_client()
+        try:
+            pubsub = client.pubsub()
+            await pubsub.subscribe(reply_channel(self._bot_id))
+            self._client = client
+            self._pubsub = pubsub
+            self._task = asyncio.create_task(self._run())
+        except Exception:
+            # Clean up whatever was created before re-raising so we never
+            # leak the Redis connection on a partial-start failure.
+            try:
+                await pubsub.aclose()
+            except Exception:
+                pass
+            await client.aclose()
+            raise
         return self
 
     async def _run(self) -> None:
@@ -71,17 +87,21 @@ class ReplySubscription:
             logger.exception("[WeCom reply_bus] Subscription loop error")
 
     async def close(self) -> None:
-        if self._task:
+        """Tear down the subscription.  Safe to call more than once."""
+        if self._task is not None:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self._pubsub:
+            self._task = None
+        if self._pubsub is not None:
             await self._pubsub.unsubscribe(reply_channel(self._bot_id))
             await self._pubsub.aclose()
-        if self._client:
+            self._pubsub = None
+        if self._client is not None:
             await self._client.aclose()
+            self._client = None
 
 
 async def subscribe_replies(bot_id: str, on_frame: OnFrame) -> ReplySubscription:
