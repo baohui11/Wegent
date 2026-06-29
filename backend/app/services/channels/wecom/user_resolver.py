@@ -18,9 +18,9 @@ class WeComUserResolver:
     """Map a WeCom userid to a Wegent User per the channel's mapping mode.
 
     Supported modes:
-    - select_user: always return a single configured Wegent user (target_user_id).
+    - select_user (default): always return a single configured Wegent user (target_user_id).
     - email: look up the user whose email matches ``{userid}@{email_domain}``.
-    - staff_id (default): treat the WeCom userid as the Wegent username.
+    - staff_id: treat the WeCom userid as the Wegent username.
     """
 
     def __init__(
@@ -61,7 +61,15 @@ class WeComUserResolver:
         if self._mode == "email":
             email_domain = self._config.get("email_domain")
             lookup = f"{userid}@{email_domain}" if email_domain else userid
-            return self._db.query(User).filter(User.email == lookup).first()
+            return (
+                self._db.query(User)
+                .filter(User.email == lookup, User.is_active == True)  # noqa: E712
+                .first()
+            )
 
-        # staff_id mode (default): treat WeCom userid as Wegent username
-        return self._db.query(User).filter(User.user_name == userid).first()
+        # staff_id mode: treat WeCom userid as Wegent username
+        return (
+            self._db.query(User)
+            .filter(User.user_name == userid, User.is_active == True)  # noqa: E712
+            .first()
+        )

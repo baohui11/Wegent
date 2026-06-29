@@ -42,6 +42,29 @@ def _get_channel_default_team_id(channel_id: int) -> Optional[int]:
         db.close()
 
 
+def _get_channel_default_model_name(channel_id: int) -> Optional[str]:
+    """Look up the default model name for a channel from the database.
+
+    Returns None if the channel is not found or the model name is empty.
+    """
+    from app.db.session import SessionLocal
+    from app.models.kind import Kind
+
+    db = SessionLocal()
+    try:
+        ch = (
+            db.query(Kind)
+            .filter(Kind.id == channel_id, Kind.kind == "Messager", Kind.user_id == 0)
+            .first()
+        )
+        if not ch:
+            return None
+        model_name = ch.json.get("spec", {}).get("defaultModelName", "")
+        return model_name if model_name else None
+    finally:
+        db.close()
+
+
 def _get_channel_user_mapping_config(channel_id: int) -> Dict[str, Any]:
     """Look up the user-mapping config for a channel from the database."""
     from app.db.session import SessionLocal
@@ -86,6 +109,7 @@ class WeComChannelProvider(BaseChannelProvider):
             channel_id=channel_id,
             bot_id=self.bot_id,
             get_default_team_id=lambda: _get_channel_default_team_id(channel_id),
+            get_default_model_name=lambda: _get_channel_default_model_name(channel_id),
             get_user_mapping_config=lambda: _get_channel_user_mapping_config(
                 channel_id
             ),

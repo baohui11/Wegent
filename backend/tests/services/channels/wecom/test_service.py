@@ -114,6 +114,19 @@ async def test_ws_send_holds_lock_during_send():
     assert lock_held_during_send == [True]
 
 
+def test_provider_wires_default_model_name():
+    """WeComChannelProvider must pass get_default_model_name to the handler."""
+    sentinel = "claude-3-7-sonnet-sentinel"
+
+    with patch(
+        "app.services.channels.wecom.service._get_channel_default_model_name",
+        return_value=sentinel,
+    ):
+        provider = WeComChannelProvider(_channel())
+        # The handler's default_model_name property calls the injected getter.
+        assert provider._handler.default_model_name == sentinel
+
+
 @pytest.mark.asyncio
 async def test_ws_send_serializes_concurrent_writes():
     """Concurrent _ws_send calls must not overlap (I-2)."""
