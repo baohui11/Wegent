@@ -418,8 +418,6 @@ class SubscriptionNotificationDispatcher:
                 return
 
             # Decrypt the client_secret (stored encrypted in database)
-            from shared.utils.crypto import decrypt_sensitive_data
-
             client_secret = decrypt_sensitive_data(client_secret_encrypted)
 
             # Send actual DingTalk message via robot API
@@ -648,8 +646,6 @@ class SubscriptionNotificationDispatcher:
                 return
 
             # Decrypt the bot_token (stored encrypted in database)
-            from shared.utils.crypto import decrypt_sensitive_data
-
             bot_token = decrypt_sensitive_data(bot_token_encrypted)
 
             # Send actual Telegram message via bot API
@@ -866,8 +862,6 @@ class SubscriptionNotificationDispatcher:
 
         # Check if secret is encrypted (has ENC: prefix)
         if secret.startswith("ENC:"):
-            from shared.utils.crypto import decrypt_sensitive_data
-
             encrypted_value = secret[4:]  # Remove "ENC:" prefix
             return decrypt_sensitive_data(encrypted_value)
 

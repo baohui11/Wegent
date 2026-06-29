@@ -111,3 +111,69 @@ async def test_send_wecom_notification_skips_when_touser_unresolved():
             subscription_display_name="S",
         )
     sender_cls.return_value.send_markdown.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_messager_notifications_wecom_no_binding_calls_wecom_path():
+    """Dispatch-gate: wecom channel without a user binding still reaches _send_wecom_notification.
+
+    This locks Spec §6 — the binding gate is bypassed for wecom, so the active-push
+    path is always scheduled even when user_bindings is empty.
+    """
+    d = SubscriptionNotificationDispatcher()
+
+    # Build a wecom channel Kind mock
+    channel = _wecom_channel()
+    channel.id = 99
+
+    # Subscription mock (needed to resolve subscription_owner_id)
+    subscription_mock = MagicMock()
+    subscription_mock.user_id = 7
+
+    # db.query(...).filter(...).first() is called twice:
+    #   1st call → subscription (to get subscription_owner_id)
+    #   2nd call → channel (inside the channel_ids loop)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.side_effect = [
+        subscription_mock,
+        channel,
+    ]
+
+    with (
+        patch(
+            "app.services.subscription.notification_dispatcher"
+            ".subscription_notification_service.get_user_im_bindings",
+            return_value={},  # no bindings for any channel
+        ),
+        patch.object(
+            d,
+            "_format_notification_message",
+            return_value="formatted",
+        ),
+        patch.object(
+            d,
+            "_convert_attachment_links",
+            return_value="formatted",
+        ),
+        patch.object(
+            d,
+            "_send_wecom_notification",
+            new_callable=AsyncMock,
+        ) as mock_wecom,
+    ):
+        await d._send_messager_notifications(
+            db=db,
+            user_id=7,
+            channel_ids=[99],
+            subscription_id=5,
+            execution_id=3,
+            subscription_display_name="Gate Test Sub",
+            result_summary="ok",
+            status="success",
+        )
+
+    # Even with no binding, the wecom path must have been scheduled/awaited
+    mock_wecom.assert_awaited_once()
+    call_kwargs = mock_wecom.await_args.kwargs
+    assert call_kwargs["channel"] is channel
+    assert call_kwargs["binding"] is None  # no binding was provided
