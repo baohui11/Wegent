@@ -603,6 +603,10 @@ class Settings(BaseSettings):
     EXECUTOR_MANAGER_URL: str = "http://localhost:8001"
     # Chat Shell service authentication token (only used when CHAT_SHELL_MODE="http")
     CHAT_SHELL_TOKEN: str = ""
+    # Root dir for per-project bid workspaces (blackboard cache; S3 is source of truth in prod).
+    BID_WORKSPACE_ROOT: str = "/data/bid-workspaces"
+    # Model CRD name used to drive the 拆标神探 specialist over Chat.
+    BID_TENDER_MODEL_NAME: str = ""
     # Backend internal URL (for service-to-service communication)
     # Used by chat_shell to download skill binaries
     BACKEND_INTERNAL_URL: str = "http://localhost:8000"

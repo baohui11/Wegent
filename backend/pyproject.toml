@@ -165,6 +165,7 @@ dev = [
 line-length = 88
 target-version = ['py310']
 include = '\.pyi?$'
+extend-exclude = "app/services/bid/vendor"
 exclude = '''
 /(
     \.eggs
@@ -194,6 +195,7 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 skip = ["alembic", ".venv", "venv"]
+extend_skip = ["app/services/bid/vendor"]
 skip_gitignore = true
 known_first_party = ["app", "shared", "chat_shell", "knowledge_engine"]
 
