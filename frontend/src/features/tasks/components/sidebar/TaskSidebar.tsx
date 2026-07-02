@@ -23,6 +23,7 @@ import {
   Inbox,
   Library,
   LayoutGrid,
+  FileText,
 } from 'lucide-react'
 import { useTaskSession } from '@/features/tasks/session/TaskSession'
 import TaskListSection from './TaskListSection'
@@ -50,7 +51,15 @@ export const SIDEBAR_NAV_CONFIG = {
 interface TaskSidebarProps {
   isMobileSidebarOpen: boolean
   setIsMobileSidebarOpen: (open: boolean) => void
-  pageType?: 'chat' | 'code' | 'flow' | 'knowledge' | 'devices' | 'inbox' | 'resource-library'
+  pageType?:
+    | 'chat'
+    | 'code'
+    | 'flow'
+    | 'knowledge'
+    | 'devices'
+    | 'inbox'
+    | 'resource-library'
+    | 'bid-workbench'
   isCollapsed?: boolean
   onToggleCollapsed?: () => void
   // Search dialog control from parent (for global shortcut support)
@@ -158,6 +167,7 @@ export default function TaskSidebar({
     | 'devices'
     | 'inbox'
     | 'resource-library'
+    | 'bid-workbench'
   interface NavigationButton {
     label: string
     icon: typeof Workflow
@@ -220,6 +230,14 @@ export default function TaskSidebar({
       isActive: pageType === 'inbox',
       buttonPageType: 'inbox',
       unreadCount: inboxUnreadCount,
+    },
+    {
+      label: t('common:navigation.bid_workbench'),
+      icon: FileText,
+      path: paths.bidWorkbench.getHref(),
+      isActive: pageType === 'bid-workbench',
+      buttonPageType: 'bid-workbench',
+      testId: 'nav-bid-workbench',
     },
   ] as NavigationButton[]
   const navigationButtons = allNavigationButtons.filter(btn => isAdmin || !btn.adminOnly)

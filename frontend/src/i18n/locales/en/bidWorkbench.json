@@ -1,0 +1,23 @@
+{
+  "title": "Bid Writing Workbench",
+  "upload": {
+    "subtitle": "Upload the tender document; AI extracts scoring points and red lines",
+    "dropzone": "Drag the tender file here, or pick a sample to try",
+    "use_sample": "Use sample tender · Smart Park project"
+  },
+  "parsing": { "title": "Tender Sleuth is parsing the document…" },
+  "phase1": {
+    "title": "Tender Analysis · Scoring & Red Lines",
+    "scoring": "Scoring matrix",
+    "clauses": "Disqualification red lines (★)",
+    "qualifications": "Qualifications",
+    "submission": "Submission rules",
+    "package": "Package",
+    "empty": "Not parsed yet",
+    "col_id": "ID",
+    "col_weight": "Weight",
+    "col_section": "Section",
+    "col_text": "Clause"
+  },
+  "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
+}

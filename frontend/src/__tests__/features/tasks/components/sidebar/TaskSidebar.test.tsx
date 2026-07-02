@@ -84,6 +84,7 @@ jest.mock('@/config/paths', () => ({
     inbox: { getHref: () => '/inbox' },
     chat: { getHref: () => '/chat' },
     resourceLibrary: { getHref: () => '/resource-library' },
+    bidWorkbench: { getHref: () => '/bid-workbench' },
   },
 }))
 

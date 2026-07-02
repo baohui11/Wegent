@@ -1,0 +1,23 @@
+{
+  "title": "标书智写工作台",
+  "upload": {
+    "subtitle": "上传招标文件，AI 自动拆解出评分点与废标红线",
+    "dropzone": "拖拽招标文件到此处，或选择示例文件快速体验",
+    "use_sample": "使用示例招标文件 · 智慧园区建设项目"
+  },
+  "parsing": { "title": "拆标神探正在拆解招标文件…" },
+  "phase1": {
+    "title": "拆标 · 评分点与红线",
+    "scoring": "评分矩阵",
+    "clauses": "废标红线（★）",
+    "qualifications": "资格要求",
+    "submission": "提交规则",
+    "package": "分包",
+    "empty": "尚未拆标",
+    "col_id": "编号",
+    "col_weight": "权重",
+    "col_section": "对应章节",
+    "col_text": "条款"
+  },
+  "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
+}
