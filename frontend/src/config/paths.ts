@@ -50,6 +50,9 @@ export const paths = {
   generate: {
     getHref: () => '/generate',
   },
+  bidWorkbench: {
+    getHref: () => '/bid-workbench',
+  },
   settings: {
     root: {
       getHref: () => '/settings',
