@@ -7,6 +7,7 @@ from app.api.endpoints import (
     api_keys,
     attachments_open,
     auth,
+    bid,
     deep_research,
     devices,
     dingtalk_docs,
@@ -102,6 +103,7 @@ api_router.include_router(pet.router, prefix="/users/me/pet", tags=["pet"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(groups.router, prefix="/groups", tags=["groups"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
+api_router.include_router(bid.router, prefix="/bid", tags=["bid"])
 api_router.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
 api_router.include_router(devices.router, prefix="/devices", tags=["devices"])
 api_router.include_router(bots.router, prefix="/bots", tags=["bots"])
