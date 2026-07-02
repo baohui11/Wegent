@@ -40,3 +40,10 @@ def test_complete_phase1_advances_cursor(test_db):
     BidProjectService.complete_phase1(test_db, project=p)
     assert p.phase_status["phase1"] == "done" and p.current_phase == 2
     assert p.max_phase_reached == 2 and p.status == "parsed"
+
+
+def test_set_phase_done_generic(test_db):
+    p = BidProjectService.create(test_db, user_id=1, title="T", workspace_ref="w")
+    BidProjectService.set_phase_done(test_db, project=p, phase=2)
+    assert p.phase_status["phase2"] == "done" and p.current_phase == 3
+    assert p.max_phase_reached == 3
