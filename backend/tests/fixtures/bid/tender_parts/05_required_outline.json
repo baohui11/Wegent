@@ -1,0 +1,222 @@
+{
+  "required_outline": {
+    "source": "第六章投标文件格式-技术文件专项投标文件(2.1-2.7)提炼为技术文件主干八章；价格/商务部分由 build_independent_volumes 独立构建",
+    "volume": "技术文件",
+    "numbering": {
+      "l1": "一、二、三…",
+      "l2": "（一）（二）…",
+      "l3": "1. 2. 3…"
+    },
+    "front_matter": [
+      {
+        "title": "评分要素响应索引表",
+        "type": "index",
+        "maps_to": "每条评分要素 → 正文页码（covers 映射 + 装订后回填页码）"
+      },
+      {
+        "title": "技术规范书响应索引表",
+        "type": "index",
+        "maps_to": "每条技术规范书条款 → 正文页码"
+      }
+    ],
+    "sections": [
+      {
+        "no": "一",
+        "title": "业绩文件",
+        "source": "第六章投标文件格式-技术文件专项投标文件2.1业绩文件",
+        "format_self_defined": false,
+        "creative_required": false
+      },
+      {
+        "no": "二",
+        "title": "项目团队情况",
+        "source": "第六章2.2项目团队情况",
+        "format_self_defined": false,
+        "creative_required": false
+      },
+      {
+        "no": "三",
+        "title": "对项目的理解",
+        "source": "第六章2.3对项目的理解（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "项目背景",
+            "children": [
+              {
+                "no": "1",
+                "title": "国家层面"
+              },
+              {
+                "no": "2",
+                "title": "行业与监管层面"
+              },
+              {
+                "no": "3",
+                "title": "招标单位本级"
+              }
+            ],
+            "rule": "背景自上而下递进、逐层收敛到本项目必要性；实际层级以招标单位隶属链为准（由 tender.project.purchaser/supervising_dept/project_unit 在运行时推导），骨架仅给通用占位，不写死具体机构名。"
+          },
+          {
+            "no": "（二）",
+            "title": "项目重难点分析及应对措施",
+            "children": [
+              {
+                "no": "1",
+                "title": "项目重点分析及应对措施"
+              },
+              {
+                "no": "2",
+                "title": "项目难点分析及应对措施"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "no": "四",
+        "title": "工作规划描述",
+        "source": "第六章2.4工作规划描述（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "服务目标"
+          },
+          {
+            "no": "（二）",
+            "title": "服务范围与要求"
+          },
+          {
+            "no": "（三）",
+            "title": "项目总体思路"
+          },
+          {
+            "no": "（四）",
+            "title": "项目整体计划"
+          },
+          {
+            "no": "（五）",
+            "title": "服务成果交付与验收"
+          }
+        ]
+      },
+      {
+        "no": "五",
+        "title": "履约能力及质量保证措施",
+        "source": "第六章2.5履约能力及质量保证措施（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "履约能力"
+          },
+          {
+            "no": "（二）",
+            "title": "工作进度保证措施"
+          },
+          {
+            "no": "（三）",
+            "title": "质量保证措施"
+          },
+          {
+            "no": "（四）",
+            "title": "知识产权管理"
+          },
+          {
+            "no": "（五）",
+            "title": "保密机制"
+          }
+        ]
+      },
+      {
+        "no": "六",
+        "title": "服务承诺",
+        "source": "第六章2.6服务承诺（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true
+      },
+      {
+        "no": "七",
+        "title": "技术评分标准涉及的支撑材料",
+        "source": "第六章2.7技术评分标准涉及的支撑材料",
+        "format_self_defined": false,
+        "creative_required": false,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "服务方案",
+            "children": [
+              {
+                "no": "1",
+                "title": "总体工作思路"
+              },
+              {
+                "no": "2",
+                "title": "政策与需求分析"
+              },
+              {
+                "no": "3",
+                "title": "现状评估与诊断"
+              },
+              {
+                "no": "4",
+                "title": "方案制定与落地"
+              }
+            ]
+          },
+          {
+            "no": "（二）",
+            "title": "管理组织"
+          },
+          {
+            "no": "（三）",
+            "title": "设备设施配置情况"
+          },
+          {
+            "no": "（四）",
+            "title": "专利数量"
+          },
+          {
+            "no": "（五）",
+            "title": "绩效评价"
+          }
+        ],
+        "rule": "本章逐项对应招标文件技术评分标准，每个评分子项一节、做得分锚点；具体子项以 tender.scoring 为准，骨架仅给通用示例。"
+      },
+      {
+        "no": "八",
+        "title": "项目案例",
+        "source": "第六章2.10其他（案例呈现）",
+        "format_self_defined": false,
+        "creative_required": false,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "案例一（节选）"
+          },
+          {
+            "no": "（二）",
+            "title": "案例二（节选）"
+          },
+          {
+            "no": "（三）",
+            "title": "案例三（节选）"
+          },
+          {
+            "no": "（四）",
+            "title": "案例四（节选）"
+          }
+        ],
+        "rule": "每个案例节选呈现，突出与本项目同类的咨询服务经验"
+      }
+    ],
+    "fallback_used": false,
+    "fallback_reason": null
+  }
+}

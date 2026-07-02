@@ -1,0 +1,107 @@
+{
+  "submission_rules": {
+    "bid_deadline": "2026年6月1日9时30分（北京时间）",
+    "bid_validity": "自投标截止日起90日",
+    "bid_opening_time": "2026年6月1日上午9时30分（北京时间）",
+    "bid_opening_location": "国网甘肃省电力公司绿色数智评标基地（甘肃省兰州市城关区盐场路1376号）",
+    "submission_method": "在线加密提交电子版投标文件",
+    "submission_channels": {
+      "price_file": "通过离线投标工具上传至“国家电网新一代电子商务平台”",
+      "commercial_tech_file": "通过国网甘肃电力数字化采购辅助工具上传至“国网甘肃电力采购云盘”",
+      "commercial_tech_note": "商务投标文件、技术投标文件以上传至国网甘肃公司电力采购云盘的完整电子投标文件为准，未完整上传商务+技术文件的视为投标文件不全，将被否决"
+    },
+    "cloud_disk_tool_url": "http://47.100.70.249/gs-web/",
+    "paper_bid_rejected": true,
+    "encrypted_bid_required": true,
+    "no_price_upload_no_opening": "上传招标人招投标交易平台信息系统价格文件不足3家的项目不予开标",
+    "bid_guarantee": {
+      "required": true,
+      "amount_yuan": 20000,
+      "amount_note": "100万-200万（含100万）档：20,000元。本包最高限价100万元属于此档",
+      "forms": [
+        "银行汇款",
+        "银行保函",
+        "投标保证保险",
+        "年度投标保证金（含年度投标保证保险）",
+        "现金"
+      ],
+      "account_info": {
+        "non_icbc": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国工商银行股份有限公司西安市东新街支行",
+          "bank_code": "102791000040"
+        },
+        "icbc": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国农业银行股份有限公司西安钟楼支行",
+          "bank_code": "103791014506"
+        },
+        "sgcc_internal": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国电力财务有限公司甘肃业务部",
+          "bank_code": "999821001202"
+        }
+      },
+      "bank_remittance_requirements": "从投标人基本账户转出，提供企业银行基本账户开户许可证扫描件或《基本存款账户信息》扫描件",
+      "insurance_requirements": "保单保费应从投标人基本账户转出，保单上应体现保费是否由投标人基本账户支付的相关信息。须提供保单查询途径",
+      "detail_table_required": true,
+      "payment_note": "请注明所担保的分标名称"
+    },
+    "price_quote_tool": "国家电网公司新一代电子商务平台ECP2.0系统在线打印带有系统二维码的报价文件，不接受系统以外离线制作的报价表",
+    "clarification_deadline": "以评标委员会书面通知为准",
+    "bid_documents_returnable": false,
+    "source_files": {
+      "deadline": "招标公告5.1，SEG-012第75行",
+      "submission_method": "招标公告5.1/5.2，SEG-012第73-91行",
+      "guarantee": "投标人须知前附表3.4.1，SEG-001第263-325行"
+    },
+    "blind_bid": true
+  },
+  "writing_rules": {
+    "volumes": [
+      "价格文件（按包制作）",
+      "商务文件（按分包制作）",
+      "技术文件（按分包制作）"
+    ],
+    "upload_volumes": {
+      "ecommerce_platform": [
+        "价格文件"
+      ],
+      "gansu_cloud_disk": [
+        "商务文件",
+        "技术文件"
+      ]
+    },
+    "copies": "电子版（在线加密提交）；不接收纸质投标文件",
+    "seal": {
+      "electronic_seal_required": true,
+      "seal_note": "需分别完成价格文件、商务文件、技术文件的电子签章。第六章投标文件格式中明确标明签字或盖章的文件，应打印并进行线下签字或盖章，然后以图片格式插入编制的文件中",
+      "authorization_letter_required": "如由委托代理人签字，须附有效的法定代表人授权委托书",
+      "seal_validation": "投标文件的签署应能通过招标人招投标交易平台信息系统投标工具的校验"
+    },
+    "format_rules": [
+      "招标文件第六章中提供了格式文件的，投标人应按格式进行编制，对格式文件进行实质性修改或未按格式进行签署的文件，被视为无效文件",
+      "投标人按照第六章投标文件格式规定的目录仅提交必需的文件",
+      "技术补充文件以分包为单位，商务补充文件以分标为单位，分别打包成一个压缩文件（zip格式），批量勾选所投标包加密提交",
+      "压缩包内目录结构参照第六章投标文件格式目录进行编制"
+    ],
+    "blind_bid": false,
+    "blind_bid_note": null,
+    "page_numbered": null,
+    "binding_requirement": null,
+    "source_files": {
+      "seal": "投标人须知正文，SEG-001第862-865行",
+      "format": "第六章投标文件格式，SEG-008"
+    }
+  },
+  "notes": [
+    "本项目不接收纸质投标文件，仅接受在线加密提交的电子版投标文件",
+    "投标文件通过两个渠道上传：价格文件上传电子商务平台，商务+技术文件上传甘肃电力采购云盘",
+    "商务和技术文件缺一不可，缺任一视为投标文件不全将被否决",
+    "投标工具要求电脑配置：内存大于8GB，64位操作系统",
+    "电子钥匙办理需要时间，需提前办理CA证书电子钥匙"
+  ]
+}

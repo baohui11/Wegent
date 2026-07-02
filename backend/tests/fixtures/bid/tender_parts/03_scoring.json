@@ -1,0 +1,320 @@
+{
+  "scoring": [
+    {
+      "id": "S-T01",
+      "category": "技术",
+      "item": "招标文件技术部分总体评价",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对投标文件技术内容的规范性、完整性、逻辑性等方面进行评审。优：9-10分；良：7-8分；一般：6分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "投标文件格式目录",
+      "target_scope": "whole_technical_volume",
+      "source": "评标办法前附表之四JS-FWTY第1项，SEG-004第949-953行",
+      "must_keep": [
+        "投标文件技术内容的规范性、完整性、逻辑性"
+      ]
+    },
+    {
+      "id": "S-T02a",
+      "category": "技术",
+      "item": "项目团队-项目负责人",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对项目负责人（指专业、工作年限、工作经验等）情况进行评审。优：10分；良：8-9分；一般：6-7分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "项目团队情况",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第2项第一部分，SEG-004第956-960行",
+      "must_keep": [
+        "项目负责人须具备科改行动或双百行动辅导项目经验",
+        "更换项目负责人须经贵司同意"
+      ]
+    },
+    {
+      "id": "S-T02b",
+      "category": "技术",
+      "item": "项目团队-团队人员配置",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对项目团队的人员结构（指专业、工作年限、工作经验等）配置情况进行评审。优：10分；良：8-9分；一般：6-7分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "项目团队情况",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第2项第二部分，SEG-004第962-966行"
+    },
+    {
+      "id": "S-T03",
+      "category": "技术",
+      "item": "业绩情况",
+      "weight": 20,
+      "score_range": "12-20分",
+      "criteria": "对满足公告专用资格条件要求的业绩情况进行评审，具有1项合格业绩的得12分，每多提供一项合格业绩得2分，最高加8分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "业绩文件",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第3项，SEG-004第969-970行",
+      "must_keep": [
+        "类似服务业绩，业绩起算期2021年1月1日至投标截止日",
+        "每多一项合格业绩加2分"
+      ]
+    },
+    {
+      "id": "S-T04",
+      "category": "技术",
+      "item": "服务方案",
+      "weight": 30,
+      "score_range": "18-30分",
+      "criteria": "从服务方案、管理组织、设备设施配置情况的先进性、创新性、可操作性、技术性、经济性、风险等方面进行综合评价。优：27-30分；良：22-26分；一般：18-21分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "工作规划描述",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第4项，SEG-004第973-977行",
+      "must_keep": [
+        "科改政策分析与宣贯、科改工作评估与分析、科改改革方案制定与落地",
+        "实施方案科学性、合理性、可行性"
+      ]
+    },
+    {
+      "id": "S-T05",
+      "category": "技术",
+      "item": "工作进度及保证措施",
+      "weight": 13,
+      "score_range": "8-13分",
+      "criteria": "从工作进度及保证措施的合理性、可操作性等方面等进行评审。优：12-13分；良：10-11分；一般：8-9分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "工作规划描述",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第5项，SEG-004第980-984行",
+      "must_keep": [
+        "服务期限2026年6月15日至2026年12月31日",
+        "解读课件、评估分析报告、指标目标、改革方案及工作台账"
+      ]
+    },
+    {
+      "id": "S-T06",
+      "category": "技术",
+      "item": "专利数量",
+      "weight": 2,
+      "score_range": "0-2分",
+      "criteria": "提供采购相关内容的发明专利或实用新型专利，每提供1项加1分，上限不超过2分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "技术评分标准涉及的支撑材料",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第6项，SEG-004第987-988行"
+    },
+    {
+      "id": "S-T07",
+      "category": "技术",
+      "item": "绩效评价",
+      "weight": 5,
+      "score_range": "1-5分",
+      "criteria": "根据最近一年度招标人对投标人的评价结果进行分类分级打分。A（优秀≥90）：5分；B（良好≥80<90）：4分；C（一般≥60<80）：3分；D（及格≥30<60）：2分；E（不及格<30）：1分；未参加绩效评价：4分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "技术评分标准涉及的支撑材料",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第7项，SEG-004第991-998行"
+    },
+    {
+      "id": "S-C01a",
+      "category": "商务",
+      "item": "诚信评价-不良行为处理情况通报",
+      "weight": 0,
+      "score_range": "-30-0分",
+      "criteria": "根据不良行为处理解除日距投标截止日时间远近和是否存在行贿行为，扣0-30分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第631-637行"
+    },
+    {
+      "id": "S-C01b",
+      "category": "商务",
+      "item": "诚信评价-公共信用信息报告/企业信用信息公示报告",
+      "weight": 0,
+      "score_range": "-10-0分",
+      "criteria": "根据失信行为和行政处罚罚款金额，扣0-10分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第640-643行"
+    },
+    {
+      "id": "S-C01c",
+      "category": "商务",
+      "item": "诚信评价-影响招投标工作公正性行为的凭证",
+      "weight": 0,
+      "score_range": "-20-0分",
+      "criteria": "投标截止日近一年内存在打招呼、请托关照等行为扣20分；无不扣分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第646-648行"
+    },
+    {
+      "id": "S-C02",
+      "category": "商务",
+      "item": "绿色低碳评价-绿电绿证",
+      "weight": 3,
+      "score_range": "0-3分",
+      "criteria": "取得绿色电力证书或凭证得3分；未取得得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第2项，SEG-004第651-654行"
+    },
+    {
+      "id": "S-C03a",
+      "category": "商务",
+      "item": "科研创新评价-企业创新成果",
+      "weight": 1,
+      "score_range": "0-1分",
+      "criteria": "国家级1分；省级0.5分；其他级别0.3分；无0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第658-663行"
+    },
+    {
+      "id": "S-C03b",
+      "category": "商务",
+      "item": "科研创新评价-创新激励机制",
+      "weight": 1,
+      "score_range": "0-1分",
+      "criteria": "企业制定创新激励相关政策和机制得1分；未制定得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第666-668行"
+    },
+    {
+      "id": "S-C03c",
+      "category": "商务",
+      "item": "科研创新评价-研发团队规模",
+      "weight": 3,
+      "score_range": "1-3分",
+      "criteria": "高级及以上职称和高级技师≥30人得3分；≥15人得2分；<15人得1分",
+      "evidence_needed": true,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第671-674行"
+    },
+    {
+      "id": "S-C03d",
+      "category": "商务",
+      "item": "科研创新评价-科研经费占比",
+      "weight": 2,
+      "score_range": "0-2分",
+      "criteria": "任一年研发投入占比达2%以上得2分；有研发投入得1分；无得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第677-681行"
+    },
+    {
+      "id": "S-C04a",
+      "category": "商务",
+      "item": "综合评价-综合实力",
+      "weight": 36,
+      "score_range": "26-36分",
+      "criteria": "对投标人能力、人员、资质等综合实力评审。优：32-33分；良：29-31分；一般：26-28分。获得中国质量奖等加2分；高新技术企业证书加1分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第686-693行"
+    },
+    {
+      "id": "S-C04b",
+      "category": "商务",
+      "item": "综合评价-投标响应-商务文件整体情况",
+      "weight": 24,
+      "score_range": "16-24分",
+      "criteria": "根据是否按格式提交完整商务文件、有无制作目录、偏差表、遗漏项数、签署情况评审。优：22-24分；良：19-21分；一般：16-18分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第698-701行"
+    },
+    {
+      "id": "S-C04c",
+      "category": "商务",
+      "item": "综合评价-投标响应-报价质量",
+      "weight": 30,
+      "score_range": "25-30分",
+      "criteria": "对投标报价完整性、准确性、规范性、合理性综合评审。优：29-30分；良：27-28分；一般：25-26分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第704-707行"
+    },
+    {
+      "id": "P1",
+      "category": "价格",
+      "item": "投标报价",
+      "weight": 30,
+      "score_range": null,
+      "criteria": "计算进入详评的投标人评标价算术平均值A1；剔除评标价与A1偏差超过[A1×w1, A1×w2]区间的投标人报价，计算偏差在区间以内的投标人评标价的算术平均值A2作为基准价。价格分=基准价/投标价×价格分满分",
+      "evidence_needed": false,
+      "eval_code": "区间平均价浮动法",
+      "target_section": null,
+      "target_scope": "price_volume",
+      "source": "评标办法前附表之五/之六，SEG-006/SEG-002"
+    }
+  ],
+  "notes": [
+    "技术评分总分范围57-100分（非100分制），JS-FWTY各项分值为分段区间",
+    "商务评分FWSW01总分100分，其中诚信评价为扣分项（-60~0分），其余为加分项",
+    "权重比例技:商:价=12:10:30，总和52",
+    "价格公式：区间平均价浮动法；偏差区间[-15%, +10%]；c=0",
+    "必须对子包内所有条目逐一响应，不能缺项/漏项/多项，否则否决（投标人须知16）"
+  ],
+  "scoring_meta": {
+    "tech_rubric_code": "JS-FWTY",
+    "tech_rubric_name": "服务技术详评模板（通用）",
+    "commerce_rubric_code": "FWSW01",
+    "commerce_rubric_name": "服务类通用商务详评细则",
+    "weights": {
+      "tech": 60,
+      "commerce": 10,
+      "price": 30,
+      "total": 100
+    },
+    "weight_note": "真实权重技:商:价=60:10:30(百分制),来源:主文评标办法前附表之六(line 7098)同兴智能标段9003001-包1行。需求表'2 days, 12:10:30'系Excel时间格式污染(60:10:30被解析为60小时=2天12时10分30秒),已据主文校正。",
+    "price_formula": "区间平均价浮动法",
+    "price_param": {
+      "n1": 1,
+      "n2": 0.5,
+      "w1": -0.15,
+      "w2": 0.1,
+      "c": 0
+    },
+    "tech_total_range": "57-100分",
+    "commerce_total_range": "50-100分（含扣分项实际范围-60~100分）",
+    "price_evaluation": {
+      "method": "区间平均价浮动法",
+      "description": "计算进入详评的投标人评标价算术平均值A1；剔除评标价与A1偏差超过[A1×w1, A1×w2]区间的投标人报价，计算偏差在区间以内的投标人评标价的算术平均值A2作为基准价。价格分=基准价/投标价×价格分满分",
+      "params": "n1=1,n2=0.5,w1=-0.15,w2=0.1,c值：0",
+      "price_score_zero_note": "计算出的价格部分得分<0按0分计",
+      "source": "评标办法前附表之五/之六，SEG-006/SEG-002"
+    }
+  }
+}
