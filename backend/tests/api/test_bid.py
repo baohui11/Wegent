@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash
 from app.models.user import User
@@ -71,3 +73,30 @@ def test_bid_ownership_isolation(
         f"/api/bid/projects/{pid}", headers={"Authorization": f"Bearer {tok2}"}
     )
     assert r.status_code == 404
+
+
+def test_parse_unexpected_error_releases_lock(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    # An unexpected (non-BidPipelineError) failure must not leave the project
+    # stuck in status='parsing' (the begin_parse lock).
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "X"}, headers=h).json()[
+        "id"
+    ]
+    with (
+        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.parse_tender",
+            new=AsyncMock(side_effect=ValueError("boom")),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            test_client.post(
+                f"/api/bid/projects/{pid}/parse",
+                json={"tender_text": "x"},
+                headers=h,
+            )
+    status = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["status"]
+    assert status == "parse_failed"

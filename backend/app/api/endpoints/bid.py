@@ -74,14 +74,20 @@ async def parse_project(
     ):
         raise HTTPException(status_code=409, detail="parse already running")
     ws = BidWorkspace(project.workspace_ref)
-    ws.write_tender_text(body.tender_text)
-    model, model_config = resolve_tender_model(db, current_user)
     try:
+        ws.write_tender_text(body.tender_text)
+        model, model_config = resolve_tender_model(db, current_user)
         await parse_tender(ws, model=model, model_config=model_config)
     except BidPipelineError as e:
         project.status = "parse_failed"
         db.commit()
         raise HTTPException(status_code=422, detail=str(e))
+    except Exception:
+        # Never leave the project stuck in 'parsing' on unexpected failure;
+        # begin_parse holds the lock via status, so release it on any error.
+        project.status = "parse_failed"
+        db.commit()
+        raise
     BidProjectService.complete_phase1(db, project=project)
     return ParseTriggerResponse(status="parsed")
 
