@@ -1,0 +1,1773 @@
+{
+  "project": {
+    "id": "CU1V-100000002-01912",
+    "name": "甘肃同兴智能科技发展有限责任公司2026年科改申报辅导服务项目",
+    "budget": null,
+    "ceiling": 100,
+    "currency": "万元",
+    "bid_deadline": "2026年6月1日9时30分（北京时间）",
+    "joint_bid_allowed": false,
+    "purchaser": "国网甘肃省电力公司",
+    "supervising_dept": "甘肃科源电力集团有限公司（战新办）",
+    "project_unit": "甘肃同兴智能科技发展有限责任公司",
+    "amendments": [],
+    "tender_id": "CY2726J032",
+    "bid_agency": "甘肃电力明珠集团有限公司",
+    "service_period": "2026年6月15日至2026年12月31日",
+    "project_location": "甘肃省兰州市",
+    "source_files": {
+      "announcement": "04_招标公告.txt",
+      "tech_spec": "03_技术规范书.txt",
+      "demand_sheet": "05_公告附件1：需求表.txt",
+      "main_text": "01_招标文件主文.txt"
+    }
+  },
+  "target_package": {
+    "分标": "国网甘肃电力2026年子公司、战新产业及原集体企业服务第二次公开招标采购",
+    "分标编号": "CY2726J032-TXZN",
+    "分包": "9003001-包1",
+    "子包": "同兴智能标段",
+    "分包名称": "甘肃同兴智能科技发展有限责任公司2026年科改申报辅导服务项目",
+    "最高限价_万元": 100,
+    "weights": {
+      "tech": 60,
+      "commerce": 10,
+      "price": 30,
+      "total": 100
+    },
+    "weight_note": "真实权重技:商:价=60:10:30(百分制),来源:主文评标办法前附表之六(line 7098)同兴智能标段9003001-包1行。需求表'2 days, 12:10:30'系Excel时间格式污染(60:10:30被解析为60小时=2天12时10分30秒),已据主文校正。",
+    "price_formula": "区间平均价浮动法",
+    "price_formula_source": "需求表/评标办法前附表之六",
+    "price_param_n": "n1=1,n2=0.5,w1=-0.15,w2=0.1,c值：0",
+    "tech_rubric_code": "JS-FWTY",
+    "commerce_rubric_code": "FWSW01",
+    "quote_method": "总价",
+    "contract_template": "《技术服务合同》",
+    "procurement_category": "其他技术服务",
+    "purchase_order_id": "1502446787921801219",
+    "tech_spec_id": "CU1V-100000002-01912",
+    "approval_number": "同兴智能【2026】6号"
+  },
+  "commitment_terms": {
+    "_comment": "commitment_terms 由技术规范书和招标文件提取；无明确数值的写待填",
+    "staff_replacement_notice_days": "以技术规范书为准：更换合同规定的工作人员（尤其是项目负责人）时，必须提请双方磋商并经得采购方同意",
+    "response_mechanism": "投标方应积极主动与甲方指定联络人联系，定期反馈工作进度",
+    "response_hours": "待填(来源:技术规范书未明确响应时限)",
+    "after_service_months": "待填(来源:技术规范书未明确售后期限)",
+    "signatory": "{{bidder}}",
+    "commitment_date": "待填",
+    "clauses": [
+      "投标方相关工作人员对申请代办工作中知悉的采购方秘密、商业秘密，负有保密义务",
+      "投标方相关工作人员应严格按照服务时间节点完成各项工作，确保按期完成报告的分析及编制",
+      "投标方应保留申办过程资料并在取证后将相关文件（纸质版及电子版）一并转交甲方",
+      "投标方最终移交甲方的文件应按公文国标相关要求统一排版，便于采购方归档工作",
+      "本服务产生的所有文档的知识产权均归甘肃同兴智能科技发展有限责任公司所有",
+      "保密条款长期有效（无论合同是否变更、解除、终止）"
+    ]
+  },
+  "qualifications": [
+    {
+      "id": "Q01",
+      "type": "通用资格",
+      "desc": "投标人须为中华人民共和国境内依法注册的法人或其他组织，须具备承担所投项目的资格条件；并在人员、设备、资金等方面具有保障如期完成中标项目的能力",
+      "evidence": "企业营业执照（或事业单位法人证书或其他组织登记证书）扫描件",
+      "source": "招标公告3.1(1)"
+    },
+    {
+      "id": "Q02",
+      "type": "通用资格",
+      "desc": "法定代表人（单位负责人）为同一人或者存在控股、管理关系的不同单位，不得参加同一标包投标或者未划分标包的同一采购项目投标",
+      "evidence": "特定关系公司投标合法性承诺函、股权关系说明表、天眼查/企查查截图",
+      "source": "招标公告3.1(2)"
+    },
+    {
+      "id": "Q03",
+      "type": "通用资格",
+      "desc": "取得国家法律、法规、部门规章规定的有效许可证。取得招标文件要求的国家强制认证证书",
+      "evidence": "相关许可证及认证证书扫描件",
+      "source": "招标公告3.1(3)"
+    },
+    {
+      "id": "Q04",
+      "type": "通用资格",
+      "desc": "应有良好的财务状况和商业信用",
+      "evidence": "财务状况证明材料",
+      "source": "招标公告3.1(4)"
+    },
+    {
+      "id": "Q05",
+      "type": "通用资格",
+      "desc": "投标人存在导致其被暂停中标资格或取消中标资格的不良行为且在处理有效期内的，其投标将被否决。投标人存在触发安全及质量重大问题“熔断机制”情形的，其投标将被否决",
+      "evidence": "无不良行为承诺（投标函中体现）",
+      "source": "招标公告3.1(5)"
+    },
+    {
+      "id": "Q06",
+      "type": "通用资格",
+      "desc": "投标人不得被人民法院列为失信被执行人。投标人不得存在违法失信行为，不得被“信用中国”网站列入严重失信主体名单",
+      "evidence": "信用中国查询报告",
+      "source": "招标公告3.1(6)"
+    },
+    {
+      "id": "Q07",
+      "type": "通用资格",
+      "desc": "投标人不得被市场监督管理机关在国家企业信用信息公示系统中列入严重违法失信企业名单或列入经营异常名录信息。需提供查询日期在投标截止日前20天内的PDF查询结果",
+      "evidence": "国家企业信用信息公示系统查询的PDF文件（含营业执照信息、列入严重违法失信企业名单、列入经营异常名录信息、行政处罚信息、清算信息）",
+      "source": "招标公告3.1(7)"
+    },
+    {
+      "id": "Q08",
+      "type": "否定式准入",
+      "desc": "不接受联合体投标",
+      "evidence": "N/A",
+      "source": "招标公告3.3"
+    },
+    {
+      "id": "Q09",
+      "type": "否定式准入",
+      "desc": "不接受代理商投标",
+      "evidence": "N/A",
+      "source": "招标公告3.5"
+    },
+    {
+      "id": "Q10",
+      "type": "否定式准入",
+      "desc": "不接受投标人委托中介机构或者中间人编制投标文件或代行办理投标事宜",
+      "evidence": "N/A",
+      "source": "招标公告3.6"
+    },
+    {
+      "id": "Q11",
+      "type": "专用资格-同兴智能标段9003001-包1",
+      "desc": "专用资质要求：无（/——即同兴智能标段科改申报辅导服务项目无特定资质要求）",
+      "evidence": "N/A",
+      "source": "需求表SEG-017第1行、SEG-016第227行"
+    },
+    {
+      "id": "Q12",
+      "type": "专用资格-同兴智能标段9003001-包1",
+      "desc": "业绩要求：自2021年1月1日至投标截止日，投标人具有类似服务业绩",
+      "evidence": "合同等业绩证明文件关键页（能体现项目规模等要素点），信息不全的证明材料不予认可",
+      "source": "需求表SEG-017第1行"
+    },
+    {
+      "id": "Q13",
+      "type": "专用资格-同兴智能标段9003001-包1",
+      "desc": "人员要求：无（/）。但技术规范书要求配一名具有“科改行动”或“双百行动”相关辅导项目经验的人员（项目负责人）专门负责项目总协调",
+      "evidence": "项目负责人简历及经验证明",
+      "source": "需求表SEG-017第1行（人员要求为/），技术规范书第六条第1款"
+    },
+    {
+      "id": "Q14",
+      "type": "通用资格-否决",
+      "desc": "投标人应如实提交《投标人与国家电网公司系统人员关系说明》，未提交说明的将进行否决处理",
+      "evidence": "投标人与国家电网公司系统人员关系说明（按格式提交）",
+      "source": "投标人须知正文SEG-001约857行"
+    }
+  ],
+  "scoring": [
+    {
+      "id": "S-T01",
+      "category": "技术",
+      "item": "招标文件技术部分总体评价",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对投标文件技术内容的规范性、完整性、逻辑性等方面进行评审。优：9-10分；良：7-8分；一般：6分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "投标文件格式目录",
+      "target_scope": "whole_technical_volume",
+      "source": "评标办法前附表之四JS-FWTY第1项，SEG-004第949-953行",
+      "must_keep": [
+        "投标文件技术内容的规范性、完整性、逻辑性"
+      ]
+    },
+    {
+      "id": "S-T02a",
+      "category": "技术",
+      "item": "项目团队-项目负责人",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对项目负责人（指专业、工作年限、工作经验等）情况进行评审。优：10分；良：8-9分；一般：6-7分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "项目团队情况",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第2项第一部分，SEG-004第956-960行",
+      "must_keep": [
+        "项目负责人须具备科改行动或双百行动辅导项目经验",
+        "更换项目负责人须经贵司同意"
+      ]
+    },
+    {
+      "id": "S-T02b",
+      "category": "技术",
+      "item": "项目团队-团队人员配置",
+      "weight": 10,
+      "score_range": "6-10分",
+      "criteria": "对项目团队的人员结构（指专业、工作年限、工作经验等）配置情况进行评审。优：10分；良：8-9分；一般：6-7分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "项目团队情况",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第2项第二部分，SEG-004第962-966行"
+    },
+    {
+      "id": "S-T03",
+      "category": "技术",
+      "item": "业绩情况",
+      "weight": 20,
+      "score_range": "12-20分",
+      "criteria": "对满足公告专用资格条件要求的业绩情况进行评审，具有1项合格业绩的得12分，每多提供一项合格业绩得2分，最高加8分",
+      "evidence_needed": true,
+      "eval_code": "JS-FWTY",
+      "target_section": "业绩文件",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第3项，SEG-004第969-970行",
+      "must_keep": [
+        "类似服务业绩，业绩起算期2021年1月1日至投标截止日",
+        "每多一项合格业绩加2分"
+      ]
+    },
+    {
+      "id": "S-T04",
+      "category": "技术",
+      "item": "服务方案",
+      "weight": 30,
+      "score_range": "18-30分",
+      "criteria": "从服务方案、管理组织、设备设施配置情况的先进性、创新性、可操作性、技术性、经济性、风险等方面进行综合评价。优：27-30分；良：22-26分；一般：18-21分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "工作规划描述",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第4项，SEG-004第973-977行",
+      "must_keep": [
+        "科改政策分析与宣贯、科改工作评估与分析、科改改革方案制定与落地",
+        "实施方案科学性、合理性、可行性"
+      ]
+    },
+    {
+      "id": "S-T05",
+      "category": "技术",
+      "item": "工作进度及保证措施",
+      "weight": 13,
+      "score_range": "8-13分",
+      "criteria": "从工作进度及保证措施的合理性、可操作性等方面等进行评审。优：12-13分；良：10-11分；一般：8-9分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "工作规划描述",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第5项，SEG-004第980-984行",
+      "must_keep": [
+        "服务期限2026年6月15日至2026年12月31日",
+        "解读课件、评估分析报告、指标目标、改革方案及工作台账"
+      ]
+    },
+    {
+      "id": "S-T06",
+      "category": "技术",
+      "item": "专利数量",
+      "weight": 2,
+      "score_range": "0-2分",
+      "criteria": "提供采购相关内容的发明专利或实用新型专利，每提供1项加1分，上限不超过2分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "技术评分标准涉及的支撑材料",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第6项，SEG-004第987-988行"
+    },
+    {
+      "id": "S-T07",
+      "category": "技术",
+      "item": "绩效评价",
+      "weight": 5,
+      "score_range": "1-5分",
+      "criteria": "根据最近一年度招标人对投标人的评价结果进行分类分级打分。A（优秀≥90）：5分；B（良好≥80<90）：4分；C（一般≥60<80）：3分；D（及格≥30<60）：2分；E（不及格<30）：1分；未参加绩效评价：4分",
+      "evidence_needed": false,
+      "eval_code": "JS-FWTY",
+      "target_section": "技术评分标准涉及的支撑材料",
+      "target_scope": null,
+      "source": "评标办法前附表之四JS-FWTY第7项，SEG-004第991-998行"
+    },
+    {
+      "id": "S-C01a",
+      "category": "商务",
+      "item": "诚信评价-不良行为处理情况通报",
+      "weight": 0,
+      "score_range": "-30-0分",
+      "criteria": "根据不良行为处理解除日距投标截止日时间远近和是否存在行贿行为，扣0-30分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第631-637行"
+    },
+    {
+      "id": "S-C01b",
+      "category": "商务",
+      "item": "诚信评价-公共信用信息报告/企业信用信息公示报告",
+      "weight": 0,
+      "score_range": "-10-0分",
+      "criteria": "根据失信行为和行政处罚罚款金额，扣0-10分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第640-643行"
+    },
+    {
+      "id": "S-C01c",
+      "category": "商务",
+      "item": "诚信评价-影响招投标工作公正性行为的凭证",
+      "weight": 0,
+      "score_range": "-20-0分",
+      "criteria": "投标截止日近一年内存在打招呼、请托关照等行为扣20分；无不扣分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第1项，SEG-004第646-648行"
+    },
+    {
+      "id": "S-C02",
+      "category": "商务",
+      "item": "绿色低碳评价-绿电绿证",
+      "weight": 3,
+      "score_range": "0-3分",
+      "criteria": "取得绿色电力证书或凭证得3分；未取得得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第2项，SEG-004第651-654行"
+    },
+    {
+      "id": "S-C03a",
+      "category": "商务",
+      "item": "科研创新评价-企业创新成果",
+      "weight": 1,
+      "score_range": "0-1分",
+      "criteria": "国家级1分；省级0.5分；其他级别0.3分；无0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第658-663行"
+    },
+    {
+      "id": "S-C03b",
+      "category": "商务",
+      "item": "科研创新评价-创新激励机制",
+      "weight": 1,
+      "score_range": "0-1分",
+      "criteria": "企业制定创新激励相关政策和机制得1分；未制定得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第666-668行"
+    },
+    {
+      "id": "S-C03c",
+      "category": "商务",
+      "item": "科研创新评价-研发团队规模",
+      "weight": 3,
+      "score_range": "1-3分",
+      "criteria": "高级及以上职称和高级技师≥30人得3分；≥15人得2分；<15人得1分",
+      "evidence_needed": true,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第671-674行"
+    },
+    {
+      "id": "S-C03d",
+      "category": "商务",
+      "item": "科研创新评价-科研经费占比",
+      "weight": 2,
+      "score_range": "0-2分",
+      "criteria": "任一年研发投入占比达2%以上得2分；有研发投入得1分；无得0分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": null,
+      "source": "评标办法前附表之三FWSW01第3项，SEG-004第677-681行"
+    },
+    {
+      "id": "S-C04a",
+      "category": "商务",
+      "item": "综合评价-综合实力",
+      "weight": 36,
+      "score_range": "26-36分",
+      "criteria": "对投标人能力、人员、资质等综合实力评审。优：32-33分；良：29-31分；一般：26-28分。获得中国质量奖等加2分；高新技术企业证书加1分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第686-693行"
+    },
+    {
+      "id": "S-C04b",
+      "category": "商务",
+      "item": "综合评价-投标响应-商务文件整体情况",
+      "weight": 24,
+      "score_range": "16-24分",
+      "criteria": "根据是否按格式提交完整商务文件、有无制作目录、偏差表、遗漏项数、签署情况评审。优：22-24分；良：19-21分；一般：16-18分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第698-701行"
+    },
+    {
+      "id": "S-C04c",
+      "category": "商务",
+      "item": "综合评价-投标响应-报价质量",
+      "weight": 30,
+      "score_range": "25-30分",
+      "criteria": "对投标报价完整性、准确性、规范性、合理性综合评审。优：29-30分；良：27-28分；一般：25-26分",
+      "evidence_needed": false,
+      "eval_code": "FWSW01",
+      "target_section": null,
+      "target_scope": "whole_commerce_volume",
+      "source": "评标办法前附表之三FWSW01第4项，SEG-004第704-707行"
+    },
+    {
+      "id": "P1",
+      "category": "价格",
+      "item": "投标报价",
+      "weight": 30,
+      "score_range": null,
+      "criteria": "计算进入详评的投标人评标价算术平均值A1；剔除评标价与A1偏差超过[A1×w1, A1×w2]区间的投标人报价，计算偏差在区间以内的投标人评标价的算术平均值A2作为基准价。价格分=基准价/投标价×价格分满分",
+      "evidence_needed": false,
+      "eval_code": "区间平均价浮动法",
+      "target_section": null,
+      "target_scope": "price_volume",
+      "source": "评标办法前附表之五/之六，SEG-006/SEG-002"
+    }
+  ],
+  "scoring_meta": {
+    "tech_rubric_code": "JS-FWTY",
+    "tech_rubric_name": "服务技术详评模板（通用）",
+    "commerce_rubric_code": "FWSW01",
+    "commerce_rubric_name": "服务类通用商务详评细则",
+    "weights": {
+      "tech": 60,
+      "commerce": 10,
+      "price": 30,
+      "total": 100
+    },
+    "weight_note": "真实权重技:商:价=60:10:30(百分制),来源:主文评标办法前附表之六(line 7098)同兴智能标段9003001-包1行。需求表'2 days, 12:10:30'系Excel时间格式污染(60:10:30被解析为60小时=2天12时10分30秒),已据主文校正。",
+    "price_formula": "区间平均价浮动法",
+    "price_param": {
+      "n1": 1,
+      "n2": 0.5,
+      "w1": -0.15,
+      "w2": 0.1,
+      "c": 0
+    },
+    "tech_total_range": "57-100分",
+    "commerce_total_range": "50-100分（含扣分项实际范围-60~100分）",
+    "price_evaluation": {
+      "method": "区间平均价浮动法",
+      "description": "计算进入详评的投标人评标价算术平均值A1；剔除评标价与A1偏差超过[A1×w1, A1×w2]区间的投标人报价，计算偏差在区间以内的投标人评标价的算术平均值A2作为基准价。价格分=基准价/投标价×价格分满分",
+      "params": "n1=1,n2=0.5,w1=-0.15,w2=0.1,c值：0",
+      "price_score_zero_note": "计算出的价格部分得分<0按0分计",
+      "source": "评标办法前附表之五/之六，SEG-006/SEG-002"
+    }
+  },
+  "mandatory_clauses": [
+    {
+      "id": "M01",
+      "category": "形式否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标文件未按招标文件规定的格式填写，内容不全或者关键字迹模糊无法辨认的。未按招标文件要求在招标人招投标交易平台信息系统制作并上传凭证单，或因投标人删除了系统文件导致凭证单索引的核实信息无法查看的",
+      "source": "评标办法前附表之二否决情形表第1条，SEG-002第606-608行"
+    },
+    {
+      "id": "M02",
+      "category": "形式否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标人递交两份或多份内容不同的投标文件，或在一份投标文件中对同一招标内容报有两个或多个报价，按招标文件规定提交备选投标方案的除外",
+      "source": "评标办法前附表之二否决情形表第2条，SEG-002第614-616行"
+    },
+    {
+      "id": "M03",
+      "category": "形式否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "对格式文件进行实质性修改或未按格式进行签署的，如由委托代理人签字的，未附有效的法定代表人授权委托书的；使用投标专用章未附有效的投标专用章与公章具有同等效力说明的",
+      "source": "评标办法前附表之二否决情形表第3条，SEG-002第622-624行；投标人须知SEG-001第863行"
+    },
+    {
+      "id": "M04",
+      "category": "形式否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "上传招标人招投标交易平台信息系统的电子投标文件无电子签章，或者电子签章无效的，或者电子签章名称与投标人不是同一人的",
+      "source": "评标办法前附表之二否决情形表第4条，SEG-002第630-632行"
+    },
+    {
+      "id": "M05",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标有效期不满足招标文件要求的（要求：自投标截止日起90日）",
+      "source": "评标办法前附表之二否决情形表第5条，SEG-002第638-640行"
+    },
+    {
+      "id": "M06",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标文件所承诺的工期/服务期不满足招标文件要求的，且招标人不能接受的（要求：2026.6.15-2026.12.31）",
+      "source": "评标办法前附表之二否决情形表第6条，SEG-002第646-648行"
+    },
+    {
+      "id": "M07",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "未按招标文件要求提交投标保证金的；以银行汇款形式提供的投标保证金未提供从投标人基本账户转出有效证明的；以投标保证保险形式提交的投标保证金保单保费未从投标人基本账户转出或保单未体现保费是否由投标人基本账户支付的相关信息或未提供保单查询途径或提供的查询途径招标人无法查询的；以银行保函、投标保证保险形式提交的投标保证金不满足招标文件要求的",
+      "source": "评标办法前附表之二否决情形表第7条，SEG-002第654-656行；投标人须知SEG-001第1391行"
+    },
+    {
+      "id": "M08",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标人提出招标人不能接受的条件或偏差的；未按要求填写具体数据信息以及填写的数据信息不满足招标文件规定的",
+      "source": "评标办法前附表之二否决情形表第8条，SEG-002第662-664行"
+    },
+    {
+      "id": "M09",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "提交投标文件截止时间后主动撤销投标文件或对投标文件提出实质性修改的",
+      "source": "评标办法前附表之二否决情形表第9条，SEG-002第670-672行"
+    },
+    {
+      "id": "M10",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "不按评标委员会要求对投标文件进行澄清、说明或补正的",
+      "source": "评标办法前附表之二否决情形表第10条，SEG-002第678-680行"
+    },
+    {
+      "id": "M11",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标范围与招标文件要求存在偏差的，且招标人不能接受的",
+      "source": "评标办法前附表之二否决情形表第11条，SEG-002第686-688行"
+    },
+    {
+      "id": "M12",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标人不接受评标委员会依法所作的修正价格的",
+      "source": "评标办法前附表之二否决情形表第12条，SEG-002第694-696行"
+    },
+    {
+      "id": "M13",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "报价明显低于其他投标报价，且投标人不能合理说明或者提供相关证明材料，评标委员会认定该投标人以低于成本报价竞标的",
+      "source": "评标办法前附表之二否决情形表第13条，SEG-002第702-704行"
+    },
+    {
+      "id": "M14",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标总价超出最高限价的（本包最高限价100万元）。招标文件明确规定了最高限价，投标人的投标价格剔除角和分的数值后超过最高限价的",
+      "source": "评标办法前附表之二否决情形表第14条，SEG-002第710-712行；投标人须知前附表13，SEG-001第876行"
+    },
+    {
+      "id": "M15",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标报价构成招标文件规定为无效报价的；开标一览表中显示为非报价数值的。投标报价小数点错误导致单价总价都出现明显错误的",
+      "source": "评标办法前附表之二否决情形表第15条，SEG-002第718-720行"
+    },
+    {
+      "id": "M16",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标价格出现数值与货币单位不对应，即出现了明显的百倍至万倍高于正常水平的报价（如把“万元”当成“元”报价）",
+      "source": "评标办法前附表之二否决情形表第16条，SEG-002第726-728行"
+    },
+    {
+      "id": "M17",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "不按国家法律法规规定填报增值税税率或征收率的",
+      "source": "评标办法前附表之二否决情形表第17条，SEG-002第734-736行"
+    },
+    {
+      "id": "M18",
+      "category": "资格否决-质量否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "在本次投标截止日前三年内发生重大质量问题（以相关行业主管部门的行政处罚决定或司法机关出具的有关法律文书为准）",
+      "source": "评标办法前附表之二否决情形表第18条，SEG-002第742-744行"
+    },
+    {
+      "id": "M19",
+      "category": "响应性否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "不符合招标文件实质性要求的",
+      "source": "评标办法前附表之二否决情形表第19条，SEG-002第750-752行"
+    },
+    {
+      "id": "M20",
+      "category": "法定否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标文件响应与事实不符或虚假投标的（虚假投标包括但不限于提供虚假的资格证明文件、业绩证明文件、验收报告、故意修改招标文件明确列明的技术要求并对其进行响应等），该投标人参与本次投标的所有标包将均被否决，且今后一段时间内参与国家电网有限公司及其所属单位招标活动的任何投标也将被否决",
+      "source": "评标办法前附表之二否决情形表第20条，SEG-002第758-760行"
+    },
+    {
+      "id": "M21",
+      "category": "法定否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "串通投标或视为串通投标或根据投诉举报经核实认定为串通投标或联合围标或有其他违法行为的，该投标人参与本次招标活动的所有标包将均被否决",
+      "source": "评标办法前附表之二否决情形表第21条，SEG-002第766-768行；投标人须知SEG-001第710行"
+    },
+    {
+      "id": "M22",
+      "category": "法定否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "《中华人民共和国招标投标法》、《中华人民共和国招标投标法实施条例》、《评标委员会和评标方法暂行规定》等法律法规规章规定的其他否决情形",
+      "source": "评标办法前附表之二否决情形表第22条，SEG-002第774-776行"
+    },
+    {
+      "id": "M23",
+      "category": "其他-拒收",
+      "marker": "★",
+      "veto": true,
+      "desc": "未按招标公告规定的时间和方式获取并下载招标文件的投标将予以拒收",
+      "source": "投标人须知前附表，SEG-001约593行"
+    },
+    {
+      "id": "M24",
+      "category": "其他-拒收",
+      "marker": "★",
+      "veto": true,
+      "desc": "逾期送达的电子投标文件将予以拒收",
+      "source": "投标人须知前附表，SEG-001约594行"
+    },
+    {
+      "id": "M25",
+      "category": "其他-拒收",
+      "marker": "★",
+      "veto": true,
+      "desc": "纸质投标文件将予以拒收",
+      "source": "投标人须知前附表，SEG-001约595行"
+    },
+    {
+      "id": "M26",
+      "category": "其他-否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "未提交《投标人与国家电网公司系统人员关系说明》的，将进行否决处理",
+      "source": "投标人须知正文，SEG-001约857行"
+    },
+    {
+      "id": "M27",
+      "category": "其他-否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标人的最小投标单位为子包，投标人必须对子包内所有条目进行逐一响应，不能缺项、漏项、多项；如有，将作否决投标处理",
+      "source": "投标人须知前附表16，SEG-001第879行"
+    },
+    {
+      "id": "M28",
+      "category": "其他-否决",
+      "marker": "★",
+      "veto": true,
+      "desc": "通过国网甘肃电力数字化采购辅助工具上传至云盘的商务投标文件、技术投标文件未完整上传的，视为投标文件不全，其投标将被否决",
+      "source": "招标公告5.1.2，SEG-012第85行"
+    },
+    {
+      "id": "M29",
+      "category": "否定式准入",
+      "marker": "★",
+      "veto": true,
+      "desc": "不接受联合体投标",
+      "source": "招标公告3.3，SEG-012第41行"
+    },
+    {
+      "id": "M30",
+      "category": "否定式准入",
+      "marker": "★",
+      "veto": true,
+      "desc": "不接受代理商投标",
+      "source": "招标公告3.5，SEG-012第55行"
+    },
+    {
+      "id": "M31",
+      "category": "否定式准入",
+      "marker": "★",
+      "veto": true,
+      "desc": "不接受投标人委托中介机构或者中间人编制投标文件或代行办理投标事宜",
+      "source": "招标公告3.6，SEG-012第57行；投标人须知正文SEG-001第1043行"
+    },
+    {
+      "id": "M32",
+      "category": "其他-保证金",
+      "marker": "★",
+      "veto": true,
+      "desc": "投标保证金金额（本包100万元对应20,000元），未按要求提交保证金将否决",
+      "source": "投标人须知前附表3.4.1及附表一，SEG-001第263-325行"
+    },
+    {
+      "id": "M33",
+      "category": "其他-报价",
+      "marker": "★",
+      "veto": true,
+      "desc": "招标人不接受从国家电网公司新一代电子商务平台ECP2.0系统以外离线制作的报价表。投标函及投标报价单需递交从ECP2.0系统在线打印出的最终上传带有系统二维码的报价文件",
+      "source": "投标人须知前附表15，SEG-001第878行"
+    },
+    {
+      "id": "M34",
+      "category": "其他-格式",
+      "marker": "★",
+      "veto": true,
+      "desc": "招标文件第六章中提供了格式文件的，投标人应按格式进行编制。对上述格式文件进行实质性修改或未按格式进行签署的文件，被视为无效文件",
+      "source": "投标人须知前附表，SEG-001第533行/第863行"
+    }
+  ],
+  "total_count": 34,
+  "required_outline": {
+    "source": "第六章投标文件格式-技术文件专项投标文件(2.1-2.7)提炼为技术文件主干八章；价格/商务部分由 build_independent_volumes 独立构建",
+    "volume": "技术文件",
+    "numbering": {
+      "l1": "一、二、三…",
+      "l2": "（一）（二）…",
+      "l3": "1. 2. 3…"
+    },
+    "front_matter": [
+      {
+        "title": "评分要素响应索引表",
+        "type": "index",
+        "maps_to": "每条评分要素 → 正文页码（covers 映射 + 装订后回填页码）"
+      },
+      {
+        "title": "技术规范书响应索引表",
+        "type": "index",
+        "maps_to": "每条技术规范书条款 → 正文页码"
+      }
+    ],
+    "sections": [
+      {
+        "no": "一",
+        "title": "业绩文件",
+        "source": "第六章投标文件格式-技术文件专项投标文件2.1业绩文件",
+        "format_self_defined": false,
+        "creative_required": false
+      },
+      {
+        "no": "二",
+        "title": "项目团队情况",
+        "source": "第六章2.2项目团队情况",
+        "format_self_defined": false,
+        "creative_required": false
+      },
+      {
+        "no": "三",
+        "title": "对项目的理解",
+        "source": "第六章2.3对项目的理解（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "项目背景",
+            "children": [
+              {
+                "no": "1",
+                "title": "国家层面"
+              },
+              {
+                "no": "2",
+                "title": "行业与监管层面"
+              },
+              {
+                "no": "3",
+                "title": "招标单位本级"
+              }
+            ],
+            "rule": "背景自上而下递进、逐层收敛到本项目必要性；实际层级以招标单位隶属链为准（由 tender.project.purchaser/supervising_dept/project_unit 在运行时推导），骨架仅给通用占位，不写死具体机构名。"
+          },
+          {
+            "no": "（二）",
+            "title": "项目重难点分析及应对措施",
+            "children": [
+              {
+                "no": "1",
+                "title": "项目重点分析及应对措施"
+              },
+              {
+                "no": "2",
+                "title": "项目难点分析及应对措施"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "no": "四",
+        "title": "工作规划描述",
+        "source": "第六章2.4工作规划描述（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "服务目标"
+          },
+          {
+            "no": "（二）",
+            "title": "服务范围与要求"
+          },
+          {
+            "no": "（三）",
+            "title": "项目总体思路"
+          },
+          {
+            "no": "（四）",
+            "title": "项目整体计划"
+          },
+          {
+            "no": "（五）",
+            "title": "服务成果交付与验收"
+          }
+        ]
+      },
+      {
+        "no": "五",
+        "title": "履约能力及质量保证措施",
+        "source": "第六章2.5履约能力及质量保证措施（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "履约能力"
+          },
+          {
+            "no": "（二）",
+            "title": "工作进度保证措施"
+          },
+          {
+            "no": "（三）",
+            "title": "质量保证措施"
+          },
+          {
+            "no": "（四）",
+            "title": "知识产权管理"
+          },
+          {
+            "no": "（五）",
+            "title": "保密机制"
+          }
+        ]
+      },
+      {
+        "no": "六",
+        "title": "服务承诺",
+        "source": "第六章2.6服务承诺（招标文件标注：格式自拟）",
+        "format_self_defined": true,
+        "creative_required": true
+      },
+      {
+        "no": "七",
+        "title": "技术评分标准涉及的支撑材料",
+        "source": "第六章2.7技术评分标准涉及的支撑材料",
+        "format_self_defined": false,
+        "creative_required": false,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "服务方案",
+            "children": [
+              {
+                "no": "1",
+                "title": "总体工作思路"
+              },
+              {
+                "no": "2",
+                "title": "政策与需求分析"
+              },
+              {
+                "no": "3",
+                "title": "现状评估与诊断"
+              },
+              {
+                "no": "4",
+                "title": "方案制定与落地"
+              }
+            ]
+          },
+          {
+            "no": "（二）",
+            "title": "管理组织"
+          },
+          {
+            "no": "（三）",
+            "title": "设备设施配置情况"
+          },
+          {
+            "no": "（四）",
+            "title": "专利数量"
+          },
+          {
+            "no": "（五）",
+            "title": "绩效评价"
+          }
+        ],
+        "rule": "本章逐项对应招标文件技术评分标准，每个评分子项一节、做得分锚点；具体子项以 tender.scoring 为准，骨架仅给通用示例。"
+      },
+      {
+        "no": "八",
+        "title": "项目案例",
+        "source": "第六章2.10其他（案例呈现）",
+        "format_self_defined": false,
+        "creative_required": false,
+        "children": [
+          {
+            "no": "（一）",
+            "title": "案例一（节选）"
+          },
+          {
+            "no": "（二）",
+            "title": "案例二（节选）"
+          },
+          {
+            "no": "（三）",
+            "title": "案例三（节选）"
+          },
+          {
+            "no": "（四）",
+            "title": "案例四（节选）"
+          }
+        ],
+        "rule": "每个案例节选呈现，突出与本项目同类的咨询服务经验"
+      }
+    ],
+    "fallback_used": false,
+    "fallback_reason": null
+  },
+  "submission_rules": {
+    "bid_deadline": "2026年6月1日9时30分（北京时间）",
+    "bid_validity": "自投标截止日起90日",
+    "bid_opening_time": "2026年6月1日上午9时30分（北京时间）",
+    "bid_opening_location": "国网甘肃省电力公司绿色数智评标基地（甘肃省兰州市城关区盐场路1376号）",
+    "submission_method": "在线加密提交电子版投标文件",
+    "submission_channels": {
+      "price_file": "通过离线投标工具上传至“国家电网新一代电子商务平台”",
+      "commercial_tech_file": "通过国网甘肃电力数字化采购辅助工具上传至“国网甘肃电力采购云盘”",
+      "commercial_tech_note": "商务投标文件、技术投标文件以上传至国网甘肃公司电力采购云盘的完整电子投标文件为准，未完整上传商务+技术文件的视为投标文件不全，将被否决"
+    },
+    "cloud_disk_tool_url": "http://47.100.70.249/gs-web/",
+    "paper_bid_rejected": true,
+    "encrypted_bid_required": true,
+    "no_price_upload_no_opening": "上传招标人招投标交易平台信息系统价格文件不足3家的项目不予开标",
+    "bid_guarantee": {
+      "required": true,
+      "amount_yuan": 20000,
+      "amount_note": "100万-200万（含100万）档：20,000元。本包最高限价100万元属于此档",
+      "forms": [
+        "银行汇款",
+        "银行保函",
+        "投标保证保险",
+        "年度投标保证金（含年度投标保证保险）",
+        "现金"
+      ],
+      "account_info": {
+        "non_icbc": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国工商银行股份有限公司西安市东新街支行",
+          "bank_code": "102791000040"
+        },
+        "icbc": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国农业银行股份有限公司西安钟楼支行",
+          "bank_code": "103791014506"
+        },
+        "sgcc_internal": {
+          "account": "1202643510201000002",
+          "name": "甘肃电力明珠集团有限公司",
+          "bank": "中国电力财务有限公司甘肃业务部",
+          "bank_code": "999821001202"
+        }
+      },
+      "bank_remittance_requirements": "从投标人基本账户转出，提供企业银行基本账户开户许可证扫描件或《基本存款账户信息》扫描件",
+      "insurance_requirements": "保单保费应从投标人基本账户转出，保单上应体现保费是否由投标人基本账户支付的相关信息。须提供保单查询途径",
+      "detail_table_required": true,
+      "payment_note": "请注明所担保的分标名称"
+    },
+    "price_quote_tool": "国家电网公司新一代电子商务平台ECP2.0系统在线打印带有系统二维码的报价文件，不接受系统以外离线制作的报价表",
+    "clarification_deadline": "以评标委员会书面通知为准",
+    "bid_documents_returnable": false,
+    "source_files": {
+      "deadline": "招标公告5.1，SEG-012第75行",
+      "submission_method": "招标公告5.1/5.2，SEG-012第73-91行",
+      "guarantee": "投标人须知前附表3.4.1，SEG-001第263-325行"
+    },
+    "blind_bid": true
+  },
+  "writing_rules": {
+    "volumes": [
+      "价格文件（按包制作）",
+      "商务文件（按分包制作）",
+      "技术文件（按分包制作）"
+    ],
+    "upload_volumes": {
+      "ecommerce_platform": [
+        "价格文件"
+      ],
+      "gansu_cloud_disk": [
+        "商务文件",
+        "技术文件"
+      ]
+    },
+    "copies": "电子版（在线加密提交）；不接收纸质投标文件",
+    "seal": {
+      "electronic_seal_required": true,
+      "seal_note": "需分别完成价格文件、商务文件、技术文件的电子签章。第六章投标文件格式中明确标明签字或盖章的文件，应打印并进行线下签字或盖章，然后以图片格式插入编制的文件中",
+      "authorization_letter_required": "如由委托代理人签字，须附有效的法定代表人授权委托书",
+      "seal_validation": "投标文件的签署应能通过招标人招投标交易平台信息系统投标工具的校验"
+    },
+    "format_rules": [
+      "招标文件第六章中提供了格式文件的，投标人应按格式进行编制，对格式文件进行实质性修改或未按格式进行签署的文件，被视为无效文件",
+      "投标人按照第六章投标文件格式规定的目录仅提交必需的文件",
+      "技术补充文件以分包为单位，商务补充文件以分标为单位，分别打包成一个压缩文件（zip格式），批量勾选所投标包加密提交",
+      "压缩包内目录结构参照第六章投标文件格式目录进行编制"
+    ],
+    "blind_bid": false,
+    "blind_bid_note": null,
+    "page_numbered": null,
+    "binding_requirement": null,
+    "source_files": {
+      "seal": "投标人须知正文，SEG-001第862-865行",
+      "format": "第六章投标文件格式，SEG-008"
+    }
+  },
+  "requirements": [
+    {
+      "id": "R001",
+      "source": "招标公告3.1(1)",
+      "text": "投标人须为中华人民共和国境内依法注册的法人或其他组织，须具备承担所投项目的资格条件；并在人员、设备、资金等方面具有保障如期完成中标项目的能力",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "证明材料",
+      "evidence": "企业营业执照扫描件",
+      "owner": "商务",
+      "risk": "缺材料将被否决"
+    },
+    {
+      "id": "R002",
+      "source": "招标公告3.1(2)",
+      "text": "法定代表人（单位负责人）为同一人或者存在控股、管理关系的不同单位，不得参加同一标包投标或者未划分标包的同一采购项目投标",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺+证明材料",
+      "evidence": "特定关系公司投标合法性承诺函、股权关系说明表",
+      "owner": "商务",
+      "risk": "存在控股关系将被否决"
+    },
+    {
+      "id": "R003",
+      "source": "招标公告3.1(5)",
+      "text": "投标人存在导致其被暂停中标资格或取消中标资格的不良行为且在处理有效期内的，其投标将被否决",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "无不良行为承诺",
+      "owner": "商务",
+      "risk": "有不良行为将被否决"
+    },
+    {
+      "id": "R004",
+      "source": "招标公告3.1(6)",
+      "text": "投标人不得被人民法院列为失信被执行人，不得被“信用中国”网站列入严重失信主体名单",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "证明材料",
+      "evidence": "信用中国查询报告",
+      "owner": "商务",
+      "risk": "失信将被否决"
+    },
+    {
+      "id": "R005",
+      "source": "招标公告3.1(7)",
+      "text": "投标人不得被市场监督管理机关在国家企业信用信息公示系统中列入严重违法失信企业名单或列入经营异常名录信息。需提供查询日期在投标截止日前20天内的PDF查询结果",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "证明材料",
+      "evidence": "国家企业信用信息公示系统查询的PDF文件",
+      "owner": "商务",
+      "risk": "列入黑名单将被否决"
+    },
+    {
+      "id": "R006",
+      "source": "招标公告3.3/3.5/3.6",
+      "text": "不接受联合体投标、不接受代理商投标、不接受委托中介机构或中间人编制投标文件或代行办理投标事宜",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "N/A",
+      "owner": "商务",
+      "risk": "违反将被否决"
+    },
+    {
+      "id": "R007",
+      "source": "需求表SEG-017第1行",
+      "text": "专用资质要求：无（/）",
+      "category": "资格",
+      "priority": "D",
+      "substantive": false,
+      "response": "N/A",
+      "evidence": "N/A",
+      "owner": "商务",
+      "risk": "无特定资质要求"
+    },
+    {
+      "id": "R008",
+      "source": "需求表SEG-017第1行",
+      "text": "业绩要求：自2021年1月1日至投标截止日，投标人具有类似服务业绩",
+      "category": "资格",
+      "priority": "A",
+      "substantive": true,
+      "response": "证明材料",
+      "evidence": "合同等业绩证明文件关键页（能体现项目规模等要素点），信息不全的证明材料不予认可",
+      "owner": "技术",
+      "risk": "无合格业绩将影响资格评审和评分"
+    },
+    {
+      "id": "R009",
+      "source": "技术规范书第六条第1款，SEG-011第71行",
+      "text": "投标方应配一名具有“科改行动”或“双百行动”相关辅导项目经验的人员（项目负责人）专门负责项目总协调及双方的日常沟通交流等工作",
+      "category": "技术",
+      "priority": "B",
+      "substantive": true,
+      "response": "逐条响应",
+      "evidence": "项目负责人简历、经验证明、资质证书",
+      "owner": "技术",
+      "risk": "影响技术评分S-T02a项（6-10分）"
+    },
+    {
+      "id": "R010",
+      "source": "技术规范书第六条第2款，SEG-011第73行",
+      "text": "如投标方在执行合同期间提出全部或部分更换合同规定的工作人员（尤其是项目负责人）时，必须提请双方磋商并经得采购方的同意才能更换，否则采购方有权单方面终止本合同",
+      "category": "合同",
+      "priority": "C",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "服务承诺函",
+      "owner": "技术",
+      "risk": "违约可能导致合同终止"
+    },
+    {
+      "id": "R011",
+      "source": "技术规范书第二条，SEG-011第19-39行",
+      "text": "服务内容：1.科改政策分析与宣贯（持续跟踪政策文件、提供政策分析与解读、培训服务）；2.科改工作评估与分析（调研工作、评估分析、指标短板分析）；3.科改改革方案制定与落地（编制改革方案及工作台账、建立工作推进机制）",
+      "category": "技术",
+      "priority": "B",
+      "substantive": true,
+      "response": "方案说明",
+      "evidence": "技术投标文件-服务方案",
+      "owner": "技术",
+      "risk": "影响技术评分S-T04项（18-30分）"
+    },
+    {
+      "id": "R012",
+      "source": "技术规范书第三条，SEG-011第42-49行",
+      "text": "交付成果：1.《科改行动解读与分析课件》；2.《2026年度科改行动评估分析报告》；3.《2026年度指标目标》；4.《2026年度科改行动改革方案及工作台账》",
+      "category": "技术",
+      "priority": "B",
+      "substantive": true,
+      "response": "逐条响应",
+      "evidence": "技术投标文件-服务方案中明确交付成果清单",
+      "owner": "技术",
+      "risk": "影响技术评分S-T04项"
+    },
+    {
+      "id": "R013",
+      "source": "技术规范书第四条，SEG-011第52-63行",
+      "text": "质量要求：符合国家有关法律法规、行业及同兴智能公司有关制度和规定；保密义务；严格按时间节点完成；定期反馈工作进度；保留并转交申办过程资料；文件按公文国标排版",
+      "category": "技术",
+      "priority": "B",
+      "substantive": true,
+      "response": "逐条响应",
+      "evidence": "技术投标文件-履约能力及质量保证措施",
+      "owner": "技术",
+      "risk": "影响技术评分S-T04项"
+    },
+    {
+      "id": "R014",
+      "source": "技术规范书第五条，SEG-011第66行",
+      "text": "服务期限：自2026年6月15日起至2026年12月31日止",
+      "category": "技术",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "投标函中体现",
+      "owner": "技术",
+      "risk": "服务期不满足将被否决（M06）"
+    },
+    {
+      "id": "R015",
+      "source": "技术规范书第七条第1款，SEG-011第81-83行",
+      "text": "保密要求：投标方及其工作人员应对获悉的采购方有关文档资料、商业秘密及采购方要求保密的其他信息严格保密，未征得采购方书面同意不得向第三方透露",
+      "category": "合同",
+      "priority": "C",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "服务承诺函/保密协议",
+      "owner": "法务",
+      "risk": "违约风险"
+    },
+    {
+      "id": "R016",
+      "source": "技术规范书第七条第2款，SEG-011第87行",
+      "text": "知识产权要求：本服务产生的所有文档的知识产权均归甘肃同兴智能科技发展有限责任公司所有",
+      "category": "合同",
+      "priority": "C",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "服务承诺函",
+      "owner": "法务",
+      "risk": "知识产权归属约定"
+    },
+    {
+      "id": "R017",
+      "source": "技术规范书第七条第2款，SEG-011第89-91行",
+      "text": "未经同兴智能公司许可，严禁向本项目以外的任何机构或人员提供本项目涉及的所有数据及相关的文档信息。保密条款长期有效",
+      "category": "合同",
+      "priority": "C",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "服务承诺函",
+      "owner": "法务",
+      "risk": "保密义务长期有效"
+    },
+    {
+      "id": "R018",
+      "source": "投标人须知前附表13，SEG-001第876行",
+      "text": "投标总价不得超出最高限价（本包100万元），超出将否决",
+      "category": "报价",
+      "priority": "A",
+      "substantive": true,
+      "response": "报价表",
+      "evidence": "投标函价格表",
+      "owner": "财务",
+      "risk": "超限价直接否决"
+    },
+    {
+      "id": "R019",
+      "source": "投标人须知前附表16，SEG-001第879行",
+      "text": "投标人的最小投标单位为子包，投标人必须对子包内所有条目进行逐一响应，不能缺项、漏项、多项",
+      "category": "格式",
+      "priority": "A",
+      "substantive": true,
+      "response": "逐条响应",
+      "evidence": "报价明细表逐项填报",
+      "owner": "技术",
+      "risk": "缺项/漏项/多项将被否决"
+    },
+    {
+      "id": "R020",
+      "source": "评标办法前附表之四JS-FWTY第3项",
+      "text": "业绩评分：具有1项合格业绩得12分，每多提供一项合格业绩得2分，最高加8分（满分20分）",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "合同等业绩证明文件关键页",
+      "owner": "技术",
+      "risk": "影响技术评分S-T03（12-20分）"
+    },
+    {
+      "id": "R021",
+      "source": "评标办法前附表之四JS-FWTY第4项",
+      "text": "服务方案评分（18-30分）：从服务方案、管理组织、设备设施配置情况的先进性、创新性、可操作性、技术性、经济性、风险等方面综合评价",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "方案说明",
+      "evidence": "技术投标文件-工作规划描述",
+      "owner": "技术",
+      "risk": "影响技术评分S-T04（18-30分）"
+    },
+    {
+      "id": "R022",
+      "source": "评标办法前附表之四JS-FWTY第5项",
+      "text": "工作进度及保证措施评分（8-13分）：从合理性、可操作性等方面评审",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "方案说明",
+      "evidence": "技术投标文件-工作规划描述",
+      "owner": "技术",
+      "risk": "影响技术评分S-T05（8-13分）"
+    },
+    {
+      "id": "R023",
+      "source": "评标办法前附表之四JS-FWTY第6项",
+      "text": "专利数量评分（0-2分）：提供采购相关内容的发明专利或实用新型专利，每提供1项加1分，上限2分",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "专利证书扫描件",
+      "owner": "技术",
+      "risk": "影响技术评分S-T06（0-2分）"
+    },
+    {
+      "id": "R024",
+      "source": "评标办法前附表之四JS-FWTY第7项",
+      "text": "绩效评价评分（1-5分）：根据最近一年度招标人对投标人的评价结果分类分级打分。未参加绩效评价：4分",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "供应商绩效评价结果证明",
+      "owner": "商务",
+      "risk": "影响技术评分S-T07（1-5分）"
+    },
+    {
+      "id": "R025",
+      "source": "评标办法前附表之三FWSW01第2项",
+      "text": "绿色低碳评价-绿电绿证评分（0-3分）：取得绿色电力证书或凭证得3分",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "绿色电力证书或凭证",
+      "owner": "商务",
+      "risk": "影响商务评分S-C02（0-3分）"
+    },
+    {
+      "id": "R026",
+      "source": "评标办法前附表之三FWSW01第3项",
+      "text": "科研创新评价（7分）：企业创新成果（0-1分）、创新激励机制（0-1分）、研发团队规模（1-3分）、科研经费占比（0-2分）",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "科技成果证书、创新激励制度文件、研发人员名单及资质、科研经费报表",
+      "owner": "商务",
+      "risk": "影响商务评分S-C03（0-7分）"
+    },
+    {
+      "id": "R027",
+      "source": "评标办法前附表之三FWSW01第4项",
+      "text": "综合评价-综合实力评分（26-36分）：能力、人员、资质等综合实力。中国质量奖等加2分；高新技术企业加1分",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "证明材料",
+      "evidence": "资质证书、获奖证书、高新技术企业证书",
+      "owner": "商务",
+      "risk": "影响商务评分S-C04a（26-36分）"
+    },
+    {
+      "id": "R028",
+      "source": "评标办法前附表之三FWSW01第4项",
+      "text": "综合评价-投标响应评分（41-54分）：商务文件整体情况（16-24分）+报价质量（25-30分）",
+      "category": "评分",
+      "priority": "B",
+      "substantive": false,
+      "response": "逐条响应",
+      "evidence": "完整商务投标文件+合理报价",
+      "owner": "商务",
+      "risk": "影响商务评分S-C04b/c（41-54分）"
+    },
+    {
+      "id": "R029",
+      "source": "投标人须知前附表3.4.1",
+      "text": "投标保证金：100万-200万（含100万）档金额20,000元，须从基本账户转出",
+      "category": "报价",
+      "priority": "A",
+      "substantive": true,
+      "response": "证明材料",
+      "evidence": "汇款凭证/保函/保险保单+基本账户证明",
+      "owner": "财务",
+      "risk": "未提交保证金将被否决（M07）"
+    },
+    {
+      "id": "R030",
+      "source": "招标公告5.1.2",
+      "text": "商务投标文件、技术投标文件须通过国网甘肃电力数字化采购辅助工具上传至云盘，缺一不可",
+      "category": "格式",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "上传截图",
+      "owner": "技术",
+      "risk": "缺任一文件将被否决（M28）"
+    },
+    {
+      "id": "R031",
+      "source": "投标人须知SEG-001第862-863行",
+      "text": "需分别完成价格文件、商务文件、技术文件的电子签章。第六章格式中明确标明签字或盖章的文件，应打印并进行线下签字或盖章，然后以图片格式插入",
+      "category": "签章",
+      "priority": "A",
+      "substantive": true,
+      "response": "逐条响应",
+      "evidence": "电子签章+线下签章扫描件",
+      "owner": "商务",
+      "risk": "签章无效将被否决（M03/M04）"
+    },
+    {
+      "id": "R032",
+      "source": "投标人须知SEG-001第865行",
+      "text": "投标人按照第六章投标文件格式规定的目录仅提交必需的文件",
+      "category": "格式",
+      "priority": "D",
+      "substantive": false,
+      "response": "方案说明",
+      "evidence": "N/A",
+      "owner": "技术",
+      "risk": "文件目录不规范影响评分"
+    },
+    {
+      "id": "R033",
+      "source": "投标人须知SEG-001第873行",
+      "text": "技术补充文件以分包为单位，商务补充文件以分标为单位，分别打包成一个压缩文件（zip格式），批量勾选所投标包加密提交。压缩包内目录结构参照第六章投标文件格式目录编制",
+      "category": "格式",
+      "priority": "D",
+      "substantive": false,
+      "response": "方案说明",
+      "evidence": "N/A",
+      "owner": "技术",
+      "risk": "格式不规范影响评分"
+    },
+    {
+      "id": "R034",
+      "source": "招标公告5.1/SEG-012第75行",
+      "text": "投标截止时间：2026年6月1日9时30分（北京时间）",
+      "category": "递交",
+      "priority": "A",
+      "substantive": true,
+      "response": "承诺",
+      "evidence": "N/A",
+      "owner": "商务",
+      "risk": "逾期送达将被拒收（M24）"
+    }
+  ],
+  "priority_distribution": {
+    "A": 14,
+    "B": 12,
+    "C": 4,
+    "D": 4
+  },
+  "derived_outline": {
+    "source": "技术规范书（03_技术规范书.txt）+ 评标办法前附表之四（JS-FWTY）+ 评标办法前附表之三（FWSW01）",
+    "requirement_groups": [
+      {
+        "id": "DG001",
+        "topic": "科改政策分析与宣贯",
+        "source": "技术规范书第二条第1款，SEG-011第21-25行",
+        "items": [
+          "持续跟踪、梳理国资委、国家电网公司关于国企改革、“科改行动”政策文件，提供持续的政策分析与解读，明确各项政策的重点内容和要求",
+          "结合深化改革要求，按需提供政策分析、科改目标宣贯、重点指标解读等培训服务"
+        ],
+        "target_section": "工作规划描述"
+      },
+      {
+        "id": "DG002",
+        "topic": "科改工作评估与分析",
+        "source": "技术规范书第二条第2款，SEG-011第28-33行",
+        "items": [
+          "按照国资委对“科改企业”评估要求，围绕科技成果产出、科技成果转化及科技人员激励等方面开展调研工作，并做好分析诊断",
+          "根据国资委“科改行动”考核材料要求，结合同兴智能公司实际情况，开展2026年度科改工作评估分析，明确评估结果情况",
+          "基于评估结果，开展指标短板、失分原因分析，明确可提分指标及可提升目标，针对性提出提升方向和举措建议"
+        ],
+        "target_section": "对项目的理解"
+      },
+      {
+        "id": "DG003",
+        "topic": "科改改革方案制定与落地",
+        "source": "技术规范书第二条第3款，SEG-011第36-39行",
+        "items": [
+          "根据评估结果、指标分析及公司发展实际，编制同兴智能公司2026年度“科改行动”改革方案及工作台账，科学制定改革思路和预期目标，明确考核指标相关的提升措施、重点任务等",
+          "根据改革方案工作内容，科学制定工作计划，建立有序、高效的工作推进机制，做好常态化跟踪，推动方案的落地与实施"
+        ],
+        "target_section": "工作规划描述"
+      },
+      {
+        "id": "DG004",
+        "topic": "交付成果",
+        "source": "技术规范书第三条，SEG-011第42-49行",
+        "items": [
+          "《甘肃同兴智能科技发展公司“科改行动”解读与分析课件》",
+          "《甘肃同兴智能科技发展公司2026年度“科改行动”评估分析报告》",
+          "《甘肃同兴智能科技发展公司2026年度指标目标》",
+          "《甘肃同兴智能科技发展公司2026年度“科改行动”改革方案及工作台账》"
+        ],
+        "target_section": "工作规划描述"
+      },
+      {
+        "id": "DG005",
+        "topic": "质量与验收标准",
+        "source": "技术规范书第四条、第六条，SEG-011第52-77行",
+        "items": [
+          "符合国家有关法律法规、行业、国网公司及同兴智能公司有关制度和规定",
+          "投标方相关工作人员对采购方秘密、商业秘密负有保密义务",
+          "严格按照服务时间节点完成各项工作，确保按期完成报告的分析及编制",
+          "积极主动与甲方指定联络人联系，定期反馈工作进度",
+          "保留申办过程资料并在取证后将相关文件一并转交甲方",
+          "最终移交甲方的文件应按公文国标相关要求统一排版",
+          "配一名具有“科改行动”或“双百行动”相关辅导项目经验的项目负责人",
+          "更换工作人员须提请双方磋商并经采购方同意",
+          "验收标准：满足技术规范书的成果要求"
+        ],
+        "target_section": "履约能力及质量保证措施"
+      },
+      {
+        "id": "DG006",
+        "topic": "保密与知识产权",
+        "source": "技术规范书第七条，SEG-011第81-91行",
+        "items": [
+          "投标方及其工作人员应对获悉的采购方有关文档资料、商业秘密及采购方要求保密的其他信息严格保密",
+          "在未征得采购方书面同意的情况下，不得向第三方透露",
+          "本服务产生的所有文档的知识产权均归甘肃同兴智能科技发展有限责任公司所有",
+          "未经同兴智能公司许可，严禁向本项目以外的任何机构或人员提供本项目涉及的所有数据及相关的文档信息",
+          "保密条款长期有效（无论合同是否变更、解除、终止）"
+        ],
+        "target_section": "服务承诺"
+      },
+      {
+        "id": "DG007",
+        "topic": "项目团队配置",
+        "source": "JS-FWTY第2项+技术规范书第六条",
+        "items": [
+          "项目负责人（指专业、工作年限、工作经验等）情况评审（6-10分）",
+          "项目团队的人员结构（指专业、工作年限、工作经验等）配置情况评审（6-10分）",
+          "项目负责人须具有“科改行动”或“双百行动”相关辅导项目经验"
+        ],
+        "target_section": "项目团队情况"
+      },
+      {
+        "id": "DG008",
+        "topic": "业绩证明",
+        "source": "JS-FWTY第3项+需求表",
+        "items": [
+          "自2021年1月1日至投标截止日具有类似服务业绩（专用资格要求）",
+          "具有1项合格业绩得12分，每多提供一项合格业绩得2分，最高加8分（满分20分）"
+        ],
+        "target_section": "业绩文件"
+      }
+    ],
+    "section_expansions": [
+      {
+        "target_section": "对项目的理解",
+        "source": "技术规范书+JS-FWTY",
+        "expansion_type": "服务内容",
+        "requirement_ids": [
+          "R011",
+          "R012"
+        ],
+        "requirements": [
+          "科改政策分析与宣贯服务内容",
+          "科改工作评估与分析服务内容",
+          "科改改革方案制定与落地服务内容"
+        ],
+        "children": [
+          {
+            "no": "（一）",
+            "title": "项目背景与政策环境",
+            "children": []
+          },
+          {
+            "no": "（二）",
+            "title": "同兴智能公司科改现状分析",
+            "children": []
+          },
+          {
+            "no": "（三）",
+            "title": "服务需求理解与工作思路",
+            "children": []
+          }
+        ]
+      },
+      {
+        "target_section": "工作规划描述",
+        "source": "技术规范书+JS-FWTY",
+        "expansion_type": "服务内容|交付成果|质量验收",
+        "requirement_ids": [
+          "R011",
+          "R012",
+          "R013",
+          "R022"
+        ],
+        "requirements": [
+          "服务内容三大部分的工作规划",
+          "4项交付成果的具体编制计划",
+          "工作进度及保证措施（8-13分）"
+        ],
+        "children": [
+          {
+            "no": "（一）",
+            "title": "服务目标与总体思路",
+            "children": []
+          },
+          {
+            "no": "（二）",
+            "title": "科改政策分析与宣贯工作计划",
+            "children": []
+          },
+          {
+            "no": "（三）",
+            "title": "科改工作评估与分析工作计划",
+            "children": []
+          },
+          {
+            "no": "（四）",
+            "title": "科改改革方案制定与落地工作计划",
+            "children": []
+          },
+          {
+            "no": "（五）",
+            "title": "交付成果清单与编制计划",
+            "children": []
+          },
+          {
+            "no": "（六）",
+            "title": "工作进度安排与保证措施",
+            "children": []
+          }
+        ]
+      },
+      {
+        "target_section": "履约能力及质量保证措施",
+        "source": "技术规范书+JS-FWTY",
+        "expansion_type": "质量验收|人员稳定",
+        "requirement_ids": [
+          "R009",
+          "R010",
+          "R013"
+        ],
+        "requirements": [
+          "项目负责人资质与经验",
+          "人员更换机制与采购方审批",
+          "质量管控与验收标准"
+        ],
+        "children": [
+          {
+            "no": "（一）",
+            "title": "项目负责人资质与经验",
+            "children": []
+          },
+          {
+            "no": "（二）",
+            "title": "质量管理体系",
+            "children": []
+          },
+          {
+            "no": "（三）",
+            "title": "人员稳定与更换机制",
+            "children": []
+          }
+        ]
+      },
+      {
+        "target_section": "服务承诺",
+        "source": "技术规范书第七条",
+        "expansion_type": "保密|知识产权",
+        "requirement_ids": [
+          "R015",
+          "R016",
+          "R017"
+        ],
+        "requirements": [
+          "保密义务承诺",
+          "知识产权归属承诺",
+          "保密条款长期有效承诺"
+        ],
+        "children": [
+          {
+            "no": "（一）",
+            "title": "保密承诺",
+            "children": []
+          },
+          {
+            "no": "（二）",
+            "title": "知识产权承诺",
+            "children": []
+          },
+          {
+            "no": "（三）",
+            "title": "服务响应承诺",
+            "children": []
+          }
+        ]
+      }
+    ],
+    "unmapped_requirements": [],
+    "bidder_outline_profile": "科改申报辅导类项目技术方案组织建议：背景诊断型（政策环境+企业现状）+ 工作计划型（分阶段任务分解）+ 保障措施型（质量/人员/进度）+ 承诺型（保密/知识产权/响应）",
+    "bidder_knowledge_base": "待查 corpus/bidder_knowledge_base.json"
+  },
+  "notes": [
+    "权重比例技:商:价=12:10:30（总和52，非100分制）；价格公式为区间平均价浮动法",
+    "本项目不接受联合体投标（招标公告3.3）",
+    "本项目不接受代理商投标（招标公告3.5）",
+    "本项目不接受投标人委托中介机构或中间人编制投标文件或代行办理投标事宜（招标公告3.6）",
+    "投标截止时间2026年6月1日9时30分（北京时间），同开标时间",
+    "投标有效期：自投标截止日起90日",
+    "最高限价100万元，投标总价超出最高限价将被否决（投标人须知前附表13）",
+    "投标保证金：100万-200万（含100万）档，金额20,000元；本包最高限价恰好100万属于此档",
+    "同兴智能标段9003001-包1专用资质要求为空（/），即无特定行业资质要求",
+    "业绩要求为“类似服务业绩”（科改申报辅导/咨询服务类），时间窗口2021.1.1至投标截止日",
+    "技术规范书明确要求配“科改行动”或“双百行动”辅导经验的项目负责人，但需求表人员要求列为/——以技术规范书为准",
+    "技术评分总分范围57-100分（非100分制），JS-FWTY各项分值为分段区间",
+    "商务评分FWSW01总分100分，其中诚信评价为扣分项（-60~0分），其余为加分项",
+    "权重比例技:商:价=12:10:30，总和52",
+    "价格公式：区间平均价浮动法；偏差区间[-15%, +10%]；c=0",
+    "必须对子包内所有条目逐一响应，不能缺项/漏项/多项，否则否决（投标人须知16）",
+    "否决情形共22条（评标办法前附表之二编号1-22），外加拒收、否定式准入、保证金、报价格式等补充否决条款共34条",
+    "M14为最高限价否决，本包限价100万元",
+    "M20虚假投标否决特别严重：所有标包均否决+今后参与国网招标也将否决",
+    "M27为子包逐一响应否决，同兴智能标段9003001-包1包含31个项目条目需逐一响应",
+    "M29/M30/M31为否定式准入条款（“不接受”类），易漏抽，已全部纳入",
+    "本项目不接收纸质投标文件，仅接受在线加密提交的电子版投标文件",
+    "投标文件通过两个渠道上传：价格文件上传电子商务平台，商务+技术文件上传甘肃电力采购云盘",
+    "商务和技术文件缺一不可，缺任一视为投标文件不全将被否决",
+    "投标工具要求电脑配置：内存大于8GB，64位操作系统",
+    "电子钥匙办理需要时间，需提前办理CA证书电子钥匙",
+    "A级要求（否决/实质性）共14条，为保命底线",
+    "B级要求（评分项）共12条，影响技术分和商务分",
+    "C级要求（合同风险）共4条，主要涉及保密、知识产权、人员更换",
+    "D级要求（格式呈现）共4条，影响评分但不致否决",
+    "所有target_section均逐字来自required_outline.sections中的标题（“对项目的理解”“工作规划描述“履约能力及质量保证措施”“服务承诺”“项目团队情况”“业绩文件”）",
+    "科改辅导服务无“设备设施配置”需求，S-T04评分项中的“设备设施配置”将以信息化工具/平台支撑替代",
+    "unmapped_requirements为空，所有要求均找到对应章节"
+  ],
+  "_meta": {
+    "merge_issues": []
+  }
+}

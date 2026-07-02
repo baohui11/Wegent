@@ -1,0 +1,109 @@
+{
+  "bidder_outline_profile": {
+    "name": "科改咨询类投标人大纲扩写画像",
+    "version": "2026-06-17",
+    "scope": "仅用于 creative_required:true 的二级、三级章节组织建议，不提供真实背书事实。",
+    "rules": [
+      "profile 只提供章节组织模式，不替代 required_outline.sections。",
+      "案例、业绩、团队、资质、专利、绩效、设备、平台、服务承诺等投标人背书型内容必须来自 bidder_knowledge_base。",
+      "知识库缺证明或状态不可用时写待填，不得编造。"
+    ],
+    "patterns": {
+      "background_pattern": {
+        "applies_to": ["项目背景", "项目理解", "政策背景"],
+        "default_children": [
+          {"no": "（一）", "title": "政策背景与改革要求"},
+          {"no": "（二）", "title": "项目现状与发展基础"},
+          {"no": "（三）", "title": "本次服务的关键任务"}
+        ],
+        "notes": "用于建立政策、企业、任务三层背景。",
+        "guidance": "项目背景按招标单位实际隶属层级自上而下递进（层级以拆标法定大纲/单位隶属链为准，依单位级别可多可少、不套固定模板；build_outline 动态推导仅在大纲未给背景子节时兜底），每层落 2–3 个具体论点（政策/要求/现状）。"
+      },
+      "diagnosis_pattern": {
+        "applies_to": ["现状诊断", "问题分析", "需求分析"],
+        "default_children": [
+          {"no": "1", "title": "资料核验与访谈调研"},
+          {"no": "2", "title": "问题识别与差距分析"},
+          {"no": "3", "title": "诊断结论与改进方向"}
+        ],
+        "notes": "强调先查实、再诊断、后归纳。"
+      },
+      "workplan_pattern": {
+        "applies_to": ["工作规划描述", "实施方案", "服务方案"],
+        "default_children": [
+          {"no": "（一）", "title": "服务目标"},
+          {"no": "（二）", "title": "服务范围与要求"},
+          {"no": "（三）", "title": "项目总体思路"},
+          {"no": "（四）", "title": "项目整体计划"},
+          {"no": "（五）", "title": "服务成果交付与验收"}
+        ],
+        "notes": "P0 默认工作方案骨架。",
+        "guidance": "总体思路下，分项服务按 准备→实施→评价 阶段组织，每阶段列具体做法与产出（步骤名依 required_outline 子项与项目实际生成，不写死域方法）；整体计划含里程碑/进度；成果交付含交付物清单与验收标准。"
+      },
+      "assurance_pattern": {
+        "applies_to": ["质量保证措施", "履约能力", "保障措施"],
+        "default_children": [
+          {"no": "（一）", "title": "组织保障"},
+          {"no": "（二）", "title": "质量控制"},
+          {"no": "（三）", "title": "进度控制"},
+          {"no": "（四）", "title": "风险控制"}
+        ],
+        "notes": "背书材料必须由 bidder_knowledge_base 提供。"
+      },
+      "commitment_pattern": {
+        "applies_to": ["服务承诺", "保密承诺", "人员稳定"],
+        "default_children": [
+          {"no": "（一）", "title": "响应承诺"},
+          {"no": "（二）", "title": "保密与合规承诺"},
+          {"no": "（三）", "title": "人员稳定与替换机制"},
+          {"no": "（四）", "title": "售后与持续服务承诺"}
+        ],
+        "notes": "承诺期限、提前期等数字必须来自招标文件或知识库。",
+        "guidance": "每条承诺落到可执行机制（机制五要素：触发条件→响应动作→责任人→时限→违约责任），不写空泛口号；同一承诺数值全文一致。"
+      },
+      "scoring_anchor_pattern": {
+        "applies_to": ["评分响应", "评分要素", "技术规范响应"],
+        "default_children": [
+          {"no": "（一）", "title": "评分要素逐项响应"},
+          {"no": "（二）", "title": "技术条款逐项响应"},
+          {"no": "（三）", "title": "证明材料索引"}
+        ],
+        "notes": "用于把评分点映射到正文位置。"
+      },
+      "case_pattern": {
+        "applies_to": ["业绩文件", "项目案例", "类似项目经验"],
+        "default_children": [
+          {"no": "（一）", "title": "类似项目筛选原则"},
+          {"no": "（二）", "title": "案例匹配说明"},
+          {"no": "（三）", "title": "成果与证明材料"}
+        ],
+        "case_selection_weights": {
+          "task_similarity": 0.30,
+          "industry_similarity": 0.25,
+          "client_relevance": 0.20,
+          "evidence_completeness": 0.15,
+          "recency": 0.10
+        },
+        "notes": "仅给出筛选权重；真实案例必须从 bidder_knowledge_base 选择。"
+      },
+      "theory_method_pattern": {
+        "applies_to": ["理论内涵", "工具方法", "方法论", "理论框架"],
+        "default_children": [
+          {"no": "（一）", "title": "理论内涵"},
+          {"no": "（二）", "title": "工具方法"}
+        ],
+        "notes": "理论+工具双拼：先界定理论框架，再给可操作工具与步骤。",
+        "guidance": "每个专题按 理论内涵 + 工具方法 成对组织；工具须可操作、能落到步骤。"
+      },
+      "keypoint_difficulty_pattern": {
+        "applies_to": ["重难点", "重点、难点", "重点和难点", "难点分析"],
+        "default_children": [
+          {"no": "（一）", "title": "项目重点分析及应对措施"},
+          {"no": "（二）", "title": "项目难点分析及应对措施"}
+        ],
+        "notes": "重点与难点分列。",
+        "guidance": "重点、难点逐条列举，每条=问题界定→对项目的影响→针对性应对措施，不堆泛泛而谈。"
+      }
+    }
+  }
+}
