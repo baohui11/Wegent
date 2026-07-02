@@ -12,11 +12,23 @@ from app.models.user import User
 from app.schemas.bid import (
     BidProjectCreate,
     BidProjectResponse,
+    CoverageResponse,
+    OutlineResponse,
+    OutlineSaveRequest,
+    PackageRequest,
     ParseTriggerRequest,
     ParseTriggerResponse,
+    SimpleStatusResponse,
     TenderDocResponse,
 )
+from app.services.bid.coverage import compute_coverage
 from app.services.bid.model_resolver import resolve_tender_model
+from app.services.bid.outline_pipeline import build_outline_for_project
+from app.services.bid.outline_service import (
+    read_outline,
+    write_bid_config,
+    write_outline,
+)
 from app.services.bid.parse_pipeline import BidPipelineError, parse_tender
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.workspace import BidWorkspace
@@ -129,3 +141,83 @@ def get_file(
             ],
         }
     return {"path": path, "content": target.read_text(encoding="utf-8")}
+
+
+def _coverage(ws) -> CoverageResponse:
+    outline = read_outline(ws)
+    tender = ws.read_json("workspace/tender.json")
+    return CoverageResponse(**compute_coverage(outline, tender))
+
+
+@router.post("/projects/{project_id}/package", response_model=SimpleStatusResponse)
+def declare_package(
+    project_id: int,
+    body: PackageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    write_bid_config(BidWorkspace(project.workspace_ref), body.package)
+    return SimpleStatusResponse(status="declared")
+
+
+@router.post("/projects/{project_id}/outline", response_model=OutlineResponse)
+async def build_outline_endpoint(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/tender.json").exists():
+        raise HTTPException(status_code=409, detail="tender not parsed yet")
+    try:
+        await build_outline_for_project(ws)
+    except BidPipelineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    BidProjectService.set_phase_done(db, project=project, phase=2)
+    return OutlineResponse(outline=read_outline(ws), coverage=_coverage(ws))
+
+
+@router.get("/projects/{project_id}/outline", response_model=OutlineResponse)
+def get_outline(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        outline = read_outline(ws)
+    except FileNotFoundError:
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    return OutlineResponse(outline=outline, coverage=_coverage(ws))
+
+
+@router.put("/projects/{project_id}/outline", response_model=OutlineResponse)
+def save_outline(
+    project_id: int,
+    body: OutlineSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        write_outline(ws, body.outline)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return OutlineResponse(outline=read_outline(ws), coverage=_coverage(ws))
+
+
+@router.get("/projects/{project_id}/coverage", response_model=CoverageResponse)
+def get_coverage(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/outline.json").exists():
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    return _coverage(ws)

@@ -11,6 +11,7 @@ class BidProjectCreate(BaseModel):
 class BidProjectResponse(BaseModel):
     id: int
     title: str
+    workspace_ref: str
     current_phase: int
     max_phase_reached: int
     status: str
@@ -30,3 +31,27 @@ class ParseTriggerResponse(BaseModel):
 
 class TenderDocResponse(BaseModel):
     tender: dict
+
+
+class CoverageResponse(BaseModel):
+    total: int
+    covered: int
+    uncovered_scoring: list[str]
+    uncovered_clauses: list[str]
+
+
+class OutlineResponse(BaseModel):
+    outline: dict
+    coverage: CoverageResponse
+
+
+class OutlineSaveRequest(BaseModel):
+    outline: dict
+
+
+class PackageRequest(BaseModel):
+    package: str
+
+
+class SimpleStatusResponse(BaseModel):
+    status: str
