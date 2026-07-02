@@ -86,7 +86,8 @@
     "settings": "Settings",
     "docs": "Docs",
     "feedback": "Feedback",
-    "admin": "Admin"
+    "admin": "Admin",
+    "bid_workbench": "Bid Workbench"
   },
   "sidebar": {
     "recent_visits": "Recent Visits",
