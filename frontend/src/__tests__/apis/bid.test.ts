@@ -109,4 +109,25 @@ describe('bidApis', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/sections/s1')
     expect(r.content).toBe('正文')
   })
+
+  it('redraftSection posts instruction', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({ status: 'drafting' })
+    await bidApis.redraftSection(5, 's1', '更简洁')
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/sections/s1/redraft', {
+      instruction: '更简洁',
+    })
+  })
+
+  it('acceptSection posts', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({ status: 'accepted' })
+    await bidApis.acceptSection(5, 's1')
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/sections/s1/accept')
+  })
+
+  it('getReviewStatus gets accepted map', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValue({ accepted: { s1: true } })
+    const r = await bidApis.getReviewStatus(5)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/review/status')
+    expect(r.accepted.s1).toBe(true)
+  })
 })

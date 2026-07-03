@@ -56,5 +56,14 @@
     "status_done": "Done",
     "status_error": "Failed"
   },
+  "phase5": {
+    "title": "Review",
+    "enter": "Enter review",
+    "pick_section": "Click a section on the left to view/review its content",
+    "instruction_placeholder": "Enter a revision instruction, e.g.: make it more concise, add XX performance data…",
+    "redraft": "Redraft",
+    "accept": "Accept",
+    "complete": "Finish review"
+  },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }

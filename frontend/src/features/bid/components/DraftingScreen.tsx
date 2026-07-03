@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidApis, type DraftStatus } from '@/apis/bid'
 
-export function DraftingScreen({ projectId }: { projectId: number }) {
+export function DraftingScreen({ projectId, onNext }: { projectId: number; onNext?: () => void }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -50,6 +50,16 @@ export function DraftingScreen({ projectId }: { projectId: number }) {
           <div className="mb-2 text-sm text-success" data-testid="bid-draft-finished">
             {t('phase4.finished')}
           </div>
+        )}
+        {status.finished && onNext && (
+          <button
+            type="button"
+            onClick={onNext}
+            data-testid="bid-drafting-next-button"
+            className="mb-2 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+          >
+            {t('phase5.enter')}
+          </button>
         )}
         <ul className="flex flex-col gap-1 text-sm">
           {entries.map(([id, s]) => (

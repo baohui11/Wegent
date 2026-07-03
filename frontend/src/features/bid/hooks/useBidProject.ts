@@ -13,6 +13,8 @@ type Phase =
   | 'materials'
   | 'materials_done'
   | 'drafting'
+  | 'review'
+  | 'review_done'
   | 'error'
 
 export function useBidProject() {
@@ -89,6 +91,14 @@ export function useBidProject() {
     setPhase('drafting')
   }, [projectId])
 
+  const enterReview = useCallback(() => setPhase('review'), [])
+
+  const completeReview = useCallback(async () => {
+    if (projectId == null) return
+    await bidApis.completeReview(projectId)
+    setPhase('review_done')
+  }, [projectId])
+
   return {
     phase,
     projectId,
@@ -103,5 +113,7 @@ export function useBidProject() {
     enterMaterials,
     completeMaterials,
     startDrafting,
+    enterReview,
+    completeReview,
   }
 }
