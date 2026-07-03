@@ -164,3 +164,88 @@ def test_package_declaration(test_client, test_token, tmp_path, monkeypatch):
     ]
     ws = BidWorkspace(ws_ref)
     assert ws.read_json("corpus/bid_config.json")["package"] == "包件二"
+
+
+def test_materials_kb_quals_attachments_and_complete(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "M"}, headers=h).json()[
+        "id"
+    ]
+
+    # knowledge base put/get
+    kb = {"knowledge_base": {"bidder_knowledge_base": {"cases": [{"name": "案例甲"}]}}}
+    assert (
+        test_client.put(
+            f"/api/bid/projects/{pid}/materials/knowledge-base", json=kb, headers=h
+        ).status_code
+        == 200
+    )
+    got = test_client.get(
+        f"/api/bid/projects/{pid}/materials/knowledge-base", headers=h
+    ).json()
+    assert (
+        got["knowledge_base"]["bidder_knowledge_base"]["cases"][0]["name"] == "案例甲"
+    )
+
+    # bad shape -> 400
+    bad = {"knowledge_base": {"nope": 1}}
+    assert (
+        test_client.put(
+            f"/api/bid/projects/{pid}/materials/knowledge-base", json=bad, headers=h
+        ).status_code
+        == 400
+    )
+
+    # qualifications
+    q = {
+        "qualifications": {"company": "好大一家", "items": {"Q1": {"title": "ISO9001"}}}
+    }
+    assert (
+        test_client.put(
+            f"/api/bid/projects/{pid}/materials/qualifications", json=q, headers=h
+        ).status_code
+        == 200
+    )
+
+    # attachment upload + list
+    r = test_client.post(
+        f"/api/bid/projects/{pid}/materials/attachments",
+        files={"file": ("iso9001.pdf", b"PDFDATA", "application/pdf")},
+        headers=h,
+    )
+    assert r.status_code == 200 and r.json() == {"name": "iso9001.pdf", "size": 7}
+    lst = test_client.get(
+        f"/api/bid/projects/{pid}/materials/attachments", headers=h
+    ).json()
+    assert lst["items"] == [{"name": "iso9001.pdf", "size": 7}]
+
+    # complete -> phase advances
+    assert (
+        test_client.post(
+            f"/api/bid/projects/{pid}/materials/complete", headers=h
+        ).json()["status"]
+        == "materials_done"
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
+        == 4
+    )
+
+
+def test_materials_kb_missing_returns_409(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "N"}, headers=h).json()[
+        "id"
+    ]
+    assert (
+        test_client.get(
+            f"/api/bid/projects/{pid}/materials/knowledge-base", headers=h
+        ).status_code
+        == 409
+    )

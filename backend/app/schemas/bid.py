@@ -55,3 +55,28 @@ class PackageRequest(BaseModel):
 
 class SimpleStatusResponse(BaseModel):
     status: str
+
+
+class KnowledgeBaseResponse(BaseModel):
+    knowledge_base: dict
+
+
+class KnowledgeBaseSaveRequest(BaseModel):
+    knowledge_base: dict
+
+
+class QualificationsResponse(BaseModel):
+    qualifications: dict
+
+
+class QualificationsSaveRequest(BaseModel):
+    qualifications: dict
+
+
+class AttachmentInfo(BaseModel):
+    name: str
+    size: int
+
+
+class AttachmentListResponse(BaseModel):
+    items: list[AttachmentInfo]
