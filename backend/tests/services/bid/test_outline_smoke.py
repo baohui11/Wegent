@@ -29,6 +29,19 @@ def test_normalize_qualifications_coerces_string_items():
     assert normalize_qualifications(None) is None
 
 
+def test_normalize_qualifications_flattens_dict_of_lists():
+    quals = {
+        "basic_qualifications": ["独立法人", {"desc": "营业执照"}],
+        "specific_qualifications": ["ISO9001"],
+        "joint_venture_allowed": None,
+    }
+    out = normalize_qualifications(quals)
+    assert {"desc": "独立法人"} in out
+    assert {"desc": "营业执照"} in out
+    assert {"desc": "ISO9001"} in out
+    assert all(isinstance(x, dict) for x in out)
+
+
 def test_normalize_required_outline_handles_list_and_scalar():
     assert normalize_required_outline(["A", {"title": "B"}]) == [
         {"title": "A"},

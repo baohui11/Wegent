@@ -46,13 +46,30 @@ def normalize_scoring(tender: dict) -> list:
 
 
 def normalize_qualifications(quals):
-    """Coerce tender.qualifications list items into dicts.
+    """Coerce tender.qualifications into a flat list of dicts.
 
-    ``qualification_ids_matching`` calls ``qual.get("type"/"desc"/"evidence")`` on
-    each entry, but qwen sometimes emits qualifications as bare strings.
+    ``qualification_ids_matching`` iterates ``tender["qualifications"]`` and calls
+    ``qual.get("type"/"desc"/"evidence")`` on each entry. qwen variously emits it
+    as a list of bare strings, or a dict-of-lists
+    (``{"basic_qualifications": [...], ...}``) whose iteration yields the string
+    keys. Flatten the dict form and wrap string items as ``{"desc": str}``.
     """
+
+    def coerce(items):
+        return [
+            {"desc": q} if isinstance(q, str) else q
+            for q in items
+            if isinstance(q, (str, dict))
+        ]
+
+    if isinstance(quals, dict):
+        out = []
+        for v in quals.values():
+            if isinstance(v, list):
+                out += coerce(v)
+        return out
     if isinstance(quals, list):
-        return [{"desc": q} if isinstance(q, str) else q for q in quals]
+        return coerce(quals)
     return quals
 
 
