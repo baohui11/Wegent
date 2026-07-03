@@ -80,3 +80,24 @@ class AttachmentInfo(BaseModel):
 
 class AttachmentListResponse(BaseModel):
     items: list[AttachmentInfo]
+
+
+class DraftStatusResponse(BaseModel):
+    total: int
+    sections: dict
+    finished: bool
+    error: str | None = None
+
+
+class SectionStatus(BaseModel):
+    id: str
+    status: str
+
+
+class SectionListResponse(BaseModel):
+    items: list[SectionStatus]
+
+
+class SectionContentResponse(BaseModel):
+    id: str
+    content: str
