@@ -8,6 +8,10 @@ from pathlib import Path
 import anyio
 
 from app.services.bid.parse_pipeline import BidPipelineError
+from app.services.bid.tender_normalize import (
+    normalize_required_outline,
+    normalize_scoring,
+)
 from app.services.bid.workspace import BidWorkspace
 
 _SW = Path(__file__).parent / "vendor" / "skills" / "bid-section-writer"
@@ -19,30 +23,17 @@ _TENDER = "workspace/tender.json"
 _TENDER_BUILD = "workspace/_tender_build.json"
 
 
-def _normalize_required_outline(ro):
-    """Coerce LLM-produced required_outline into the shape build_outline expects.
-
-    build_front_sections indexes ``item.get("title")`` on each entry, but qwen
-    sometimes emits the list items (e.g. front_matter) as bare strings, crashing
-    the deterministic build with AttributeError. Wrap string items as
-    ``{"title": str}`` so the build cannot fail on partial LLM output.
-    """
-
-    def coerce_list(items):
-        return [{"title": x} if isinstance(x, str) else x for x in items]
-
-    if isinstance(ro, dict):
-        return {k: coerce_list(v) if isinstance(v, list) else v for k, v in ro.items()}
-    if isinstance(ro, list):
-        return coerce_list(ro)
-    return ro
-
-
 def _prepare_tender(ws: BidWorkspace) -> str:
-    """Write a build-only tender copy with normalized required_outline; return path."""
+    """Write a build-only tender copy with normalized scoring + required_outline.
+
+    build_outline hard-indexes scoring ``s["id"]`` and front_matter
+    ``item.get("title")``; normalize both so partial LLM output cannot crash the
+    deterministic build. The canonical tender.json is never mutated.
+    """
     tender = dict(ws.read_json(_TENDER))
+    tender["scoring"] = normalize_scoring(tender)
     if "required_outline" in tender:
-        tender["required_outline"] = _normalize_required_outline(
+        tender["required_outline"] = normalize_required_outline(
             tender["required_outline"]
         )
     ws.write_json(_TENDER_BUILD, tender)

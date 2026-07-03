@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from app.services.bid import audit_service as audit
+from app.services.bid.tender_normalize import normalize_scoring
 from app.services.bid.workspace import BidWorkspace
 
 
@@ -55,7 +56,7 @@ def test_normalize_scoring_unwraps_dict_and_fills_missing_keys():
             ],
         }
     }
-    out = audit._normalize_scoring(tender)
+    out = normalize_scoring(tender)
     assert isinstance(out, list) and len(out) == 2
     assert out[0]["id"] == "T1"
     assert out[0]["weight"] == 20
@@ -66,7 +67,7 @@ def test_normalize_scoring_unwraps_dict_and_fills_missing_keys():
 
 
 def test_normalize_scoring_fills_id_and_defaults_when_absent():
-    out = audit._normalize_scoring({"scoring": [{"score": 10}]})
+    out = normalize_scoring({"scoring": [{"score": 10}]})
     assert out[0]["id"] == "S1"
     assert out[0]["weight"] == 10
     assert out[0]["category"] == "技术"
@@ -74,9 +75,9 @@ def test_normalize_scoring_fills_id_and_defaults_when_absent():
 
 
 def test_normalize_scoring_handles_missing_or_nonlist():
-    assert audit._normalize_scoring({}) == []
-    assert audit._normalize_scoring({"scoring": None}) == []
-    assert audit._normalize_scoring({"scoring": ["oops", 3]}) == []
+    assert normalize_scoring({}) == []
+    assert normalize_scoring({"scoring": None}) == []
+    assert normalize_scoring({"scoring": ["oops", 3]}) == []
 
 
 def test_run_audit_survives_dict_form_scoring(tmp_path):
