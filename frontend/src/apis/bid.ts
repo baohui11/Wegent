@@ -189,6 +189,8 @@ export const bidApis = {
     apiClient.post<AuditReport>(`/bid/projects/${id}/audit`),
   getAuditReport: (id: number): Promise<AuditReport> =>
     apiClient.get<AuditReport>(`/bid/projects/${id}/audit/report`),
+  verifyAudit: (id: number): Promise<AuditReport> =>
+    apiClient.post<AuditReport>(`/bid/projects/${id}/audit/verify`),
   finalize: (id: number): Promise<{ status: string }> =>
     apiClient.post<{ status: string }>(`/bid/projects/${id}/finalize`),
   downloadBid: async (id: number): Promise<void> => {

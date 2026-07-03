@@ -82,7 +82,9 @@
     "done": "投标文件已装订",
     "download": "下载 投标文件.docx",
     "downloading": "下载中…",
-    "back_to_audit": "返回体检"
+    "back_to_audit": "返回体检",
+    "verify": "深度核验（接地保真）",
+    "verifying": "核验中…"
   },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }

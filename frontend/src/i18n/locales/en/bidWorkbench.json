@@ -82,7 +82,9 @@
     "done": "Bid document assembled",
     "download": "Download 投标文件.docx",
     "downloading": "Downloading…",
-    "back_to_audit": "Back to health check"
+    "back_to_audit": "Back to health check",
+    "verify": "Deep verify (fidelity)",
+    "verifying": "Verifying…"
   },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }
