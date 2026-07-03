@@ -33,3 +33,23 @@ it('shows the error screen when parse fails, with a retry button', async () => {
   await waitFor(() => expect(screen.getByTestId('bid-error')).toBeInTheDocument())
   expect(screen.getByTestId('bid-retry-button')).toBeInTheDocument()
 })
+
+it('builds outline from tender-ready and shows editor', async () => {
+  ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [], volumes: [] },
+    coverage: {
+      total: 0,
+      covered: 0,
+      uncovered_scoring: [],
+      uncovered_clauses: [],
+    },
+  })
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  await screen.findByTestId('bid-tender-result')
+  fireEvent.click(screen.getByTestId('bid-build-outline-button'))
+  await screen.findByTestId('bid-outline-editor')
+})
