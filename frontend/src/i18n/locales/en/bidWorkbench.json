@@ -6,6 +6,32 @@
     "use_sample": "Use sample tender · Smart Park project",
     "package_label": "Package (required for multi-package, leave blank for single)"
   },
+  "projects": {
+    "title": "My Bid Projects",
+    "new": "New Bid",
+    "empty": "No bid projects yet — click \"New Bid\" to start",
+    "loading": "Loading…",
+    "back": "Back to projects",
+    "created_at": "Created",
+    "load_failed": "Failed to load projects",
+    "retry": "Retry",
+    "phase": {
+      "1": "Parse",
+      "2": "Outline",
+      "3": "Materials",
+      "4": "Draft",
+      "5": "Review",
+      "6": "Assemble"
+    },
+    "status": {
+      "created": "Pending",
+      "parsing": "Parsing",
+      "parsed": "Parsed",
+      "drafting": "Drafting",
+      "parse_failed": "Failed",
+      "done": "Done"
+    }
+  },
   "parsing": { "title": "Tender Sleuth is parsing the document…" },
   "phase1": {
     "title": "Tender Analysis · Scoring & Red Lines",

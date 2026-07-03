@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState } from 'react'
-import { bidApis, type CoverageReport, type OutlineDoc, type TenderDoc } from '@/apis/bid'
+import {
+  bidApis,
+  type BidProject,
+  type CoverageReport,
+  type OutlineDoc,
+  type TenderDoc,
+} from '@/apis/bid'
 
 type Phase =
   | 'idle'
+  | 'import'
   | 'creating'
   | 'parsing'
   | 'ready'
@@ -28,34 +35,120 @@ export function useBidProject() {
   const [coverage, setCoverage] = useState<CoverageReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const startFromText = useCallback(async (text: string, pkg?: string) => {
-    setError(null)
-    try {
-      setPhase('creating')
-      const project = await bidApis.createProject('标书项目')
-      setProjectId(project.id)
-      if (pkg) await bidApis.declarePackage(project.id, pkg)
-      setPhase('parsing')
-      await bidApis.parse(project.id, text)
-      // 拆标 is backgrounded; poll project status until parsed or failed.
-      let parsed = false
-      for (let i = 0; i < 240 && !parsed; i++) {
-        const p = await bidApis.getProject(project.id)
-        if (p.status === 'parse_failed') throw new Error('拆标失败，请检查招标文件后重试')
-        if (p.status === 'parsed' || p.current_phase >= 2) {
-          parsed = true
-          break
-        }
-        await new Promise(r => setTimeout(r, 3000))
+  const pollUntilParsed = useCallback(async (id: number) => {
+    for (let i = 0; i < 240; i++) {
+      const p = await bidApis.getProject(id)
+      if (p.status === 'parse_failed') {
+        throw new Error('拆标失败，请检查招标文件后重试')
       }
-      if (!parsed) throw new Error('拆标超时，请稍后重试')
-      const res = await bidApis.getTender(project.id)
-      setTender(res.tender)
-      setPhase('ready')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'unknown')
-      setPhase('error')
+      if (p.status === 'parsed' || p.current_phase >= 2) return
+      await new Promise(r => setTimeout(r, 3000))
     }
+    throw new Error('拆标超时，请稍后重试')
+  }, [])
+
+  const parseExisting = useCallback(
+    async (id: number, text: string, pkg?: string) => {
+      setError(null)
+      try {
+        if (pkg) await bidApis.declarePackage(id, pkg)
+        setPhase('parsing')
+        await bidApis.parse(id, text)
+        await pollUntilParsed(id)
+        const res = await bidApis.getTender(id)
+        setTender(res.tender)
+        setPhase('ready')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'unknown')
+        setPhase('error')
+      }
+    },
+    [pollUntilParsed]
+  )
+
+  const open = useCallback(
+    async (project: BidProject) => {
+      setError(null)
+      setProjectId(project.id)
+      const cp = project.current_phase
+      const st = project.status
+      try {
+        if (cp <= 1) {
+          if (st === 'parsing') {
+            setPhase('parsing')
+            await pollUntilParsed(project.id)
+            const res = await bidApis.getTender(project.id)
+            setTender(res.tender)
+            setPhase('ready')
+            return
+          }
+          setPhase('import')
+          return
+        }
+        if (cp === 2) {
+          const res = await bidApis.getTender(project.id)
+          setTender(res.tender)
+          try {
+            const o = await bidApis.getOutline(project.id)
+            setOutline(o.outline)
+            setCoverage(o.coverage)
+            setPhase('outline_ready')
+          } catch {
+            setPhase('ready')
+          }
+          return
+        }
+        if (cp === 3) {
+          setPhase('materials')
+          return
+        }
+        if (cp === 4) {
+          setPhase(st === 'drafting' ? 'drafting' : 'materials_done')
+          return
+        }
+        if (cp === 5) {
+          setPhase('review')
+          return
+        }
+        if (cp === 6) {
+          setPhase('audit')
+          return
+        }
+        setPhase('done')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'unknown')
+        setPhase('error')
+      }
+    },
+    [pollUntilParsed]
+  )
+
+  const startFromText = useCallback(
+    async (text: string, pkg?: string) => {
+      setError(null)
+      let id: number
+      try {
+        setPhase('creating')
+        const project = await bidApis.createProject('标书项目')
+        setProjectId(project.id)
+        id = project.id
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'unknown')
+        setPhase('error')
+        return
+      }
+      await parseExisting(id, text, pkg)
+    },
+    [parseExisting]
+  )
+
+  const startNew = useCallback(() => {
+    setProjectId(null)
+    setTender(null)
+    setOutline(null)
+    setCoverage(null)
+    setError(null)
+    setPhase('import')
   }, [])
 
   const buildOutline = useCallback(async () => {
@@ -137,6 +230,9 @@ export function useBidProject() {
     coverage,
     error,
     startFromText,
+    parseExisting,
+    startNew,
+    open,
     buildOutline,
     saveOutline,
     reset,
