@@ -12,6 +12,7 @@ type Phase =
   | 'outline_ready'
   | 'materials'
   | 'materials_done'
+  | 'drafting'
   | 'error'
 
 export function useBidProject() {
@@ -82,6 +83,12 @@ export function useBidProject() {
     setPhase('materials_done')
   }, [projectId])
 
+  const startDrafting = useCallback(async () => {
+    if (projectId == null) return
+    await bidApis.startDraft(projectId)
+    setPhase('drafting')
+  }, [projectId])
+
   return {
     phase,
     projectId,
@@ -95,5 +102,6 @@ export function useBidProject() {
     reset,
     enterMaterials,
     completeMaterials,
+    startDrafting,
   }
 }

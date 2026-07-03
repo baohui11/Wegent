@@ -84,4 +84,29 @@ describe('bidApis', () => {
     expect(init.method).toBe('POST')
     expect(init.body).toBeInstanceOf(FormData)
   })
+
+  it('startDraft posts to /draft', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({ status: 'drafting' })
+    await bidApis.startDraft(5)
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/draft')
+  })
+
+  it('getDraftStatus gets status', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValue({
+      total: 2,
+      sections: { s1: 'done' },
+      finished: false,
+      error: null,
+    })
+    const s = await bidApis.getDraftStatus(5)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/draft/status')
+    expect(s.total).toBe(2)
+  })
+
+  it('getSectionContent gets a section', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValue({ id: 's1', content: '正文' })
+    const r = await bidApis.getSectionContent(5, 's1')
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/sections/s1')
+    expect(r.content).toBe('正文')
+  })
 })

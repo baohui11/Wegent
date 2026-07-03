@@ -75,6 +75,18 @@ export interface AttachmentInfo {
   size: number
 }
 
+export interface DraftStatus {
+  total: number
+  sections: Record<string, string>
+  finished: boolean
+  error: string | null
+}
+
+export interface DraftSection {
+  id: string
+  status: string
+}
+
 export const bidApis = {
   createProject: (title: string): Promise<BidProject> =>
     apiClient.post<BidProject>('/bid/projects', { title }),
@@ -126,4 +138,12 @@ export const bidApis = {
   },
   completeMaterials: (id: number): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/materials/complete`),
+  startDraft: (id: number): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/draft`),
+  getDraftStatus: (id: number): Promise<DraftStatus> =>
+    apiClient.get(`/bid/projects/${id}/draft/status`),
+  getDraftSections: (id: number): Promise<{ items: DraftSection[] }> =>
+    apiClient.get(`/bid/projects/${id}/sections`),
+  getSectionContent: (id: number, sectionId: string): Promise<{ id: string; content: string }> =>
+    apiClient.get(`/bid/projects/${id}/sections/${sectionId}`),
 }

@@ -45,5 +45,16 @@
     "complete": "Start drafting",
     "json_error": "JSON format error"
   },
+  "phase4": {
+    "title": "Drafting",
+    "start": "Start drafting",
+    "progress": "Completed",
+    "finished": "Drafting complete",
+    "pick_section": "Click a completed section on the left to view its content",
+    "status_pending": "Pending",
+    "status_drafting": "Drafting",
+    "status_done": "Done",
+    "status_error": "Failed"
+  },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }
