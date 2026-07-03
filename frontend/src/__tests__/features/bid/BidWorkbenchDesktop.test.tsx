@@ -158,3 +158,58 @@ it('enters review from finished drafting', async () => {
   fireEvent.click(screen.getByTestId('bid-drafting-next-button'))
   await screen.findByTestId('bid-review-screen')
 })
+
+it('goes review_done -> audit -> finalize -> done export', async () => {
+  ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 3 })
+  ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [], volumes: [] },
+    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
+  })
+  ;(bidApis.completeMaterials as jest.Mock).mockResolvedValue({ status: 'materials_done' })
+  ;(bidApis.startDraft as jest.Mock).mockResolvedValue({ status: 'drafting' })
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    sections: { s1: 'done' },
+    finished: true,
+    error: null,
+  })
+  ;(bidApis.getDraftSections as jest.Mock).mockResolvedValue({
+    items: [{ id: 's1', status: 'done' }],
+  })
+  ;(bidApis.getReviewStatus as jest.Mock).mockResolvedValue({ accepted: {} })
+  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({ id: 's1', content: '正文' })
+  ;(bidApis.completeReview as jest.Mock).mockResolvedValue({ status: 'review_done' })
+  ;(bidApis.runAudit as jest.Mock).mockResolvedValue({
+    verdict: 'PASS',
+    summary: { total_issues: 0, veto_issues: 0, high_issues: 0, scoring_coverage: '1/1' },
+    checks: [{ check: 'coverage', ok: true, issues: [] }],
+  })
+  ;(bidApis.finalize as jest.Mock).mockResolvedValue({ status: 'finalized' })
+  ;(bidApis.downloadBid as jest.Mock).mockResolvedValue(undefined)
+
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  await screen.findByTestId('bid-tender-result')
+  fireEvent.click(screen.getByTestId('bid-build-outline-button'))
+  await screen.findByTestId('bid-outline-editor')
+  fireEvent.click(screen.getByTestId('outline-next-button'))
+  await screen.findByTestId('bid-materials-screen')
+  fireEvent.click(screen.getByTestId('bid-materials-complete-button'))
+  await screen.findByTestId('bid-materials-done')
+  fireEvent.click(screen.getByTestId('bid-start-drafting-button'))
+  await screen.findByTestId('bid-drafting-screen')
+  await screen.findByTestId('bid-drafting-next-button')
+  fireEvent.click(screen.getByTestId('bid-drafting-next-button'))
+  await screen.findByTestId('bid-review-screen')
+  fireEvent.click(screen.getByTestId('bid-review-complete-button'))
+  await screen.findByTestId('bid-review-done')
+
+  fireEvent.click(screen.getByTestId('bid-enter-audit-button'))
+  await screen.findByTestId('bid-audit-screen')
+  fireEvent.click(screen.getByTestId('bid-audit-finalize-button'))
+  await screen.findByTestId('bid-export-screen')
+  fireEvent.click(screen.getByTestId('bid-download-button'))
+  await waitFor(() => expect(bidApis.downloadBid).toHaveBeenCalledWith(3))
+})

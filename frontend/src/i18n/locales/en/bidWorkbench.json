@@ -65,5 +65,24 @@
     "accept": "Accept",
     "complete": "Finish review"
   },
+  "phase6": {
+    "enter": "Health check & assemble",
+    "running": "Running deterministic health check…",
+    "verdict_PASS": "PASS",
+    "verdict_NEED_FIX": "Needs fixes",
+    "verdict_NEED_FIX_VETO": "Disqualification risk",
+    "coverage": "Scoring coverage",
+    "veto_issues": "Veto",
+    "high_issues": "High",
+    "veto_warning": "Disqualification-level issues found — fix them in review before assembling.",
+    "rerun": "Re-run check",
+    "rework": "Back to review",
+    "finalize": "Assemble bid document",
+    "finalizing": "Assembling the Word document…",
+    "done": "Bid document assembled",
+    "download": "Download 投标文件.docx",
+    "downloading": "Downloading…",
+    "back_to_audit": "Back to health check"
+  },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }

@@ -65,5 +65,24 @@
     "accept": "采纳",
     "complete": "完成审阅"
   },
+  "phase6": {
+    "enter": "体检并装订",
+    "running": "正在跑确定性体检…",
+    "verdict_PASS": "通过",
+    "verdict_NEED_FIX": "需修改",
+    "verdict_NEED_FIX_VETO": "废标风险",
+    "coverage": "评分覆盖",
+    "veto_issues": "废标级",
+    "high_issues": "高危",
+    "veto_warning": "存在废标级问题——请先返回审阅修改再装订。",
+    "rerun": "重新体检",
+    "rework": "返回审阅修改",
+    "finalize": "装订生成投标文件",
+    "finalizing": "正在装订 Word 文档…",
+    "done": "投标文件已装订",
+    "download": "下载 投标文件.docx",
+    "downloading": "下载中…",
+    "back_to_audit": "返回体检"
+  },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }
