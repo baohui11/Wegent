@@ -72,3 +72,29 @@ def test_mark_done_sets_status(test_db):
     p = BidProjectService.create(test_db, user_id=9, title="R", workspace_ref="w-r")
     BidProjectService.mark_done(test_db, project=p)
     assert p.status == "done"
+
+
+def test_complete_phase1_derives_title_from_tender(test_db):
+    p = BidProjectService.create(
+        test_db, user_id=9, title="标书项目", workspace_ref="w-t"
+    )
+    BidProjectService.complete_phase1(test_db, project=p, title="XX市政务数据中心项目")
+    assert p.title == "XX市政务数据中心项目" and p.current_phase == 2
+
+
+def test_complete_phase1_keeps_title_when_name_empty(test_db):
+    p = BidProjectService.create(
+        test_db, user_id=9, title="标书项目", workspace_ref="w-t2"
+    )
+    BidProjectService.complete_phase1(test_db, project=p, title=None)
+    assert p.title == "标书项目"
+
+
+def test_delete_removes_row_and_enforces_owner(test_db):
+    p = BidProjectService.create(test_db, user_id=9, title="D", workspace_ref="w-d")
+    assert (
+        BidProjectService.delete(test_db, user_id=8, project_id=p.id) is False
+    )  # wrong owner
+    assert BidProjectService.get(test_db, user_id=9, project_id=p.id) is not None
+    assert BidProjectService.delete(test_db, user_id=9, project_id=p.id) is True
+    assert BidProjectService.get(test_db, user_id=9, project_id=p.id) is None

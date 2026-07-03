@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Bid workbench API — phase 1 (project + 拆标 + files)."""
 
+import shutil
 import uuid
 
 import anyio
@@ -95,6 +96,22 @@ def get_project(
     db: Session = Depends(get_db),
 ):
     return _require(db, current_user, project_id)
+
+
+@router.delete("/projects/{project_id}", response_model=SimpleStatusResponse)
+def delete_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    # Best-effort remove the workspace blackboard, then the ledger row.
+    try:
+        shutil.rmtree(BidWorkspace(project.workspace_ref).dir(), ignore_errors=True)
+    except Exception:
+        pass
+    BidProjectService.delete(db, user_id=current_user.id, project_id=project_id)
+    return SimpleStatusResponse(status="deleted")
 
 
 @router.post("/projects/{project_id}/parse", response_model=ParseTriggerResponse)

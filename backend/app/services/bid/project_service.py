@@ -80,15 +80,34 @@ class BidProjectService:
         return updated == 1
 
     @staticmethod
-    def complete_phase1(db: Session, *, project: BidProject) -> None:
+    def complete_phase1(
+        db: Session, *, project: BidProject, title: str | None = None
+    ) -> None:
         ps = dict(project.phase_status or {})
         ps["phase1"] = "done"
         project.phase_status = ps
         project.current_phase = 2
         project.max_phase_reached = max(project.max_phase_reached, 2)
         project.status = "parsed"
+        # Derive the project title from the parsed tender's project name when the
+        # LLM extracted one; keep the default otherwise.
+        if title:
+            project.title = title[:255]
         db.commit()
         db.refresh(project)
+
+    @staticmethod
+    def delete(db: Session, *, user_id: int, project_id: int) -> bool:
+        row = (
+            db.query(BidProject)
+            .filter(BidProject.id == project_id, BidProject.user_id == user_id)
+            .first()
+        )
+        if row is None:
+            return False
+        db.delete(row)
+        db.commit()
+        return True
 
     @staticmethod
     def set_phase_done(db: Session, *, project: BidProject, phase: int) -> None:

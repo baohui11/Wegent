@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ProjectListScreen } from '@/features/bid/components/ProjectListScreen'
 import { bidApis, type BidProject } from '@/apis/bid'
 
@@ -28,6 +28,29 @@ it('renders projects and opens one on click', async () => {
   await screen.findByTestId('bid-project-card-1')
   fireEvent.click(screen.getByTestId('bid-project-card-2'))
   expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }))
+})
+
+it('deletes a project after confirm and removes its card', async () => {
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([proj({ id: 1 }), proj({ id: 2 })])
+  ;(bidApis.deleteProject as jest.Mock).mockResolvedValue({ status: 'deleted' })
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+  render(<ProjectListScreen onOpen={jest.fn()} onNew={jest.fn()} />)
+  await screen.findByTestId('bid-project-card-2')
+  fireEvent.click(screen.getByTestId('bid-project-delete-2'))
+  await waitFor(() => expect(bidApis.deleteProject).toHaveBeenCalledWith(2))
+  await waitFor(() => expect(screen.queryByTestId('bid-project-card-2')).not.toBeInTheDocument())
+  expect(screen.getByTestId('bid-project-card-1')).toBeInTheDocument()
+  confirmSpy.mockRestore()
+})
+
+it('does not delete when confirm is cancelled', async () => {
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([proj({ id: 1 })])
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false)
+  render(<ProjectListScreen onOpen={jest.fn()} onNew={jest.fn()} />)
+  await screen.findByTestId('bid-project-card-1')
+  fireEvent.click(screen.getByTestId('bid-project-delete-1'))
+  expect(bidApis.deleteProject).not.toHaveBeenCalled()
+  confirmSpy.mockRestore()
 })
 
 it('shows empty state when there are no projects', async () => {

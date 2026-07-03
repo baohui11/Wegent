@@ -44,6 +44,12 @@ export function ProjectListScreen({
     load()
   }, [load])
 
+  const remove = async (p: BidProject) => {
+    if (!window.confirm(t('projects.delete_confirm', { title: p.title }))) return
+    await bidApis.deleteProject(p.id)
+    setItems(prev => (prev ? prev.filter(x => x.id !== p.id) : prev))
+  }
+
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col p-6" data-testid="bid-project-list">
       <div className="mb-6 flex items-center justify-between">
@@ -93,12 +99,12 @@ export function ProjectListScreen({
       {!failed && items && items.length > 0 && (
         <ul className="flex flex-col gap-2 overflow-auto">
           {items.map(p => (
-            <li key={p.id}>
+            <li key={p.id} className="group flex items-stretch gap-2">
               <button
                 type="button"
                 onClick={() => onOpen(p)}
                 data-testid={`bid-project-card-${p.id}`}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left"
+                className="flex flex-1 items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{p.title}</div>
@@ -110,6 +116,15 @@ export function ProjectListScreen({
                   {gateOf(p)} · {t(`projects.phase.${gateOf(p)}`)}
                 </span>
                 <span className="text-xs text-primary">{t(`projects.status.${statusKey(p)}`)}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(p)}
+                data-testid={`bid-project-delete-${p.id}`}
+                title={t('projects.delete')}
+                className="flex-shrink-0 rounded-xl border border-border px-3 text-sm text-text-muted opacity-0 transition-opacity hover:text-error group-hover:opacity-100"
+              >
+                🗑
               </button>
             </li>
           ))}

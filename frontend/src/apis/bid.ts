@@ -117,6 +117,8 @@ export const bidApis = {
     apiClient.post<BidProject>('/bid/projects', { title }),
   listProjects: (): Promise<BidProject[]> => apiClient.get<BidProject[]>('/bid/projects'),
   getProject: (id: number): Promise<BidProject> => apiClient.get<BidProject>(`/bid/projects/${id}`),
+  deleteProject: (id: number): Promise<{ status: string }> =>
+    apiClient.delete<{ status: string }>(`/bid/projects/${id}`),
   parse: (id: number, tenderText: string): Promise<{ status: string }> =>
     apiClient.post<{ status: string }>(`/bid/projects/${id}/parse`, {
       tender_text: tenderText,

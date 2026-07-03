@@ -77,6 +77,8 @@
     "created_at": "创建于",
     "load_failed": "加载项目列表失败",
     "retry": "重试",
+    "delete": "删除",
+    "delete_confirm": "确定删除「{{title}}」？此操作不可撤销。",
     "phase": {
       "1": "拆标",
       "2": "大纲",

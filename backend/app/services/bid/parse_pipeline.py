@@ -169,8 +169,9 @@ async def _run_parse(
             return
         ws = BidWorkspace(project.workspace_ref)
         try:
-            await parse_tender(ws, model=model, model_config=model_config)
-            BidProjectService.complete_phase1(db, project=project)
+            tender = await parse_tender(ws, model=model, model_config=model_config)
+            name = ((tender.get("project") or {}).get("name") or "").strip()
+            BidProjectService.complete_phase1(db, project=project, title=name or None)
         except Exception as e:  # never leave the project stuck in 'parsing'
             logger.warning("parse failed for project %s: %s", project_id, e)
             project.status = "parse_failed"

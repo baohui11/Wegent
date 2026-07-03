@@ -83,6 +83,8 @@
     "created_at": "Created",
     "load_failed": "Failed to load projects",
     "retry": "Retry",
+    "delete": "Delete",
+    "delete_confirm": "Delete \"{{title}}\"? This cannot be undone.",
     "phase": {
       "1": "Parse",
       "2": "Outline",
