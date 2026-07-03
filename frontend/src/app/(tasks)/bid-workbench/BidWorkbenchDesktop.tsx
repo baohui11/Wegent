@@ -2,9 +2,13 @@
 
 'use client'
 
+import { useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidThemeVars } from '@/features/bid/theme'
 import { useBidProject } from '@/features/bid/hooks/useBidProject'
+import type { BidProject } from '@/apis/bid'
+import { ProjectListScreen } from '@/features/bid/components/ProjectListScreen'
+import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
 import { ParsingScreen } from '@/features/bid/components/ParsingScreen'
 import { TenderResultView } from '@/features/bid/components/TenderResultView'
@@ -51,6 +55,8 @@ const SAMPLE_TENDER = `XX市政务数据中心信息化系统采购项目 招标
 
 export function BidWorkbenchDesktop() {
   const { t } = useTranslation('bidWorkbench')
+  const [view, setView] = useState<'list' | 'workbench'>('list')
+  const [title, setTitle] = useState('')
   const {
     phase,
     projectId,
@@ -59,6 +65,8 @@ export function BidWorkbenchDesktop() {
     coverage,
     error,
     startFromText,
+    startNew,
+    open,
     buildOutline,
     saveOutline,
     reset,
@@ -71,110 +79,135 @@ export function BidWorkbenchDesktop() {
     finalizeBid,
   } = useBidProject()
 
+  const openProject = async (p: BidProject) => {
+    setTitle(p.title)
+    await open(p)
+    setView('workbench')
+  }
+  const newProject = () => {
+    setTitle(t('projects.new'))
+    startNew()
+    setView('workbench')
+  }
+  const backToList = () => {
+    reset()
+    setView('list')
+  }
+
+  if (view === 'list') {
+    return (
+      <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
+        <ProjectListScreen onOpen={openProject} onNew={newProject} />
+      </div>
+    )
+  }
+
   return (
     <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
-      {(phase === 'idle' || phase === 'creating') && (
-        <UploadScreen onUseSample={pkg => startFromText(SAMPLE_TENDER, pkg || undefined)} />
-      )}
-      {phase === 'parsing' && <ParsingScreen />}
-      {phase === 'ready' && tender && (
-        <div className="flex h-full flex-col">
-          <div className="flex-1 overflow-auto">
-            <TenderResultView tender={tender} />
+      <WorkbenchShell phase={phase} title={title} onBack={backToList}>
+        {(phase === 'import' || phase === 'creating') && (
+          <UploadScreen onUseSample={pkg => startFromText(SAMPLE_TENDER, pkg || undefined)} />
+        )}
+        {phase === 'parsing' && <ParsingScreen />}
+        {phase === 'ready' && tender && (
+          <div className="flex h-full flex-col">
+            <div className="flex-1 overflow-auto">
+              <TenderResultView tender={tender} />
+            </div>
+            <div className="border-t border-border p-4 text-right">
+              <button
+                type="button"
+                onClick={buildOutline}
+                data-testid="bid-build-outline-button"
+                className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+              >
+                {t('phase2.build')}
+              </button>
+            </div>
           </div>
-          <div className="border-t border-border p-4 text-right">
+        )}
+        {phase === 'outline_building' && <ParsingScreen />}
+        {phase === 'outline_ready' && outline && coverage && (
+          <OutlineEditor
+            outline={outline}
+            coverage={coverage}
+            onSave={saveOutline}
+            onNext={enterMaterials}
+          />
+        )}
+        {phase === 'materials' && projectId != null && (
+          <MaterialsScreen projectId={projectId} onComplete={completeMaterials} />
+        )}
+        {phase === 'materials_done' && (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-4"
+            data-testid="bid-materials-done"
+          >
+            <div className="text-sm text-text-secondary">{t('phase3.complete')} ✓</div>
             <button
               type="button"
-              onClick={buildOutline}
-              data-testid="bid-build-outline-button"
+              onClick={startDrafting}
+              data-testid="bid-start-drafting-button"
               className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
             >
-              {t('phase2.build')}
+              {t('phase4.start')}
             </button>
           </div>
-        </div>
-      )}
-      {phase === 'outline_building' && <ParsingScreen />}
-      {phase === 'outline_ready' && outline && coverage && (
-        <OutlineEditor
-          outline={outline}
-          coverage={coverage}
-          onSave={saveOutline}
-          onNext={enterMaterials}
-        />
-      )}
-      {phase === 'materials' && projectId != null && (
-        <MaterialsScreen projectId={projectId} onComplete={completeMaterials} />
-      )}
-      {phase === 'materials_done' && (
-        <div
-          className="flex h-full flex-col items-center justify-center gap-4"
-          data-testid="bid-materials-done"
-        >
-          <div className="text-sm text-text-secondary">{t('phase3.complete')} ✓</div>
-          <button
-            type="button"
-            onClick={startDrafting}
-            data-testid="bid-start-drafting-button"
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+        )}
+        {phase === 'drafting' && projectId != null && (
+          <DraftingScreen projectId={projectId} onNext={enterReview} />
+        )}
+        {phase === 'review' && projectId != null && (
+          <ReviewScreen projectId={projectId} onComplete={completeReview} />
+        )}
+        {phase === 'review_done' && (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-4"
+            data-testid="bid-review-done"
           >
-            {t('phase4.start')}
-          </button>
-        </div>
-      )}
-      {phase === 'drafting' && projectId != null && (
-        <DraftingScreen projectId={projectId} onNext={enterReview} />
-      )}
-      {phase === 'review' && projectId != null && (
-        <ReviewScreen projectId={projectId} onComplete={completeReview} />
-      )}
-      {phase === 'review_done' && (
-        <div
-          className="flex h-full flex-col items-center justify-center gap-4"
-          data-testid="bid-review-done"
-        >
-          <div className="text-sm text-text-secondary">{t('phase5.complete')} ✓</div>
-          <button
-            type="button"
-            onClick={enterAudit}
-            data-testid="bid-enter-audit-button"
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+            <div className="text-sm text-text-secondary">{t('phase5.complete')} ✓</div>
+            <button
+              type="button"
+              onClick={enterAudit}
+              data-testid="bid-enter-audit-button"
+              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+            >
+              {t('phase6.enter')}
+            </button>
+          </div>
+        )}
+        {phase === 'audit' && projectId != null && (
+          <AuditScreen projectId={projectId} onRework={enterReview} onFinalize={finalizeBid} />
+        )}
+        {phase === 'finalizing' && (
+          <div
+            className="flex h-full items-center justify-center text-sm text-text-secondary"
+            data-testid="bid-finalizing"
           >
-            {t('phase6.enter')}
-          </button>
-        </div>
-      )}
-      {phase === 'audit' && projectId != null && (
-        <AuditScreen projectId={projectId} onRework={enterReview} onFinalize={finalizeBid} />
-      )}
-      {phase === 'finalizing' && (
-        <div
-          className="flex h-full items-center justify-center text-sm text-text-secondary"
-          data-testid="bid-finalizing"
-        >
-          {t('phase6.finalizing')}
-        </div>
-      )}
-      {phase === 'done' && projectId != null && (
-        <ExportScreen projectId={projectId} onReaudit={enterAudit} />
-      )}
-      {phase === 'error' && (
-        <div
-          className="flex h-full flex-col items-center justify-center gap-4"
-          data-testid="bid-error"
-        >
-          <div className="text-sm text-error">{t('errors.parse_failed')}</div>
-          {error && <div className="text-xs text-text-muted">{error}</div>}
-          <button
-            type="button"
-            onClick={reset}
-            data-testid="bid-retry-button"
-            className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
+            {t('phase6.finalizing')}
+          </div>
+        )}
+        {phase === 'done' && projectId != null && (
+          <ExportScreen projectId={projectId} onReaudit={enterAudit} />
+        )}
+        {phase === 'error' && (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-4"
+            data-testid="bid-error"
           >
-            {t('upload.use_sample')}
-          </button>
-        </div>
-      )}
+            <div className="text-sm text-error">{t('errors.parse_failed')}</div>
+            {error && <div className="text-xs text-text-muted">{error}</div>}
+            <button
+              type="button"
+              onClick={startNew}
+              data-testid="bid-retry-button"
+              className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
+            >
+              {t('upload.use_sample')}
+            </button>
+          </div>
+        )}
+      </WorkbenchShell>
     </div>
   )
 }
