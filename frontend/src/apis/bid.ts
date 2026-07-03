@@ -146,4 +146,18 @@ export const bidApis = {
     apiClient.get(`/bid/projects/${id}/sections`),
   getSectionContent: (id: number, sectionId: string): Promise<{ id: string; content: string }> =>
     apiClient.get(`/bid/projects/${id}/sections/${sectionId}`),
+  redraftSection: (
+    id: number,
+    sectionId: string,
+    instruction?: string
+  ): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/sections/${sectionId}/redraft`, {
+      instruction: instruction ?? null,
+    }),
+  acceptSection: (id: number, sectionId: string): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/sections/${sectionId}/accept`),
+  getReviewStatus: (id: number): Promise<{ accepted: Record<string, boolean> }> =>
+    apiClient.get(`/bid/projects/${id}/review/status`),
+  completeReview: (id: number): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/review/complete`),
 }
