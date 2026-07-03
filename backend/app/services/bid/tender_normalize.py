@@ -45,6 +45,17 @@ def normalize_scoring(tender: dict) -> list:
     return normalized
 
 
+def normalize_qualifications(quals):
+    """Coerce tender.qualifications list items into dicts.
+
+    ``qualification_ids_matching`` calls ``qual.get("type"/"desc"/"evidence")`` on
+    each entry, but qwen sometimes emits qualifications as bare strings.
+    """
+    if isinstance(quals, list):
+        return [{"desc": q} if isinstance(q, str) else q for q in quals]
+    return quals
+
+
 def normalize_required_outline(ro):
     """Coerce required_outline list items into dicts.
 

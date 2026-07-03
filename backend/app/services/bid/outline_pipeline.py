@@ -9,6 +9,7 @@ import anyio
 
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.tender_normalize import (
+    normalize_qualifications,
     normalize_required_outline,
     normalize_scoring,
 )
@@ -32,6 +33,8 @@ def _prepare_tender(ws: BidWorkspace) -> str:
     """
     tender = dict(ws.read_json(_TENDER))
     tender["scoring"] = normalize_scoring(tender)
+    if "qualifications" in tender:
+        tender["qualifications"] = normalize_qualifications(tender["qualifications"])
     if "required_outline" in tender:
         tender["required_outline"] = normalize_required_outline(
             tender["required_outline"]
