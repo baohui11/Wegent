@@ -103,3 +103,20 @@ async def test_call_ghostwriter_strips_fence():
             knowledge_base={},
         )
     assert md == "正文"
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_includes_instruction():
+    with patch(
+        "app.services.bid.specialists.complete_text",
+        new=AsyncMock(return_value="正文"),
+    ) as m:
+        await call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "T", "covers": []},
+            tender={},
+            knowledge_base={},
+            instruction="语言更简洁，补充业绩数据",
+        )
+    assert "语言更简洁，补充业绩数据" in m.await_args.kwargs["instructions"]

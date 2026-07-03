@@ -101,3 +101,11 @@ class SectionListResponse(BaseModel):
 class SectionContentResponse(BaseModel):
     id: str
     content: str
+
+
+class RedraftRequest(BaseModel):
+    instruction: str | None = None
+
+
+class ReviewStatusResponse(BaseModel):
+    accepted: dict

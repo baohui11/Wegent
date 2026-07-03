@@ -63,3 +63,44 @@ async def test_launch_drafting_schedules_under_running_loop():
         dp.launch_drafting(1, 1, "m", None)
         await asyncio.sleep(0)  # let the scheduled task run
     run.assert_awaited_once()
+
+
+def test_find_section():
+    outline = {"sections": [{"id": "a", "children": [{"id": "a1"}]}, {"id": "b"}]}
+    assert dp.find_section(outline, "a1")["id"] == "a1"
+    assert dp.find_section(outline, "zzz") is None
+
+
+@pytest.mark.asyncio
+async def test_redraft_one_overwrites_and_marks_done(tmp_path):
+    ws = BidWorkspace("rd1", root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "s1", "covers": []}]})
+    ws.write_json("workspace/tender.json", {})
+    ds.init_status(ws, ["s1"])
+    with patch.object(
+        dp, "call_ghostwriter", new=AsyncMock(return_value="改写后的正文")
+    ) as m:
+        await dp.redraft_one(
+            ws, "s1", model="m", model_config=None, instruction="更简洁"
+        )
+    assert ds.read_section(ws, "s1") == "改写后的正文"
+    assert ds.read_status(ws)["sections"]["s1"] == "done"
+    assert m.await_args.kwargs["instruction"] == "更简洁"
+
+
+@pytest.mark.asyncio
+async def test_redraft_one_missing_section_marks_error(tmp_path):
+    ws = BidWorkspace("rd2", root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": []})
+    ws.write_json("workspace/tender.json", {})
+    ds.init_status(ws, ["s1"])
+    await dp.redraft_one(ws, "s1", model="m", model_config=None, instruction=None)
+    assert ds.read_status(ws)["sections"]["s1"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_launch_redraft_schedules_under_running_loop():
+    with patch.object(dp, "_run_redraft", new=AsyncMock(return_value=None)) as run:
+        dp.launch_redraft(1, 1, "s1", None, "m", None)
+        await asyncio.sleep(0)
+    run.assert_awaited_once()

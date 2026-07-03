@@ -127,6 +127,7 @@ async def call_ghostwriter(
     section: dict,
     tender: dict,
     knowledge_base: dict,
+    instruction: str | None = None,
 ) -> str:
     covers = set(section.get("covers") or [])
     scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
@@ -151,6 +152,8 @@ async def call_ghostwriter(
         + _STYLE
         + "\n\n## 后端调用输出格式\n只返回本节正文 markdown，不要 JSON、不要代码围栏。"
     )
+    if instruction:
+        instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
     raw = await complete_text(
         model=model,
         model_config=model_config,

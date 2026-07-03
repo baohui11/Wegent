@@ -89,3 +89,86 @@ def launch_drafting(
     project_id: int, user_id: int, model: str, model_config: dict | None
 ) -> None:
     asyncio.create_task(_run_drafting(project_id, user_id, model, model_config))
+
+
+def find_section(outline: dict, section_id: str) -> dict | None:
+    for s in flatten_sections(outline):
+        if str(s.get("id")) == str(section_id):
+            return s
+    return None
+
+
+async def redraft_one(
+    ws: BidWorkspace,
+    section_id: str,
+    *,
+    model: str,
+    model_config: dict | None,
+    instruction: str | None,
+) -> None:
+    ds.set_section_status(ws, section_id, "drafting")
+    try:
+        outline = ws.read_json("workspace/outline.json")
+        tender = ws.read_json("workspace/tender.json")
+        try:
+            kb = ws.read_json("corpus/bidder_knowledge_base.json")
+        except FileNotFoundError:
+            kb = {}
+        node = find_section(outline, section_id)
+        if node is None:
+            raise BidPipelineError(f"section {section_id} not in outline")
+        md = await call_ghostwriter(
+            model=model,
+            model_config=model_config,
+            section=node,
+            tender=tender,
+            knowledge_base=kb,
+            instruction=instruction,
+        )
+        target = ws.path(f"workspace/sections/{section_id}.md")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(md, encoding="utf-8")
+        ds.set_section_status(ws, section_id, "done")
+    except Exception as e:  # isolate failure to this section
+        logger.warning("redraft section %s failed: %s", section_id, e)
+        ds.set_section_status(ws, section_id, "error")
+
+
+async def _run_redraft(
+    project_id: int,
+    user_id: int,
+    section_id: str,
+    instruction: str | None,
+    model: str,
+    model_config: dict | None,
+) -> None:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        project = BidProjectService.get(db, user_id=user_id, project_id=project_id)
+        if project is None:
+            return
+        ws = BidWorkspace(project.workspace_ref)
+        await redraft_one(
+            ws,
+            section_id,
+            model=model,
+            model_config=model_config,
+            instruction=instruction,
+        )
+    finally:
+        db.close()
+
+
+def launch_redraft(
+    project_id: int,
+    user_id: int,
+    section_id: str,
+    instruction: str | None,
+    model: str,
+    model_config: dict | None,
+) -> None:
+    asyncio.create_task(
+        _run_redraft(project_id, user_id, section_id, instruction, model, model_config)
+    )
