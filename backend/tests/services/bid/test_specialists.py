@@ -57,3 +57,49 @@ async def test_strips_code_fence():
             bid_config={},
         )
     assert "project" in parts
+
+
+from app.services.bid.specialists import call_ghostwriter
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_returns_markdown():
+    with patch(
+        "app.services.bid.specialists.complete_text",
+        new=AsyncMock(return_value="## 一、总体方案\n正文……"),
+    ) as m:
+        md = await call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={
+                "id": "s1",
+                "title": "总体方案",
+                "covers": ["S1"],
+                "must_keep": ["闭环管理"],
+            },
+            tender={
+                "scoring": [{"id": "S1", "target_section": "总体方案"}],
+                "mandatory_clauses": [{"id": "V1", "veto": True, "text": "须盖章"}],
+            },
+            knowledge_base={"bidder_knowledge_base": {}},
+        )
+    assert md.startswith("## 一、总体方案")
+    # system prompt contains the ghostwriter identity + style bible snippet
+    kw = m.await_args.kwargs
+    assert "标书枪手" in kw["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_strips_fence():
+    with patch(
+        "app.services.bid.specialists.complete_text",
+        new=AsyncMock(return_value="```markdown\n正文\n```"),
+    ):
+        md = await call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "T", "covers": []},
+            tender={},
+            knowledge_base={},
+        )
+    assert md == "正文"
