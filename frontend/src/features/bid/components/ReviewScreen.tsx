@@ -131,7 +131,7 @@ export function ReviewScreen({
           data-testid="bid-review-content"
         >
           {openId ? (
-            <EnhancedMarkdown source={content} />
+            <EnhancedMarkdown source={content} theme="light" />
           ) : (
             <span className="text-text-muted">{t('phase5.pick_section')}</span>
           )}

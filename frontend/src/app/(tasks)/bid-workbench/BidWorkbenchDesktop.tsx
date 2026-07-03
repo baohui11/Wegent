@@ -11,6 +11,7 @@ import { TenderResultView } from '@/features/bid/components/TenderResultView'
 import { OutlineEditor } from '@/features/bid/components/OutlineEditor'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
+import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
 
 const SAMPLE_TENDER = '（示例招标正文占位——真实流程由上传或后端示例项目提供）'
 
@@ -30,6 +31,8 @@ export function BidWorkbenchDesktop() {
     enterMaterials,
     completeMaterials,
     startDrafting,
+    enterReview,
+    completeReview,
   } = useBidProject()
 
   return (
@@ -83,7 +86,20 @@ export function BidWorkbenchDesktop() {
           </button>
         </div>
       )}
-      {phase === 'drafting' && projectId != null && <DraftingScreen projectId={projectId} />}
+      {phase === 'drafting' && projectId != null && (
+        <DraftingScreen projectId={projectId} onNext={enterReview} />
+      )}
+      {phase === 'review' && projectId != null && (
+        <ReviewScreen projectId={projectId} onComplete={completeReview} />
+      )}
+      {phase === 'review_done' && (
+        <div
+          className="flex h-full items-center justify-center text-sm text-text-secondary"
+          data-testid="bid-review-done"
+        >
+          {t('phase5.complete')} ✓
+        </div>
+      )}
       {phase === 'error' && (
         <div
           className="flex h-full flex-col items-center justify-center gap-4"

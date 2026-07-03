@@ -56,5 +56,14 @@
     "status_done": "已完成",
     "status_error": "失败"
   },
+  "phase5": {
+    "title": "审阅",
+    "enter": "进入审阅",
+    "pick_section": "点击左侧章节查看/审阅正文",
+    "instruction_placeholder": "输入修改要求，例如：语言更简洁、补充XX业绩数据…",
+    "redraft": "重写本节",
+    "accept": "采纳",
+    "complete": "完成审阅"
+  },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }
