@@ -3,24 +3,31 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.bid import (
+    AttachmentInfo,
+    AttachmentListResponse,
     BidProjectCreate,
     BidProjectResponse,
     CoverageResponse,
+    KnowledgeBaseResponse,
+    KnowledgeBaseSaveRequest,
     OutlineResponse,
     OutlineSaveRequest,
     PackageRequest,
     ParseTriggerRequest,
     ParseTriggerResponse,
+    QualificationsResponse,
+    QualificationsSaveRequest,
     SimpleStatusResponse,
     TenderDocResponse,
 )
+from app.services.bid import materials_service as materials
 from app.services.bid.coverage import compute_coverage
 from app.services.bid.model_resolver import resolve_tender_model
 from app.services.bid.outline_pipeline import build_outline_for_project
@@ -221,3 +228,117 @@ def get_coverage(
     if not ws.path("workspace/outline.json").exists():
         raise HTTPException(status_code=409, detail="outline not built yet")
     return _coverage(ws)
+
+
+@router.get(
+    "/projects/{project_id}/materials/knowledge-base",
+    response_model=KnowledgeBaseResponse,
+)
+def get_knowledge_base(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        return KnowledgeBaseResponse(knowledge_base=materials.read_knowledge_base(ws))
+    except FileNotFoundError:
+        raise HTTPException(status_code=409, detail="knowledge base not set")
+
+
+@router.put(
+    "/projects/{project_id}/materials/knowledge-base",
+    response_model=KnowledgeBaseResponse,
+)
+def put_knowledge_base(
+    project_id: int,
+    body: KnowledgeBaseSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        materials.write_knowledge_base(ws, body.knowledge_base)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return KnowledgeBaseResponse(knowledge_base=materials.read_knowledge_base(ws))
+
+
+@router.get(
+    "/projects/{project_id}/materials/qualifications",
+    response_model=QualificationsResponse,
+)
+def get_qualifications(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        return QualificationsResponse(qualifications=materials.read_qualifications(ws))
+    except FileNotFoundError:
+        raise HTTPException(status_code=409, detail="qualifications not set")
+
+
+@router.put(
+    "/projects/{project_id}/materials/qualifications",
+    response_model=QualificationsResponse,
+)
+def put_qualifications(
+    project_id: int,
+    body: QualificationsSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        materials.write_qualifications(ws, body.qualifications)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return QualificationsResponse(qualifications=materials.read_qualifications(ws))
+
+
+@router.post(
+    "/projects/{project_id}/materials/attachments", response_model=AttachmentInfo
+)
+async def upload_attachment(
+    project_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    content = await file.read()
+    try:
+        info = materials.save_attachment(ws, file.filename or "", content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return AttachmentInfo(**info)
+
+
+@router.get(
+    "/projects/{project_id}/materials/attachments",
+    response_model=AttachmentListResponse,
+)
+def get_attachments(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    return AttachmentListResponse(
+        items=[AttachmentInfo(**a) for a in materials.list_attachments(ws)]
+    )
+
+
+@router.post(
+    "/projects/{project_id}/materials/complete", response_model=SimpleStatusResponse
+)
+def complete_materials(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    BidProjectService.set_phase_done(db, project=project, phase=3)
+    return SimpleStatusResponse(status="materials_done")
