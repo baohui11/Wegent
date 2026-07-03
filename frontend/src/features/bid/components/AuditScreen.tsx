@@ -17,6 +17,17 @@ export function AuditScreen({
   const [report, setReport] = useState<AuditReport | null>(null)
   const [running, setRunning] = useState(true)
   const [nonce, setNonce] = useState(0)
+  const [verifying, setVerifying] = useState(false)
+
+  const verify = async () => {
+    setVerifying(true)
+    try {
+      const r = await bidApis.verifyAudit(projectId)
+      setReport(r)
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -96,6 +107,15 @@ export function AuditScreen({
       )}
 
       <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={verify}
+          disabled={verifying}
+          data-testid="bid-audit-verify-button"
+          className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
+        >
+          {verifying ? t('phase6.verifying') : t('phase6.verify')}
+        </button>
         <button
           type="button"
           onClick={() => setNonce(n => n + 1)}

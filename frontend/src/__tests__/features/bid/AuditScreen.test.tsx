@@ -54,3 +54,34 @@ it('re-runs audit when rerun clicked', async () => {
   fireEvent.click(screen.getByTestId('bid-audit-rerun-button'))
   await waitFor(() => expect(bidApis.runAudit).toHaveBeenCalledTimes(2))
 })
+
+it('deep-verifies and refreshes the report with fidelity issues', async () => {
+  ;(bidApis.runAudit as jest.Mock).mockResolvedValue({
+    verdict: 'NEED_FIX',
+    summary: { total_issues: 0, veto_issues: 0, high_issues: 0, scoring_coverage: '4/4' },
+    checks: [{ check: 'source_fidelity', ok: true, issues: [] }],
+  })
+  ;(bidApis.verifyAudit as jest.Mock).mockResolvedValue({
+    verdict: 'NEED_FIX_VETO',
+    summary: { total_issues: 1, veto_issues: 1, high_issues: 0, scoring_coverage: '4/4' },
+    checks: [
+      {
+        check: 'source_fidelity',
+        ok: false,
+        issues: [{ desc: '红线条款与原文不符', severity: 'high', veto: true }],
+      },
+    ],
+  })
+  render(<AuditScreen projectId={5} onRework={jest.fn()} onFinalize={jest.fn()} />)
+  await screen.findByTestId('bid-audit-screen')
+
+  fireEvent.click(screen.getByTestId('bid-audit-verify-button'))
+  await waitFor(() => expect(bidApis.verifyAudit).toHaveBeenCalledWith(5))
+  // report replaced with the folded one -> fidelity issue now visible + verdict upgraded
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-audit-check-source_fidelity')).toHaveTextContent(
+      '红线条款与原文不符'
+    )
+  )
+  expect(screen.getByTestId('bid-audit-verdict')).toHaveTextContent('phase6.verdict_NEED_FIX_VETO')
+})
