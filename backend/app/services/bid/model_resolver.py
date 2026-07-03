@@ -23,7 +23,7 @@ def resolve_tender_model(db: Session, user: User) -> Tuple[str, Optional[dict]]:
         return "", None
     from app.services.model_aggregation_service import ModelAggregationService
 
-    svc = ModelAggregationService(db)
+    svc = ModelAggregationService()
     resolved = svc.resolve_model(db, current_user=user, name=name)
     if not resolved:
         return name, None
