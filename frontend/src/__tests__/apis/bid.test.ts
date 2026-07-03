@@ -130,4 +130,54 @@ describe('bidApis', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/review/status')
     expect(r.accepted.s1).toBe(true)
   })
+
+  it('runAudit posts to /audit', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({
+      verdict: 'PASS',
+      summary: {},
+      checks: [],
+    })
+    await bidApis.runAudit(5)
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/audit')
+  })
+
+  it('getAuditReport gets /audit/report', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValue({
+      verdict: 'NEED_FIX',
+      summary: {},
+      checks: [],
+    })
+    const r = await bidApis.getAuditReport(5)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/audit/report')
+    expect(r.verdict).toBe('NEED_FIX')
+  })
+
+  it('finalize posts to /finalize', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({ status: 'finalized' })
+    await bidApis.finalize(5)
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/finalize')
+  })
+
+  it('downloadBid fetches the docx blob and triggers an anchor download', async () => {
+    const blob = new Blob(['PK'], { type: 'application/octet-stream' })
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, blob: async () => blob })
+    ;(global as unknown as { fetch: jest.Mock }).fetch = fetchMock
+    const createURL = jest.fn().mockReturnValue('blob:x')
+    const revokeURL = jest.fn()
+    ;(global.URL as unknown as { createObjectURL: jest.Mock }).createObjectURL = createURL
+    ;(global.URL as unknown as { revokeObjectURL: jest.Mock }).revokeObjectURL = revokeURL
+    const click = jest.fn()
+    const realCreate = document.createElement.bind(document)
+    const spy = jest.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = realCreate(tag)
+      if (tag === 'a') (el as HTMLAnchorElement).click = click
+      return el
+    })
+    await bidApis.downloadBid(7)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/bid/projects/7/download')
+    expect(createURL).toHaveBeenCalledWith(blob)
+    expect(click).toHaveBeenCalled()
+    expect(revokeURL).toHaveBeenCalledWith('blob:x')
+    spy.mockRestore()
+  })
 })

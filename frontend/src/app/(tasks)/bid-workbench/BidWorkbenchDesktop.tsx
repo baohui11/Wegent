@@ -12,6 +12,8 @@ import { OutlineEditor } from '@/features/bid/components/OutlineEditor'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
 import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
+import { AuditScreen } from '@/features/bid/components/AuditScreen'
+import { ExportScreen } from '@/features/bid/components/ExportScreen'
 
 const SAMPLE_TENDER = '（示例招标正文占位——真实流程由上传或后端示例项目提供）'
 
@@ -33,6 +35,8 @@ export function BidWorkbenchDesktop() {
     startDrafting,
     enterReview,
     completeReview,
+    enterAudit,
+    finalizeBid,
   } = useBidProject()
 
   return (
@@ -94,11 +98,33 @@ export function BidWorkbenchDesktop() {
       )}
       {phase === 'review_done' && (
         <div
-          className="flex h-full items-center justify-center text-sm text-text-secondary"
+          className="flex h-full flex-col items-center justify-center gap-4"
           data-testid="bid-review-done"
         >
-          {t('phase5.complete')} ✓
+          <div className="text-sm text-text-secondary">{t('phase5.complete')} ✓</div>
+          <button
+            type="button"
+            onClick={enterAudit}
+            data-testid="bid-enter-audit-button"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+          >
+            {t('phase6.enter')}
+          </button>
         </div>
+      )}
+      {phase === 'audit' && projectId != null && (
+        <AuditScreen projectId={projectId} onRework={enterReview} onFinalize={finalizeBid} />
+      )}
+      {phase === 'finalizing' && (
+        <div
+          className="flex h-full items-center justify-center text-sm text-text-secondary"
+          data-testid="bid-finalizing"
+        >
+          {t('phase6.finalizing')}
+        </div>
+      )}
+      {phase === 'done' && projectId != null && (
+        <ExportScreen projectId={projectId} onReaudit={enterAudit} />
       )}
       {phase === 'error' && (
         <div
