@@ -1,24 +1,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState } from 'react'
-import { bidApis, type TenderDoc } from '@/apis/bid'
+import { bidApis, type CoverageReport, type OutlineDoc, type TenderDoc } from '@/apis/bid'
 
-type Phase = 'idle' | 'creating' | 'parsing' | 'ready' | 'error'
+type Phase =
+  | 'idle'
+  | 'creating'
+  | 'parsing'
+  | 'ready'
+  | 'outline_building'
+  | 'outline_ready'
+  | 'error'
 
 export function useBidProject() {
   const [phase, setPhase] = useState<Phase>('idle')
+  const [projectId, setProjectId] = useState<number | null>(null)
   const [tender, setTender] = useState<TenderDoc | null>(null)
+  const [outline, setOutline] = useState<OutlineDoc | null>(null)
+  const [coverage, setCoverage] = useState<CoverageReport | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const startFromText = useCallback(async (text: string) => {
+  const startFromText = useCallback(async (text: string, pkg?: string) => {
     setError(null)
     try {
       setPhase('creating')
       const project = await bidApis.createProject('标书项目')
+      setProjectId(project.id)
+      if (pkg) await bidApis.declarePackage(project.id, pkg)
       setPhase('parsing')
       await bidApis.parse(project.id, text)
-      const { tender } = await bidApis.getTender(project.id)
-      setTender(tender)
+      const res = await bidApis.getTender(project.id)
+      setTender(res.tender)
       setPhase('ready')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'unknown')
@@ -26,11 +38,50 @@ export function useBidProject() {
     }
   }, [])
 
+  const buildOutline = useCallback(async () => {
+    if (projectId == null) return
+    setError(null)
+    try {
+      setPhase('outline_building')
+      const { outline, coverage } = await bidApis.buildOutline(projectId)
+      setOutline(outline)
+      setCoverage(coverage)
+      setPhase('outline_ready')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown')
+      setPhase('error')
+    }
+  }, [projectId])
+
+  const saveOutline = useCallback(
+    async (edited: OutlineDoc) => {
+      if (projectId == null) return
+      const { outline, coverage } = await bidApis.saveOutline(projectId, edited)
+      setOutline(outline)
+      setCoverage(coverage)
+    },
+    [projectId]
+  )
+
   const reset = useCallback(() => {
     setPhase('idle')
+    setProjectId(null)
     setTender(null)
+    setOutline(null)
+    setCoverage(null)
     setError(null)
   }, [])
 
-  return { phase, tender, error, startFromText, reset }
+  return {
+    phase,
+    projectId,
+    tender,
+    outline,
+    coverage,
+    error,
+    startFromText,
+    buildOutline,
+    saveOutline,
+    reset,
+  }
 }
