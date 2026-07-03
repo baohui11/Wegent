@@ -67,3 +67,13 @@ class BidProjectService:
         project.status = "parsed"
         db.commit()
         db.refresh(project)
+
+    @staticmethod
+    def set_phase_done(db: Session, *, project: BidProject, phase: int) -> None:
+        ps = dict(project.phase_status or {})
+        ps[f"phase{phase}"] = "done"
+        project.phase_status = ps
+        project.current_phase = phase + 1
+        project.max_phase_reached = max(project.max_phase_reached, phase + 1)
+        db.commit()
+        db.refresh(project)
