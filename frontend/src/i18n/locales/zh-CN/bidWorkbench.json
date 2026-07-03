@@ -6,6 +6,32 @@
     "use_sample": "使用示例招标文件 · 智慧园区建设项目",
     "package_label": "分包（多包必填，单包留空）"
   },
+  "projects": {
+    "title": "我的标书项目",
+    "new": "新建标书",
+    "empty": "还没有标书项目，点击「新建标书」开始",
+    "loading": "加载中…",
+    "back": "返回项目列表",
+    "created_at": "创建于",
+    "load_failed": "加载项目列表失败",
+    "retry": "重试",
+    "phase": {
+      "1": "拆标",
+      "2": "大纲",
+      "3": "素材",
+      "4": "起草",
+      "5": "审阅",
+      "6": "装订"
+    },
+    "status": {
+      "created": "待拆标",
+      "parsing": "拆标中",
+      "parsed": "已拆标",
+      "drafting": "起草中",
+      "parse_failed": "拆标失败",
+      "done": "已完成"
+    }
+  },
   "parsing": { "title": "拆标神探正在拆解招标文件…" },
   "phase1": {
     "title": "拆标 · 评分点与红线",
