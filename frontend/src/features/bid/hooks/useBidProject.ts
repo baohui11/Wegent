@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState } from 'react'
-import { bidApis, type CoverageReport, type OutlineDoc, type TenderDoc } from '@/apis/bid'
+import {
+  bidApis,
+  type BidProject,
+  type CoverageReport,
+  type OutlineDoc,
+  type TenderDoc,
+} from '@/apis/bid'
 
 type Phase =
   | 'idle'
@@ -52,6 +58,63 @@ export function useBidProject() {
         const res = await bidApis.getTender(id)
         setTender(res.tender)
         setPhase('ready')
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'unknown')
+        setPhase('error')
+      }
+    },
+    [pollUntilParsed]
+  )
+
+  const open = useCallback(
+    async (project: BidProject) => {
+      setError(null)
+      setProjectId(project.id)
+      const cp = project.current_phase
+      const st = project.status
+      try {
+        if (cp <= 1) {
+          if (st === 'parsing') {
+            setPhase('parsing')
+            await pollUntilParsed(project.id)
+            const res = await bidApis.getTender(project.id)
+            setTender(res.tender)
+            setPhase('ready')
+            return
+          }
+          setPhase('import')
+          return
+        }
+        if (cp === 2) {
+          const res = await bidApis.getTender(project.id)
+          setTender(res.tender)
+          try {
+            const o = await bidApis.getOutline(project.id)
+            setOutline(o.outline)
+            setCoverage(o.coverage)
+            setPhase('outline_ready')
+          } catch {
+            setPhase('ready')
+          }
+          return
+        }
+        if (cp === 3) {
+          setPhase('materials')
+          return
+        }
+        if (cp === 4) {
+          setPhase(st === 'drafting' ? 'drafting' : 'materials_done')
+          return
+        }
+        if (cp === 5) {
+          setPhase('review')
+          return
+        }
+        if (cp === 6) {
+          setPhase('audit')
+          return
+        }
+        setPhase('done')
       } catch (e) {
         setError(e instanceof Error ? e.message : 'unknown')
         setPhase('error')
@@ -169,6 +232,7 @@ export function useBidProject() {
     startFromText,
     parseExisting,
     startNew,
+    open,
     buildOutline,
     saveOutline,
     reset,
