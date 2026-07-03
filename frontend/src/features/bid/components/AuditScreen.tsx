@@ -22,8 +22,7 @@ export function AuditScreen({
   const verify = async () => {
     setVerifying(true)
     try {
-      const r = await bidApis.verifyAudit(projectId)
-      setReport(r)
+      setReport(await bidApis.verifyAudit(projectId))
     } finally {
       setVerifying(false)
     }
@@ -45,7 +44,8 @@ export function AuditScreen({
   if (running || !report) {
     return (
       <div
-        className="flex h-full items-center justify-center text-sm text-text-secondary"
+        className="flex h-full items-center justify-center text-sm"
+        style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
         data-testid="bid-audit-running"
       >
         {t('phase6.running')}
@@ -54,65 +54,141 @@ export function AuditScreen({
   }
 
   const veto = report.verdict === 'NEED_FIX_VETO'
-  const badge = report.verdict === 'PASS' ? 'bg-primary' : veto ? 'bg-error' : 'bg-amber-500'
+  const verdictColor =
+    report.verdict === 'PASS'
+      ? 'var(--bid-success)'
+      : veto
+        ? 'var(--bid-primary)'
+        : 'var(--bid-warn)'
+  const s = report.summary
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6" data-testid="bid-audit-screen">
-      <div className="flex flex-wrap items-center gap-3">
-        <span
-          className={`rounded px-3 py-1 text-sm font-semibold text-white ${badge}`}
-          data-testid="bid-audit-verdict"
+    <div
+      className="flex h-full gap-6 overflow-auto p-6"
+      style={{ background: 'var(--bid-paper)' }}
+      data-testid="bid-audit-screen"
+    >
+      {/* Left: summary + risk */}
+      <div className="flex w-[240px] flex-shrink-0 flex-col gap-4">
+        <div
+          className="flex flex-col items-center gap-2 rounded-2xl p-5"
+          style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
         >
-          {t(`phase6.verdict_${report.verdict}`)}
-        </span>
-        <span className="text-sm text-text-secondary">
-          {t('phase6.coverage')}: {report.summary.scoring_coverage} · {t('phase6.veto_issues')}:{' '}
-          {report.summary.veto_issues} · {t('phase6.high_issues')}: {report.summary.high_issues}
-        </span>
+          <div className="text-xs" style={{ color: 'var(--bid-muted)' }}>
+            {t('checks.summary')}
+          </div>
+          <div
+            className="rounded-lg px-4 py-1 text-lg font-extrabold text-white"
+            style={{ background: verdictColor }}
+            data-testid="bid-audit-verdict"
+          >
+            {t(`phase6.verdict_${report.verdict}`)}
+          </div>
+          <div className="text-xs" style={{ color: 'var(--bid-sub)' }}>
+            {t('phase6.coverage')}: {s.scoring_coverage}
+          </div>
+        </div>
+
+        <div
+          className="flex flex-col gap-2 rounded-2xl p-5"
+          style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
+        >
+          <div className="text-sm font-bold" style={{ color: 'var(--bid-ink)' }}>
+            {t('checks.risk_title')}
+          </div>
+          <div className="text-2xl font-extrabold" style={{ color: 'var(--bid-primary)' }}>
+            {s.total_issues}
+          </div>
+          <div className="flex flex-col gap-1 text-xs" style={{ color: 'var(--bid-sub)' }}>
+            <div>
+              <span style={{ color: 'var(--bid-primary)' }}>●</span> {t('checks.veto')}:{' '}
+              {s.veto_issues}
+            </div>
+            <div>
+              <span style={{ color: 'var(--bid-warn)' }}>●</span> {t('checks.high')}:{' '}
+              {s.high_issues}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto rounded-lg border border-border">
-        <ul className="flex flex-col divide-y divide-border">
+      {/* Center: compliance table */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="text-sm font-bold" style={{ color: 'var(--bid-ink)' }}>
+          {t('checks.title')}
+        </div>
+        <div
+          className="overflow-hidden rounded-2xl"
+          style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
+        >
+          <div
+            className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 text-xs"
+            style={{ color: 'var(--bid-muted)', borderBottom: '1px solid var(--bid-border)' }}
+          >
+            <span>{t('checks.col_check')}</span>
+            <span>{t('checks.col_status')}</span>
+            <span>{t('checks.col_result')}</span>
+          </div>
           {report.checks.map(c => (
-            <li key={c.check} className="p-3" data-testid={`bid-audit-check-${c.check}`}>
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">{c.check}</span>
-                <span className={c.ok ? 'text-text-muted' : 'text-error'}>
-                  {c.ok ? 'ok' : String(c.issues.length)}
+            <div
+              key={c.check}
+              className="px-4 py-3"
+              style={{ borderBottom: '1px solid var(--bid-border)' }}
+              data-testid={`bid-audit-check-${c.check}`}
+            >
+              <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
+                <span className="text-sm font-medium" style={{ color: 'var(--bid-ink-2)' }}>
+                  {t(`checks.${c.check}`, { defaultValue: c.check })}
+                </span>
+                <span style={{ color: c.ok ? 'var(--bid-success)' : 'var(--bid-warn)' }}>
+                  {c.ok ? '✓' : '!'}
+                </span>
+                <span className="text-xs" style={{ color: 'var(--bid-muted)' }}>
+                  {c.ok ? t('checks.ok') : t('checks.issues_n', { n: c.issues.length })}
                 </span>
               </div>
               {c.issues.map((i, idx) => (
                 <div
                   key={idx}
-                  className={`mt-1 text-xs ${
-                    i.veto
-                      ? 'text-error'
+                  className="mt-1 text-xs"
+                  style={{
+                    color: i.veto
+                      ? 'var(--bid-primary)'
                       : i.severity === 'high'
-                        ? 'text-amber-600'
-                        : 'text-text-muted'
-                  }`}
+                        ? 'var(--bid-warn)'
+                        : 'var(--bid-muted)',
+                  }}
                 >
                   {i.veto ? '⛔' : i.severity === 'high' ? '●' : '·'} {i.desc}
                 </div>
               ))}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
+        {veto && (
+          <div
+            className="text-xs"
+            style={{ color: 'var(--bid-primary)' }}
+            data-testid="bid-audit-veto-warning"
+          >
+            {t('phase6.veto_warning')}
+          </div>
+        )}
       </div>
 
-      {veto && (
-        <div className="text-xs text-error" data-testid="bid-audit-veto-warning">
-          {t('phase6.veto_warning')}
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2">
+      {/* Right: actions */}
+      <div className="flex w-[220px] flex-shrink-0 flex-col gap-2">
         <button
           type="button"
           onClick={verify}
           disabled={verifying}
           data-testid="bid-audit-verify-button"
-          className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-60"
+          className="rounded-xl px-4 py-2.5 text-sm disabled:opacity-60"
+          style={{
+            background: '#fff',
+            border: '1px solid var(--bid-border-2)',
+            color: 'var(--bid-sub)',
+          }}
         >
           {verifying ? t('phase6.verifying') : t('phase6.verify')}
         </button>
@@ -120,7 +196,12 @@ export function AuditScreen({
           type="button"
           onClick={() => setNonce(n => n + 1)}
           data-testid="bid-audit-rerun-button"
-          className="rounded-lg border border-border px-4 py-2 text-sm"
+          className="rounded-xl px-4 py-2.5 text-sm"
+          style={{
+            background: '#fff',
+            border: '1px solid var(--bid-border-2)',
+            color: 'var(--bid-sub)',
+          }}
         >
           {t('phase6.rerun')}
         </button>
@@ -128,7 +209,8 @@ export function AuditScreen({
           type="button"
           onClick={onRework}
           data-testid="bid-audit-rework-button"
-          className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
+          className="rounded-xl px-4 py-2.5 text-sm font-semibold"
+          style={{ border: '1px solid var(--bid-primary)', color: 'var(--bid-primary)' }}
         >
           {t('phase6.rework')}
         </button>
@@ -136,7 +218,8 @@ export function AuditScreen({
           type="button"
           onClick={onFinalize}
           data-testid="bid-audit-finalize-button"
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-xl px-4 py-2.5 text-sm font-bold text-white"
+          style={{ background: 'var(--bid-primary)' }}
         >
           {t('phase6.finalize')}
         </button>
