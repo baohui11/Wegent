@@ -2,14 +2,19 @@
 """Phase 1 (拆标) orchestration. Task 4 adds run_segment/run_merge (blocking);
 Task 6 adds the async parse_tender orchestrator."""
 
+import asyncio
+import logging
 import subprocess
 import sys
 from pathlib import Path
 
 import anyio
 
+from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_tender_sleuth
 from app.services.bid.workspace import BidWorkspace
+
+logger = logging.getLogger(__name__)
 
 _SCRIPTS = Path(__file__).parent / "vendor" / "skills" / "tender-parser" / "scripts"
 
@@ -148,3 +153,33 @@ async def parse_tender(ws, *, model: str, model_config: dict | None) -> dict:
                 f"merge failed after retry: {_merge_issues(ws) or output}"
             )
     return ws.read_json("workspace/tender.json")
+
+
+async def _run_parse(
+    project_id: int, user_id: int, model: str, model_config: dict | None
+) -> None:
+    # Background 拆标 (mirrors _run_drafting): the LLM pipeline is minutes-long,
+    # so run it off the request. Owns its own DB session.
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        project = BidProjectService.get(db, user_id=user_id, project_id=project_id)
+        if project is None:
+            return
+        ws = BidWorkspace(project.workspace_ref)
+        try:
+            await parse_tender(ws, model=model, model_config=model_config)
+            BidProjectService.complete_phase1(db, project=project)
+        except Exception as e:  # never leave the project stuck in 'parsing'
+            logger.warning("parse failed for project %s: %s", project_id, e)
+            project.status = "parse_failed"
+            db.commit()
+    finally:
+        db.close()
+
+
+def launch_parse(
+    project_id: int, user_id: int, model: str, model_config: dict | None
+) -> None:
+    asyncio.create_task(_run_parse(project_id, user_id, model, model_config))

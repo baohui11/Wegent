@@ -37,6 +37,18 @@ export function useBidProject() {
       if (pkg) await bidApis.declarePackage(project.id, pkg)
       setPhase('parsing')
       await bidApis.parse(project.id, text)
+      // 拆标 is backgrounded; poll project status until parsed or failed.
+      let parsed = false
+      for (let i = 0; i < 240 && !parsed; i++) {
+        const p = await bidApis.getProject(project.id)
+        if (p.status === 'parse_failed') throw new Error('拆标失败，请检查招标文件后重试')
+        if (p.status === 'parsed' || p.current_phase >= 2) {
+          parsed = true
+          break
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+      if (!parsed) throw new Error('拆标超时，请稍后重试')
       const res = await bidApis.getTender(project.id)
       setTender(res.tender)
       setPhase('ready')

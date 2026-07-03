@@ -8,6 +8,7 @@ jest.mock('@/apis/bid')
 
 it('startDrafting triggers draft and sets phase', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.startDraft as jest.Mock).mockResolvedValue({ status: 'drafting' })

@@ -14,6 +14,7 @@ jest.mock('@/components/common/EnhancedMarkdown', () => ({
 
 it('starts at upload screen and transitions to ready via the sample button', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 1 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({
     tender: { scoring: [{ id: 'S1' }] },
@@ -28,6 +29,7 @@ it('starts at upload screen and transitions to ready via the sample button', asy
 
 it('shows the error screen when parse fails, with a retry button', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 1 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockRejectedValue(new Error('boom'))
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
 
@@ -39,6 +41,7 @@ it('shows the error screen when parse fails, with a retry button', async () => {
 
 it('builds outline from tender-ready and shows editor', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
@@ -59,6 +62,7 @@ it('builds outline from tender-ready and shows editor', async () => {
 
 it('enters materials screen after outline next', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
@@ -83,6 +87,7 @@ it('enters materials screen after outline next', async () => {
 
 it('starts drafting from materials_done and shows drafting screen', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
@@ -119,6 +124,7 @@ it('starts drafting from materials_done and shows drafting screen', async () => 
 
 it('enters review from finished drafting', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
@@ -161,6 +167,7 @@ it('enters review from finished drafting', async () => {
 
 it('goes review_done -> audit -> finalize -> done export', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 3 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({

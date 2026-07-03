@@ -52,7 +52,7 @@ from app.services.bid.outline_service import (
     write_bid_config,
     write_outline,
 )
-from app.services.bid.parse_pipeline import BidPipelineError, parse_tender
+from app.services.bid.parse_pipeline import BidPipelineError, launch_parse
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_fact_checker
 from app.services.bid.workspace import BidWorkspace
@@ -104,28 +104,19 @@ async def parse_project(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # async: launch_parse uses asyncio.create_task (needs a running loop).
     project = _require(db, current_user, project_id)
     if not BidProjectService.begin_parse(
         db, project_id=project.id, user_id=current_user.id
     ):
         raise HTTPException(status_code=409, detail="parse already running")
     ws = BidWorkspace(project.workspace_ref)
-    try:
-        ws.write_tender_text(body.tender_text)
-        model, model_config = resolve_tender_model(db, current_user)
-        await parse_tender(ws, model=model, model_config=model_config)
-    except BidPipelineError as e:
-        project.status = "parse_failed"
-        db.commit()
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception:
-        # Never leave the project stuck in 'parsing' on unexpected failure;
-        # begin_parse holds the lock via status, so release it on any error.
-        project.status = "parse_failed"
-        db.commit()
-        raise
-    BidProjectService.complete_phase1(db, project=project)
-    return ParseTriggerResponse(status="parsed")
+    ws.write_tender_text(body.tender_text)
+    model, model_config = resolve_tender_model(db, current_user)
+    # 拆标 is a minutes-long LLM pipeline; run it in the background and let the
+    # client poll project status ('parsing' -> 'parsed'/'parse_failed').
+    launch_parse(project.id, current_user.id, model, model_config)
+    return ParseTriggerResponse(status="parsing")
 
 
 @router.get("/projects/{project_id}/tender", response_model=TenderDocResponse)

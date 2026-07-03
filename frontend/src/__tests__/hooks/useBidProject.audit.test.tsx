@@ -8,6 +8,7 @@ jest.mock('@/apis/bid')
 
 it('enterAudit then finalizeBid reaches done', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.finalize as jest.Mock).mockResolvedValue({ status: 'finalized' })
@@ -28,6 +29,7 @@ it('enterAudit then finalizeBid reaches done', async () => {
 
 it('finalizeBid failure goes to error phase', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 4 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.finalize as jest.Mock).mockRejectedValue(new Error('resolve gate'))

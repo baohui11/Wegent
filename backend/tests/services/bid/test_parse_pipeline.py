@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-from unittest.mock import AsyncMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -133,3 +134,40 @@ async def test_merge_writes_no_file_raises_without_filenotfound(tmp_path):
         with pytest.raises(pp.BidPipelineError) as ei:
             await pp.parse_tender(ws, model="m", model_config=None)
     assert "merge crashed hard" in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_launch_parse_schedules_under_running_loop():
+    with patch.object(pp, "_run_parse", new=AsyncMock(return_value=None)) as run:
+        pp.launch_parse(1, 1, "m", None)
+        await asyncio.sleep(0)
+    run.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_parse_marks_parse_failed_on_error():
+    proj = MagicMock(workspace_ref="w")
+    db = MagicMock()
+    with (
+        patch("app.db.session.SessionLocal", return_value=db),
+        patch.object(pp.BidProjectService, "get", return_value=proj),
+        patch.object(pp, "parse_tender", new=AsyncMock(side_effect=ValueError("boom"))),
+    ):
+        await pp._run_parse(1, 1, "m", None)
+    assert proj.status == "parse_failed"
+    db.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_parse_completes_phase1_on_success():
+    proj = MagicMock(workspace_ref="w")
+    db = MagicMock()
+    with (
+        patch("app.db.session.SessionLocal", return_value=db),
+        patch.object(pp.BidProjectService, "get", return_value=proj),
+        patch.object(pp.BidProjectService, "complete_phase1") as cp,
+        patch.object(pp, "parse_tender", new=AsyncMock(return_value={})),
+    ):
+        await pp._run_parse(1, 1, "m", None)
+    cp.assert_called_once()
+    db.close.assert_called_once()

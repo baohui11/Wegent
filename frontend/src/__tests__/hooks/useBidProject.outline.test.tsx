@@ -8,6 +8,7 @@ jest.mock('@/apis/bid')
 
 it('declares package before parse when provided', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.declarePackage as jest.Mock).mockResolvedValue({ status: 'declared' })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
@@ -21,6 +22,7 @@ it('declares package before parse when provided', async () => {
 
 it('buildOutline moves to outline_ready with coverage', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({

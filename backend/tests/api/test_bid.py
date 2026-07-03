@@ -37,18 +37,11 @@ def test_bid_crud_and_parse(test_client, test_token, tmp_path, monkeypatch):
         p["id"] == pid for p in test_client.get("/api/bid/projects", headers=h).json()
     )
 
-    # parse_tender mock also persists tender.json (the real orchestrator writes
-    # the blackboard file), so the subsequent /tender read can return it.
-    async def _parse(ws, *, model, model_config):
-        doc = {"scoring": [{"id": "S1"}]}
-        ws.write_json("workspace/tender.json", doc)
-        return doc
-
+    # 拆标 is backgrounded: the endpoint returns 'parsing' and schedules
+    # launch_parse (the client polls project status). Patch launch_parse so the
+    # background task does not actually run in the test.
     with (
-        patch(
-            "app.api.endpoints.bid.parse_tender",
-            new=AsyncMock(side_effect=_parse),
-        ),
+        patch("app.api.endpoints.bid.launch_parse") as launch,
         patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
     ):
         r = test_client.post(
@@ -56,9 +49,17 @@ def test_bid_crud_and_parse(test_client, test_token, tmp_path, monkeypatch):
             json={"tender_text": "招标正文"},
             headers=h,
         )
-    assert r.status_code == 200 and r.json()["status"] == "parsed"
-    t = test_client.get(f"/api/bid/projects/{pid}/tender", headers=h)
-    assert t.json()["tender"]["scoring"][0]["id"] == "S1"
+    assert r.status_code == 200 and r.json()["status"] == "parsing"
+    launch.assert_called_once()
+    # tender text is written to the blackboard for the background task
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    assert ws.path("inputs/final/tender.txt").read_text(encoding="utf-8") == "招标正文"
+    # project is locked in 'parsing' until the background task completes
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["status"]
+        == "parsing"
+    )
 
 
 def test_bid_ownership_isolation(
@@ -76,31 +77,8 @@ def test_bid_ownership_isolation(
     assert r.status_code == 404
 
 
-def test_parse_unexpected_error_releases_lock(
-    test_client, test_token, tmp_path, monkeypatch
-):
-    # An unexpected (non-BidPipelineError) failure must not leave the project
-    # stuck in status='parsing' (the begin_parse lock).
-    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
-    h = {"Authorization": f"Bearer {test_token}"}
-    pid = test_client.post("/api/bid/projects", json={"title": "X"}, headers=h).json()[
-        "id"
-    ]
-    with (
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
-        patch(
-            "app.api.endpoints.bid.parse_tender",
-            new=AsyncMock(side_effect=ValueError("boom")),
-        ),
-    ):
-        with pytest.raises(ValueError):
-            test_client.post(
-                f"/api/bid/projects/{pid}/parse",
-                json={"tender_text": "x"},
-                headers=h,
-            )
-    status = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["status"]
-    assert status == "parse_failed"
+# NOTE: parse-failure lock release now lives in parse_pipeline._run_parse
+# (the background task); see test_parse_pipeline.test_run_parse_marks_parse_failed_on_error.
 
 
 def test_outline_build_read_edit_coverage(

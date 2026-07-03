@@ -8,6 +8,7 @@ jest.mock('@/apis/bid')
 
 async function toOutlineReady(result: { current: ReturnType<typeof useBidProject> }) {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({

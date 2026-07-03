@@ -8,6 +8,7 @@ jest.mock('@/apis/bid')
 
 it('enterReview then completeReview', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
   ;(bidApis.completeReview as jest.Mock).mockResolvedValue({ status: 'review_done' })
