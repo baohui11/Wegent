@@ -205,7 +205,7 @@ def get_outline(
     try:
         outline = read_outline(ws)
     except FileNotFoundError:
-        raise HTTPException(status_code=409, detail="outline not built yet")
+        raise HTTPException(status_code=404, detail="outline not built yet")
     return OutlineResponse(outline=outline, coverage=_coverage(ws))
 
 
@@ -537,6 +537,7 @@ async def finalize_bid(
     except BidPipelineError as e:
         raise HTTPException(status_code=422, detail=str(e))
     BidProjectService.set_phase_done(db, project=project, phase=6)
+    BidProjectService.mark_done(db, project=project)
     return SimpleStatusResponse(status="finalized")
 
 

@@ -246,6 +246,20 @@ async def lifespan(app: FastAPI):
             finally:
                 db.close()
 
+            # Step 3: Recover bid projects stuck in 'parsing' (non-durable task
+            # lost on the previous restart) so they become retryable.
+            db = SessionLocal()
+            try:
+                from app.services.bid.project_service import BidProjectService
+
+                n = BidProjectService.reset_stuck_parsing(db)
+                if n:
+                    logger.info(f"✓ Reset {n} stuck bid parsing project(s) to failed")
+            except Exception as e:
+                logger.warning(f"Could not reset stuck bid parsing projects: {e}")
+            finally:
+                db.close()
+
         except Exception as e:
             logger.error(f"✗ Startup initialization failed: {e}")
             # Re-raise the exception to terminate startup

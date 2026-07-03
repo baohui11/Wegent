@@ -43,6 +43,28 @@ class BidProjectService:
         )
 
     @staticmethod
+    def reset_stuck_parsing(db: Session) -> int:
+        """Flip projects stuck in 'parsing' to 'parse_failed'.
+
+        Parsing runs as a non-durable asyncio task; a backend restart loses the
+        in-flight task while the row stays 'parsing' forever. Called at startup
+        so those projects become retryable instead of polling until timeout.
+        """
+        count = (
+            db.query(BidProject)
+            .filter(BidProject.status == "parsing")
+            .update({BidProject.status: "parse_failed"}, synchronize_session=False)
+        )
+        db.commit()
+        return count
+
+    @staticmethod
+    def mark_done(db: Session, *, project: BidProject) -> None:
+        project.status = "done"
+        db.commit()
+        db.refresh(project)
+
+    @staticmethod
     def begin_parse(db: Session, *, project_id: int, user_id: int) -> bool:
         # Atomic optimistic lock: only flip to 'parsing' if not already parsing.
         updated = (

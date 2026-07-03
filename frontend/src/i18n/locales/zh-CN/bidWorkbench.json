@@ -91,7 +91,8 @@
       "parsed": "已拆标",
       "drafting": "起草中",
       "parse_failed": "拆标失败",
-      "done": "已完成"
+      "done": "已完成",
+      "in_progress": "进行中"
     }
   },
   "parsing": { "title": "拆标神探正在拆解招标文件…" },

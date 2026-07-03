@@ -54,3 +54,21 @@ def test_begin_draft_atomic(test_db):
     assert BidProjectService.begin_draft(test_db, project_id=p.id, user_id=1) is True
     # Already drafting: a second lock attempt fails.
     assert BidProjectService.begin_draft(test_db, project_id=p.id, user_id=1) is False
+
+
+def test_reset_stuck_parsing_flips_to_failed(test_db):
+    p1 = BidProjectService.create(test_db, user_id=9, title="P", workspace_ref="w-p")
+    BidProjectService.begin_parse(test_db, project_id=p1.id, user_id=9)  # -> parsing
+    p2 = BidProjectService.create(test_db, user_id=9, title="Q", workspace_ref="w-q")
+    n = BidProjectService.reset_stuck_parsing(test_db)
+    assert n == 1
+    test_db.refresh(p1)
+    test_db.refresh(p2)
+    assert p1.status == "parse_failed"
+    assert p2.status == "created"  # untouched
+
+
+def test_mark_done_sets_status(test_db):
+    p = BidProjectService.create(test_db, user_id=9, title="R", workspace_ref="w-r")
+    BidProjectService.mark_done(test_db, project=p)
+    assert p.status == "done"

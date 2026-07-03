@@ -4,14 +4,20 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidApis, type BidProject } from '@/apis/bid'
 
-const STATUS_KEYS = ['created', 'parsing', 'parsed', 'drafting', 'parse_failed', 'done']
-
 function gateOf(p: BidProject): number {
   return Math.min(6, Math.max(1, p.current_phase))
 }
 
-function statusKey(s: string): string {
-  return STATUS_KEYS.includes(s) ? s : 'created'
+// Derive a display status that never contradicts the gate badge. The backend
+// `status` string is only reliable for parsing/parse_failed/created; past that
+// it goes stale (e.g. stays 'drafting' after finalize), so fall back to the
+// phase cursor for everything else.
+function statusKey(p: BidProject): string {
+  if (p.status === 'parsing') return 'parsing'
+  if (p.status === 'parse_failed') return 'parse_failed'
+  if (p.current_phase >= 7 || p.status === 'done') return 'done'
+  if (p.status === 'created' && p.current_phase <= 1) return 'created'
+  return 'in_progress'
 }
 
 export function ProjectListScreen({
@@ -103,9 +109,7 @@ export function ProjectListScreen({
                 <span className="rounded-md bg-base px-2 py-1 text-xs text-text-secondary">
                   {gateOf(p)} · {t(`projects.phase.${gateOf(p)}`)}
                 </span>
-                <span className="text-xs text-primary">
-                  {t(`projects.status.${statusKey(p.status)}`)}
-                </span>
+                <span className="text-xs text-primary">{t(`projects.status.${statusKey(p)}`)}</span>
               </button>
             </li>
           ))}

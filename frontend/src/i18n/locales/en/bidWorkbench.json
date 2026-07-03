@@ -97,7 +97,8 @@
       "parsed": "Parsed",
       "drafting": "Drafting",
       "parse_failed": "Failed",
-      "done": "Done"
+      "done": "Done",
+      "in_progress": "In progress"
     }
   },
   "parsing": { "title": "Tender Sleuth is parsing the document…" },
