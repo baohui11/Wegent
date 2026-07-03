@@ -105,3 +105,59 @@ async def call_tender_sleuth(
         if block in obj:
             parts[block] = obj[block]
     return parts
+
+
+_GW_PROMPT = (
+    Path(__file__).parent / "vendor" / "prompts" / "bid_ghostwriter.md"
+).read_text(encoding="utf-8")
+_STYLE = (
+    Path(__file__).parent
+    / "vendor"
+    / "skills"
+    / "bid-section-writer"
+    / "references"
+    / "style-zhongda.md"
+).read_text(encoding="utf-8")
+
+
+async def call_ghostwriter(
+    *,
+    model: str,
+    model_config: dict | None,
+    section: dict,
+    tender: dict,
+    knowledge_base: dict,
+) -> str:
+    covers = set(section.get("covers") or [])
+    scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
+    clauses = [
+        c
+        for c in tender.get("mandatory_clauses", []) or []
+        if c.get("veto") and str(c.get("id")) in covers
+    ]
+    ctx = {
+        "section": {
+            "id": section.get("id"),
+            "title": section.get("title"),
+            "must_keep": section.get("must_keep") or [],
+        },
+        "scoring_to_cover": scoring,
+        "mandatory_clauses": clauses,
+        "bidder_knowledge_base": knowledge_base.get("bidder_knowledge_base", {}),
+    }
+    instructions = (
+        _GW_PROMPT
+        + "\n\n## 风格圣经（style-zhongda.md）\n"
+        + _STYLE
+        + "\n\n## 后端调用输出格式\n只返回本节正文 markdown，不要 JSON、不要代码围栏。"
+    )
+    raw = await complete_text(
+        model=model,
+        model_config=model_config,
+        input_messages=[
+            {"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}
+        ],
+        instructions=instructions,
+        metadata={"section": section.get("id")},
+    )
+    return _strip_fence(raw)

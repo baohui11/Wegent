@@ -15,6 +15,7 @@ from app.schemas.bid import (
     BidProjectCreate,
     BidProjectResponse,
     CoverageResponse,
+    DraftStatusResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
     OutlineResponse,
@@ -24,11 +25,16 @@ from app.schemas.bid import (
     ParseTriggerResponse,
     QualificationsResponse,
     QualificationsSaveRequest,
+    SectionContentResponse,
+    SectionListResponse,
+    SectionStatus,
     SimpleStatusResponse,
     TenderDocResponse,
 )
+from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
 from app.services.bid.coverage import compute_coverage
+from app.services.bid.draft_pipeline import launch_drafting
 from app.services.bid.model_resolver import resolve_tender_model
 from app.services.bid.outline_pipeline import build_outline_for_project
 from app.services.bid.outline_service import (
@@ -342,3 +348,75 @@ def complete_materials(
     project = _require(db, current_user, project_id)
     BidProjectService.set_phase_done(db, project=project, phase=3)
     return SimpleStatusResponse(status="materials_done")
+
+
+@router.post("/projects/{project_id}/draft", response_model=SimpleStatusResponse)
+async def start_draft(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Must be async: launch_drafting() calls asyncio.create_task, which requires a
+    # running event loop. A sync endpoint runs in a threadpool thread with no loop.
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/outline.json").exists():
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    if not BidProjectService.begin_draft(
+        db, project_id=project.id, user_id=current_user.id
+    ):
+        raise HTTPException(status_code=409, detail="drafting already running")
+    drafting.init_status(ws, [])  # placeholder; draft_all re-inits with real ids
+    model, model_config = resolve_tender_model(db, current_user)
+    launch_drafting(project.id, current_user.id, model, model_config)
+    return SimpleStatusResponse(status="drafting")
+
+
+@router.get("/projects/{project_id}/draft/status", response_model=DraftStatusResponse)
+def draft_status(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    return DraftStatusResponse(
+        **drafting.read_status(BidWorkspace(project.workspace_ref))
+    )
+
+
+@router.get("/projects/{project_id}/sections", response_model=SectionListResponse)
+def list_sections(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    st = drafting.read_status(ws)
+    # Merge status entries with any section files on disk (a section may be
+    # drafted before/without a status entry, e.g. pre-seeded artifacts).
+    file_ids = drafting.list_section_files(ws)
+    merged: dict[str, str] = dict(st["sections"])
+    for fid in file_ids:
+        merged.setdefault(fid, "done")
+    return SectionListResponse(
+        items=[SectionStatus(id=k, status=v) for k, v in merged.items()]
+    )
+
+
+@router.get(
+    "/projects/{project_id}/sections/{section_id}",
+    response_model=SectionContentResponse,
+)
+def get_section(
+    project_id: int,
+    section_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    try:
+        content = drafting.read_section(BidWorkspace(project.workspace_ref), section_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="section not drafted yet")
+    return SectionContentResponse(id=section_id, content=content)

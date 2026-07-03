@@ -249,3 +249,50 @@ def test_materials_kb_missing_returns_409(
         ).status_code
         == 409
     )
+
+
+def test_draft_trigger_and_status(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "D"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+
+    ws = BidWorkspace(ref, root=tmp_path)
+    # no outline -> 409
+    assert (
+        test_client.post(f"/api/bid/projects/{pid}/draft", headers=h).status_code == 409
+    )
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "s1", "covers": []}]})
+
+    with (
+        patch("app.api.endpoints.bid.launch_drafting") as launch,
+        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+    ):
+        r = test_client.post(f"/api/bid/projects/{pid}/draft", headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "drafting"
+    launch.assert_called_once()
+    # placeholder status readable
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()[
+            "finished"
+        ]
+        is False
+    )
+
+    # pre-seed a section artifact -> sections list + read single section
+    ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    ws.path("workspace/sections/s1.md").write_text("正文一", encoding="utf-8")
+    assert any(
+        i["id"] == "s1"
+        for i in test_client.get(f"/api/bid/projects/{pid}/sections", headers=h).json()[
+            "items"
+        ]
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/sections/s1", headers=h).json()[
+            "content"
+        ]
+        == "正文一"
+    )
