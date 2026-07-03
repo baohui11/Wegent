@@ -15,6 +15,9 @@ type Phase =
   | 'drafting'
   | 'review'
   | 'review_done'
+  | 'audit'
+  | 'finalizing'
+  | 'done'
   | 'error'
 
 export function useBidProject() {
@@ -99,6 +102,21 @@ export function useBidProject() {
     setPhase('review_done')
   }, [projectId])
 
+  const enterAudit = useCallback(() => setPhase('audit'), [])
+
+  const finalizeBid = useCallback(async () => {
+    if (projectId == null) return
+    setError(null)
+    try {
+      setPhase('finalizing')
+      await bidApis.finalize(projectId)
+      setPhase('done')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'unknown')
+      setPhase('error')
+    }
+  }, [projectId])
+
   return {
     phase,
     projectId,
@@ -115,5 +133,7 @@ export function useBidProject() {
     startDrafting,
     enterReview,
     completeReview,
+    enterAudit,
+    finalizeBid,
   }
 }
