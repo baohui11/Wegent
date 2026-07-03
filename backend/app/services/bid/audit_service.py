@@ -25,14 +25,69 @@ _REPORT = "workspace/audit_report.json"
 _PRICING = "workspace/pricing.json"
 _TASKS = "workspace/_fidelity_tasks.json"
 _VERDICTS = "workspace/_fidelity_verdicts.json"
+_TENDER = "workspace/tender.json"
+# Audit-only normalized copy; the canonical tender.json is never mutated.
+_TENDER_AUDIT = "workspace/_tender_audit.json"
+
+# Category values that mean "price" and must be excluded from scoring coverage.
+_PRICE_CATEGORIES = {"price", "价格", "报价"}
 
 
-def _audit_args(verdicts: bool) -> list[str]:
+def _normalize_scoring(tender: dict) -> list:
+    """Coerce LLM-produced scoring into the shape the frozen auditor hard-indexes.
+
+    ``check_coverage.py`` iterates ``tender["scoring"]`` as a list and indexes
+    ``id``/``item``/``weight``/``category`` on each entry. qwen variously emits
+    scoring as a dict (``{"weights", "items"}``), omits ``id``/``weight`` (using
+    ``code``/``score`` instead), or drops ``category`` — any of which crashes the
+    deterministic audit (Bug #8). Unwrap the dict form and fill safe defaults so
+    the audit cannot KeyError/AttributeError on partial LLM output.
+    """
+    raw = tender.get("scoring")
+    if isinstance(raw, dict):
+        items = raw.get("items", [])
+    elif isinstance(raw, list):
+        items = raw
+    else:
+        items = []
+    normalized = []
+    for i, s in enumerate(items):
+        if not isinstance(s, dict):
+            continue
+        sid = s.get("id") or s.get("code") or f"S{i + 1}"
+        category = s.get("category")
+        if category in (None, ""):
+            category = "技术"
+        elif category in _PRICE_CATEGORIES:
+            category = "价格"
+        weight = s.get("weight")
+        if weight in (None, "", 0):
+            weight = s.get("score", 0)
+        item = s.get("item") or s.get("name") or s.get("target_section") or sid
+        normalized.append(
+            {**s, "id": sid, "category": category, "weight": weight, "item": item}
+        )
+    return normalized
+
+
+def _prepare_tender(ws: BidWorkspace) -> str:
+    """Write an audit-only tender copy with normalized scoring; return its path.
+
+    Points ``--tender`` at this copy so every check reads normalized scoring
+    while the canonical ``workspace/tender.json`` stays untouched.
+    """
+    tender = dict(ws.read_json(_TENDER))
+    tender["scoring"] = _normalize_scoring(tender)
+    ws.write_json(_TENDER_AUDIT, tender)
+    return _TENDER_AUDIT
+
+
+def _audit_args(verdicts: bool, tender_path: str) -> list[str]:
     args = [
         sys.executable,
         str(_SCRIPT),
         "--tender",
-        "workspace/tender.json",
+        tender_path,
         "--outline",
         "workspace/outline.json",
         "--sections",
@@ -65,8 +120,9 @@ def _run(ws: BidWorkspace, *, verdicts: bool) -> dict:
     # false veto. Business/pricing volume is out of the closed-loop scope.
     if not ws.path(_PRICING).exists():
         ws.write_json(_PRICING, {})
+    tender_path = _prepare_tender(ws)
     proc = subprocess.run(
-        _audit_args(verdicts),
+        _audit_args(verdicts, tender_path),
         cwd=str(ws.dir()),
         capture_output=True,
         text=True,
