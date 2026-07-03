@@ -1,12 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useTranslation } from '@/hooks/useTranslation'
-import type { TenderDoc } from '@/apis/bid'
+import type { TenderClause, TenderDoc, TenderScoring } from '@/apis/bid'
+
+// qwen sometimes emits scoring/clauses as { items: [...] } instead of a bare
+// array; coerce so .map never throws (mirrors the backend tender normalizer).
+function asItems<T>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[]
+  if (v && typeof v === 'object' && Array.isArray((v as { items?: unknown }).items)) {
+    return (v as { items: T[] }).items
+  }
+  return []
+}
 
 export function TenderResultView({ tender }: { tender: TenderDoc }) {
   const { t } = useTranslation('bidWorkbench')
-  const scoring = tender.scoring ?? []
-  const redLines = (tender.mandatory_clauses ?? []).filter(c => c.veto)
+  const scoring = asItems<TenderScoring>(tender.scoring)
+  const redLines = asItems<TenderClause>(tender.mandatory_clauses).filter(c => c.veto)
   const pkg = tender.target_package
 
   return (
@@ -24,9 +34,9 @@ export function TenderResultView({ tender }: { tender: TenderDoc }) {
           <tbody>
             {scoring.map((s, i) => (
               <tr key={s.id ?? i} className="border-t border-border">
-                <td>{s.id}</td>
-                <td>{s.weight}</td>
-                <td>{s.target_section}</td>
+                <td>{String(s.id ?? s.code ?? '')}</td>
+                <td>{String(s.weight ?? s.score ?? '')}</td>
+                <td>{String(s.target_section ?? s.item ?? s.name ?? '')}</td>
               </tr>
             ))}
           </tbody>
