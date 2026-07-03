@@ -37,11 +37,13 @@ export function WorkbenchShell({
   phase,
   title,
   onBack,
+  headerAction,
   children,
 }: {
   phase: string
   title: string
   onBack: () => void
+  headerAction?: ReactNode
   children: ReactNode
 }) {
   const { t } = useTranslation('bidWorkbench')
@@ -139,15 +141,18 @@ export function WorkbenchShell({
             {t(`phaseHeader.${current}.subtitle`)}
           </div>
         </div>
-        <div
-          className="ml-4 flex-shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs"
-          style={{
-            background: 'var(--bid-paper-2)',
-            color: 'var(--bid-sub)',
-            border: '1px solid var(--bid-border)',
-          }}
-        >
-          {title}
+        <div className="ml-4 flex flex-shrink-0 items-center gap-3">
+          {headerAction}
+          <div
+            className="whitespace-nowrap rounded-lg px-3 py-1.5 text-xs"
+            style={{
+              background: 'var(--bid-paper-2)',
+              color: 'var(--bid-sub)',
+              border: '1px solid var(--bid-border)',
+            }}
+          >
+            {title}
+          </div>
         </div>
       </div>
 

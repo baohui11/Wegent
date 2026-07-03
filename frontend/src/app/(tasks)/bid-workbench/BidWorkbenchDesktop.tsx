@@ -10,8 +10,6 @@ import type { BidProject } from '@/apis/bid'
 import { ProjectListScreen } from '@/features/bid/components/ProjectListScreen'
 import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
-import { ParsingScreen } from '@/features/bid/components/ParsingScreen'
-import { TenderResultView } from '@/features/bid/components/TenderResultView'
 import { OutlineCanvas } from '@/features/bid/components/OutlineCanvas'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
@@ -60,7 +58,6 @@ export function BidWorkbenchDesktop() {
   const {
     phase,
     projectId,
-    tender,
     outline,
     coverage,
     error,
@@ -68,7 +65,6 @@ export function BidWorkbenchDesktop() {
     parseExisting,
     startNew,
     open,
-    buildOutline,
     saveOutline,
     reset,
     enterMaterials,
@@ -110,57 +106,55 @@ export function BidWorkbenchDesktop() {
 
   if (view === 'list') {
     return (
-      <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
+      <div style={bidThemeVars} className="h-screen bg-base" data-testid="bid-workbench-desktop">
         <ProjectListScreen onOpen={openProject} onNew={newProject} />
+      </div>
+    )
+  }
+
+  // New-project / import: standalone full-page (own back button + gradient),
+  // rendered outside the workbench shell/stepper to match the mockup. Once the
+  // user hits create ('creating' → 'parsing'), the flow moves into the shell's
+  // Stage 1 canvas in its parsing state.
+  if (phase === 'import') {
+    return (
+      <div style={bidThemeVars} className="h-screen bg-base" data-testid="bid-workbench-desktop">
+        <UploadScreen
+          sampleText={SAMPLE_TENDER}
+          onBack={backToList}
+          onCreate={(text, name) =>
+            projectId != null ? parseExisting(projectId, text) : startFromText(text, name)
+          }
+        />
       </div>
     )
   }
 
   return (
     <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
-      <WorkbenchShell phase={phase} title={title} onBack={backToList}>
-        {(phase === 'import' || phase === 'creating') && (
-          <UploadScreen
-            sampleText={SAMPLE_TENDER}
-            onSubmit={(text, pkg) =>
-              projectId != null
-                ? parseExisting(projectId, text, pkg || undefined)
-                : startFromText(text, pkg || undefined)
-            }
-            onUseSample={pkg =>
-              projectId != null
-                ? parseExisting(projectId, SAMPLE_TENDER, pkg || undefined)
-                : startFromText(SAMPLE_TENDER, pkg || undefined)
-            }
-          />
+      <WorkbenchShell
+        phase={phase}
+        title={title}
+        onBack={backToList}
+        headerAction={
+          phase === 'outline_ready' && outline && coverage ? (
+            <button
+              type="button"
+              onClick={enterMaterials}
+              data-testid="outline-next-button"
+              className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold text-white"
+              style={{ background: 'var(--bid-primary)' }}
+            >
+              {t('outline.confirm')}
+            </button>
+          ) : undefined
+        }
+      >
+        {(phase === 'creating' || phase === 'parsing' || phase === 'outline_building') && (
+          <OutlineCanvas title={title} parsing />
         )}
-        {phase === 'parsing' && <ParsingScreen />}
-        {phase === 'ready' && tender && (
-          <div className="flex h-full flex-col">
-            <div className="flex-1 overflow-auto">
-              <TenderResultView tender={tender} />
-            </div>
-            <div className="border-t border-border p-4 text-right">
-              <button
-                type="button"
-                onClick={buildOutline}
-                data-testid="bid-build-outline-button"
-                className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
-              >
-                {t('phase2.build')}
-              </button>
-            </div>
-          </div>
-        )}
-        {phase === 'outline_building' && <ParsingScreen />}
         {phase === 'outline_ready' && outline && coverage && (
-          <OutlineCanvas
-            outline={outline}
-            coverage={coverage}
-            title={title}
-            onSave={saveOutline}
-            onNext={enterMaterials}
-          />
+          <OutlineCanvas outline={outline} coverage={coverage} title={title} onSave={saveOutline} />
         )}
         {phase === 'materials' && projectId != null && (
           <MaterialsScreen projectId={projectId} onComplete={completeMaterials} />

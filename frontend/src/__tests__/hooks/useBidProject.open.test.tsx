@@ -27,16 +27,20 @@ it('phase1 created -> import', async () => {
   expect(result.current.projectId).toBe(5)
 })
 
-it('phase2 without outline -> ready', async () => {
+it('phase2 without outline -> builds it and lands on the canvas', async () => {
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
   ;(bidApis.getOutline as jest.Mock).mockRejectedValue(new Error('404'))
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [] },
+    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
+  })
   const { result } = renderHook(() => useBidProject())
   await act(async () => {
     await result.current.open(proj({ current_phase: 2, status: 'parsed' }))
   })
-  await waitFor(() => expect(result.current.phase).toBe('ready'))
+  await waitFor(() => expect(result.current.phase).toBe('outline_ready'))
   expect(bidApis.getTender).toHaveBeenCalledWith(5)
-  expect(result.current.tender).toEqual({ scoring: [] })
+  expect(bidApis.buildOutline).toHaveBeenCalledWith(5)
 })
 
 it('phase2 with outline -> outline_ready', async () => {
@@ -102,16 +106,20 @@ it('phase5 -> review, phase6 -> audit, phase7 -> done', async () => {
   expect(r7.current.phase).toBe('done')
 })
 
-it('phase1 parsing -> polls then ready', async () => {
+it('phase1 parsing -> polls, builds outline, lands on the canvas', async () => {
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [] },
+    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
+  })
   const { result } = renderHook(() => useBidProject())
   await act(async () => {
     await result.current.open(proj({ current_phase: 1, status: 'parsing' }))
   })
-  await waitFor(() => expect(result.current.phase).toBe('ready'))
+  await waitFor(() => expect(result.current.phase).toBe('outline_ready'))
   expect(bidApis.getTender).toHaveBeenCalledWith(5)
-  expect(result.current.tender).toEqual({})
+  expect(bidApis.buildOutline).toHaveBeenCalledWith(5)
 })
 
 it('open lands error when getTender throws', async () => {

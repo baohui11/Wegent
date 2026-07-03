@@ -10,7 +10,10 @@ from pathlib import Path
 
 import anyio
 
-from app.services.bid.project_service import BidProjectService
+from app.services.bid.project_service import (
+    DEFAULT_PROJECT_TITLE,
+    BidProjectService,
+)
 from app.services.bid.specialists import call_tender_sleuth
 from app.services.bid.workspace import BidWorkspace
 
@@ -170,8 +173,13 @@ async def _run_parse(
         ws = BidWorkspace(project.workspace_ref)
         try:
             tender = await parse_tender(ws, model=model, model_config=model_config)
-            name = ((tender.get("project") or {}).get("name") or "").strip()
-            BidProjectService.complete_phase1(db, project=project, title=name or None)
+            derived = ((tender.get("project") or {}).get("name") or "").strip()
+            # Preserve a user-chosen title; only fall back to the tender-derived
+            # name when the project still carries the smart-naming placeholder.
+            current = (project.title or "").strip()
+            keep_user_title = bool(current) and current != DEFAULT_PROJECT_TITLE
+            title = None if keep_user_title else (derived or None)
+            BidProjectService.complete_phase1(db, project=project, title=title)
         except Exception as e:  # never leave the project stuck in 'parsing'
             logger.warning("parse failed for project %s: %s", project_id, e)
             project.status = "parse_failed"

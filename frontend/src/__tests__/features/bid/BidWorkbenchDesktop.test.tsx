@@ -11,17 +11,36 @@ jest.mock('@/hooks/useTranslation', () => ({
 jest.mock('@/components/common/EnhancedMarkdown', () => ({
   EnhancedMarkdown: ({ source }: { source: string }) => <div data-testid="md">{source}</div>,
 }))
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+}))
+jest.mock('@/features/common/UserContext', () => ({
+  useUser: () => ({ user: { user_name: 'tester', real_name: '测试用户', department_name: null } }),
+}))
 
 beforeEach(() => jest.clearAllMocks())
 
-// Helper: land on the list, click "new", reach the in-shell import panel.
+// Helper: land on the list, click "new", reach the standalone new-project screen.
 async function enterNewImport() {
   ;(bidApis.listProjects as jest.Mock).mockResolvedValue([])
   render(<BidWorkbenchDesktop />)
   await screen.findByTestId('bid-project-list')
   fireEvent.click(screen.getByTestId('bid-new-project-button'))
-  await screen.findByTestId('bid-workbench-shell')
   await screen.findByTestId('bid-upload-screen')
+}
+
+// Load the sample file, pick smart naming (no name needed), then create — the
+// simplest path from the new-project screen to a parse.
+function sampleThenCreate() {
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  fireEvent.click(screen.getByTestId('bid-name-mode-smart'))
+  fireEvent.click(screen.getByTestId('bid-start-parse-button'))
+}
+
+// Parsing now flows straight into the Stage 1 canvas (outline auto-built).
+const OUTLINE_RES = {
+  outline: { sections: [], volumes: [] },
+  coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
 }
 
 it('lands on the project list by default', async () => {
@@ -31,33 +50,38 @@ it('lands on the project list by default', async () => {
   expect(screen.queryByTestId('bid-upload-screen')).not.toBeInTheDocument()
 })
 
-it('new -> import panel inside the shell, then sample -> ready', async () => {
+it('new -> standalone new-project screen, then sample + create -> ready', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 1 })
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [{ id: 'S1' }] } })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
   await enterNewImport()
-  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
-  await waitFor(() => expect(screen.getByTestId('bid-tender-result')).toBeInTheDocument())
+  sampleThenCreate()
+  await screen.findByTestId('bid-outline-editor')
 })
 
-it('new -> paste real tender text -> start parse submits that text', async () => {
+it('new -> upload a real tender file -> create submits that file text', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 5 })
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
   await enterNewImport()
-  fireEvent.change(screen.getByTestId('bid-tender-input'), {
-    target: { value: '我方真实招标文件正文' },
-  })
+  const file = new File(['我方真实招标文件正文'], 'tender.txt', { type: 'text/plain' })
+  // jsdom's File.text() is unreliable; make it deterministic for the read step.
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve('我方真实招标文件正文') })
+  fireEvent.change(screen.getByTestId('bid-tender-file'), { target: { files: [file] } })
+  await screen.findByText('tender.txt')
+  fireEvent.click(screen.getByTestId('bid-name-mode-smart'))
   fireEvent.click(screen.getByTestId('bid-start-parse-button'))
-  await waitFor(() => expect(screen.getByTestId('bid-tender-result')).toBeInTheDocument())
+  await screen.findByTestId('bid-outline-editor')
   expect(bidApis.parse).toHaveBeenCalledWith(5, '我方真实招标文件正文')
 })
 
-it('back button returns from the shell to the project list', async () => {
+it('back button returns from the new-project screen to the project list', async () => {
   await enterNewImport()
-  fireEvent.click(screen.getByTestId('bid-workbench-back'))
+  fireEvent.click(screen.getByTestId('bid-upload-back-button'))
   await screen.findByTestId('bid-project-list')
 })
 
@@ -99,11 +123,12 @@ it('opening a parse_failed project resumes to import panel and parses the existi
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsing' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
   render(<BidWorkbenchDesktop />)
   fireEvent.click(await screen.findByTestId('bid-project-card-7'))
   await screen.findByTestId('bid-upload-screen')
-  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
-  await screen.findByTestId('bid-tender-result')
+  sampleThenCreate()
+  await screen.findByTestId('bid-outline-editor')
   expect(bidApis.createProject).not.toHaveBeenCalled()
   expect(bidApis.parse).toHaveBeenCalledWith(7, expect.any(String))
 })
@@ -121,17 +146,18 @@ it('opening a parsing project mounts the workbench shell and resolves to ready',
   ])
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
   render(<BidWorkbenchDesktop />)
   fireEvent.click(await screen.findByTestId('bid-project-card-8'))
   await screen.findByTestId('bid-workbench-shell')
-  await screen.findByTestId('bid-tender-result')
+  await screen.findByTestId('bid-outline-editor')
 })
 
 it('shows the error screen when parse fails, with a retry button', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 1 })
   ;(bidApis.parse as jest.Mock).mockRejectedValue(new Error('boom'))
   await enterNewImport()
-  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  sampleThenCreate()
   await waitFor(() => expect(screen.getByTestId('bid-error')).toBeInTheDocument())
   expect(screen.getByTestId('bid-retry-button')).toBeInTheDocument()
 })
@@ -175,10 +201,9 @@ it('runs the full chain new -> ... -> export download', async () => {
   ;(bidApis.downloadBid as jest.Mock).mockResolvedValue(undefined)
 
   await enterNewImport()
-  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
-  await screen.findByTestId('bid-tender-result')
-  fireEvent.click(screen.getByTestId('bid-build-outline-button'))
+  sampleThenCreate()
   await screen.findByTestId('bid-outline-editor')
+  await screen.findByTestId('outline-next-button')
   fireEvent.click(screen.getByTestId('outline-next-button'))
   await screen.findByTestId('bid-materials-screen')
   fireEvent.click(screen.getByTestId('bid-materials-complete-button'))

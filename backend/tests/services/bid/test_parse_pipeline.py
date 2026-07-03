@@ -171,3 +171,35 @@ async def test_run_parse_completes_phase1_on_success():
         await pp._run_parse(1, 1, "m", None)
     cp.assert_called_once()
     db.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_run_parse_derives_title_for_default_named_project():
+    # Smart naming: project still carries the placeholder -> derive from tender.
+    proj = MagicMock(workspace_ref="w", title=pp.DEFAULT_PROJECT_TITLE)
+    db = MagicMock()
+    tender = {"project": {"name": "某某数据中心采购项目"}}
+    with (
+        patch("app.db.session.SessionLocal", return_value=db),
+        patch.object(pp.BidProjectService, "get", return_value=proj),
+        patch.object(pp.BidProjectService, "complete_phase1") as cp,
+        patch.object(pp, "parse_tender", new=AsyncMock(return_value=tender)),
+    ):
+        await pp._run_parse(1, 1, "m", None)
+    cp.assert_called_once_with(db, project=proj, title="某某数据中心采购项目")
+
+
+@pytest.mark.asyncio
+async def test_run_parse_preserves_user_chosen_title():
+    # Manual naming: a user-set title must not be clobbered by the tender name.
+    proj = MagicMock(workspace_ref="w", title="我的投标书")
+    db = MagicMock()
+    tender = {"project": {"name": "某某数据中心采购项目"}}
+    with (
+        patch("app.db.session.SessionLocal", return_value=db),
+        patch.object(pp.BidProjectService, "get", return_value=proj),
+        patch.object(pp.BidProjectService, "complete_phase1") as cp,
+        patch.object(pp, "parse_tender", new=AsyncMock(return_value=tender)),
+    ):
+        await pp._run_parse(1, 1, "m", None)
+    cp.assert_called_once_with(db, project=proj, title=None)

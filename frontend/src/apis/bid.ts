@@ -2,6 +2,7 @@
 
 import { getApiBaseUrl } from '@/lib/runtime-config'
 import { apiClient } from './client'
+import { bidMockApis } from './bid.mock'
 import { getToken } from './user'
 
 export interface BidProject {
@@ -112,7 +113,7 @@ export interface AuditReport {
   checks: AuditCheck[]
 }
 
-export const bidApis = {
+const realBidApis = {
   createProject: (title: string): Promise<BidProject> =>
     apiClient.post<BidProject>('/bid/projects', { title }),
   listProjects: (): Promise<BidProject[]> => apiClient.get<BidProject[]>('/bid/projects'),
@@ -211,4 +212,16 @@ export const bidApis = {
     a.remove()
     URL.revokeObjectURL(url)
   },
+}
+
+// Toggle: run the bid workbench entirely on in-memory mock data (no backend)
+// when NEXT_PUBLIC_BID_MOCK is set. Off by default so team/production always
+// hit the real API; enable locally, e.g. `NEXT_PUBLIC_BID_MOCK=1 pnpm dev`.
+const BID_USE_MOCK =
+  process.env.NEXT_PUBLIC_BID_MOCK === '1' || process.env.NEXT_PUBLIC_BID_MOCK === 'true'
+
+export const bidApis = (BID_USE_MOCK ? bidMockApis : realBidApis) as typeof realBidApis
+
+if (BID_USE_MOCK && typeof window !== 'undefined') {
+  console.info('[bid] mock mode ON — running on in-memory mock data (NEXT_PUBLIC_BID_MOCK)')
 }

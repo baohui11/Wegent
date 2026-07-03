@@ -5,6 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.models.bid_project import BidProject
 
+# Placeholder title used when the user opts into smart naming (name derived from
+# the tender during parse). A project still carrying this exact title is treated
+# as "unnamed"; any other title is a user-chosen name and is preserved on parse.
+DEFAULT_PROJECT_TITLE = "标书项目"
+
 
 class BidProjectService:
     @staticmethod

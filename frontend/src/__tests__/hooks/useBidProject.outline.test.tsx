@@ -12,12 +12,18 @@ it('declares package before parse when provided', async () => {
   ;(bidApis.declarePackage as jest.Mock).mockResolvedValue({ status: 'declared' })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [] },
+    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
+  })
   const { result } = renderHook(() => useBidProject())
   await act(async () => {
-    await result.current.startFromText('正文', '包件二')
+    await result.current.startFromText('正文', '智慧园区投标书', '包件二')
   })
+  // Manual name flows through to createProject; package is declared before parse.
+  expect(bidApis.createProject).toHaveBeenCalledWith('智慧园区投标书')
   expect(bidApis.declarePackage).toHaveBeenCalledWith(9, '包件二')
-  await waitFor(() => expect(result.current.phase).toBe('ready'))
+  await waitFor(() => expect(result.current.phase).toBe('outline_ready'))
 })
 
 it('buildOutline moves to outline_ready with coverage', async () => {

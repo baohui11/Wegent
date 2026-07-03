@@ -7,30 +7,44 @@ jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-it('start-parse is disabled until tender text is entered', () => {
-  render(<UploadScreen onSubmit={jest.fn()} onUseSample={jest.fn()} sampleText="SAMPLE" />)
-  const start = screen.getByTestId('bid-start-parse-button')
-  expect(start).toBeDisabled()
+it('create is disabled until a tender file is added', () => {
+  render(<UploadScreen onCreate={jest.fn()} onBack={jest.fn()} sampleText="SAMPLE" />)
+  expect(screen.getByTestId('bid-start-parse-button')).toBeDisabled()
 })
 
-it('submits the pasted tender text and package', () => {
-  const onSubmit = jest.fn()
-  render(<UploadScreen onSubmit={onSubmit} onUseSample={jest.fn()} sampleText="SAMPLE" />)
-  fireEvent.change(screen.getByTestId('bid-tender-input'), {
-    target: { value: '真实招标文件正文' },
-  })
-  fireEvent.change(screen.getByTestId('bid-package-input'), { target: { value: 'A包' } })
-  fireEvent.click(screen.getByTestId('bid-start-parse-button'))
-  expect(onSubmit).toHaveBeenCalledWith('真实招标文件正文', 'A包')
-})
+it('manual mode: loads sample file, requires a name, then creates with text + name', () => {
+  const onCreate = jest.fn()
+  render(<UploadScreen onCreate={onCreate} onBack={jest.fn()} sampleText="SAMPLE-TENDER" />)
 
-it('the sample button fills the textarea and calls onUseSample with the package', () => {
-  const onUseSample = jest.fn()
-  render(<UploadScreen onSubmit={jest.fn()} onUseSample={onUseSample} sampleText="SAMPLE-TENDER" />)
   fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
-  expect(onUseSample).toHaveBeenCalledWith('')
-  // sample text is loaded into the textarea so the user can see/edit it
-  expect((screen.getByTestId('bid-tender-input') as HTMLTextAreaElement).value).toBe(
-    'SAMPLE-TENDER'
-  )
+  // File added but name still empty (manual mode) -> create stays disabled.
+  expect(screen.getByTestId('bid-start-parse-button')).toBeDisabled()
+
+  fireEvent.change(screen.getByTestId('bid-project-name-input'), {
+    target: { value: '智慧园区建设项目投标书' },
+  })
+  const create = screen.getByTestId('bid-start-parse-button')
+  expect(create).not.toBeDisabled()
+  fireEvent.click(create)
+  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '智慧园区建设项目投标书')
+})
+
+it('smart mode: creates with an empty name so the backend derives it', () => {
+  const onCreate = jest.fn()
+  render(<UploadScreen onCreate={onCreate} onBack={jest.fn()} sampleText="SAMPLE-TENDER" />)
+
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  fireEvent.click(screen.getByTestId('bid-name-mode-smart'))
+  // Smart mode needs no name -> create is enabled once a file exists.
+  const create = screen.getByTestId('bid-start-parse-button')
+  expect(create).not.toBeDisabled()
+  fireEvent.click(create)
+  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '')
+})
+
+it('back button invokes onBack', () => {
+  const onBack = jest.fn()
+  render(<UploadScreen onCreate={jest.fn()} onBack={onBack} sampleText="SAMPLE" />)
+  fireEvent.click(screen.getByTestId('bid-upload-back-button'))
+  expect(onBack).toHaveBeenCalled()
 })

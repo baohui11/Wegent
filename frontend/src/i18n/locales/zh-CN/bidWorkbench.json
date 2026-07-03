@@ -1,11 +1,26 @@
 {
   "title": "标书智写工作台",
   "stages": {
-    "1": { "label": "阶段一：拆解标书", "desc": "上传招标文件，自动拆解目录结构" },
-    "2": { "label": "阶段二：上传素材与编写要求", "desc": "为各节点上传素材，填写编写要求" },
-    "3": { "label": "阶段三：Agent 生成内容", "desc": "多智能体协同生成内容" },
-    "4": { "label": "阶段四：阅读与重生成果", "desc": "阅读内容并按需优化或再次生成" },
-    "5": { "label": "阶段五：检查评价与排版导出", "desc": "检查评价与排版，导出正式标书" }
+    "1": {
+      "label": "阶段一：拆解标书",
+      "desc": "上传招标文件，自动拆解目录结构"
+    },
+    "2": {
+      "label": "阶段二：上传素材与编写要求",
+      "desc": "为各节点上传素材，填写编写要求"
+    },
+    "3": {
+      "label": "阶段三：Agent 生成内容",
+      "desc": "多智能体协同生成内容"
+    },
+    "4": {
+      "label": "阶段四：阅读与重生成果",
+      "desc": "阅读内容并按需优化或再次生成"
+    },
+    "5": {
+      "label": "阶段五：检查评价与排版导出",
+      "desc": "检查评价与排版，导出正式标书"
+    }
   },
   "phaseHeader": {
     "1": {
@@ -16,8 +31,14 @@
       "title": "阶段二：上传素材与编写要求",
       "subtitle": "为目录节点上传素材，填写编写要求与具体需求，为内容生成做准备"
     },
-    "3": { "title": "阶段三：Agent 生成内容", "subtitle": "多智能体按流程协同生成各章节内容" },
-    "4": { "title": "阶段四：阅读与重生成果", "subtitle": "阅读内容并按需优化或再次生成" },
+    "3": {
+      "title": "阶段三：Agent 生成内容",
+      "subtitle": "多智能体按流程协同生成各章节内容"
+    },
+    "4": {
+      "title": "阶段四：阅读与重生成果",
+      "subtitle": "阅读内容并按需优化或再次生成"
+    },
     "5": {
       "title": "阶段五：检查评价与排版导出",
       "subtitle": "对完整标书进行检查与评价，设置排版要求，并导出最终文件"
@@ -56,17 +77,54 @@
     "uncovered_scoring": "未覆盖评分项",
     "uncovered_clause": "未覆盖废标红线",
     "changelog": "目录变更记录",
-    "changelog_init": "初始拆解 · 系统自动拆解"
+    "changelog_init": "初始拆解 · 系统自动拆解",
+    "file_count": "{{count}} 个",
+    "expand_all": "展开全部",
+    "collapse_all": "折叠全部",
+    "reset_view": "重置视图",
+    "add_node": "添加节点",
+    "reupload": "重新上传",
+    "reparse": "自动拆解",
+    "scoring_points": "评分点",
+    "detail_words": "建议字数",
+    "detail_priority": "生成优先级",
+    "words_hint": "约 {{n}} 字",
+    "accept": "采纳",
+    "dismiss": "忽略",
+    "canvas_hint": "拖到节点上=建立从属关系；同列拖拽调整顺序；双击改名（拖拽为二期功能）",
+    "new_leaf": "针对 {{id}} 的响应",
+    "changelog_build": "生成技术文件目录框架",
+    "log_items": {
+      "ocr": "完成招标文件 OCR 识别",
+      "toc": "提取目录与章节结构",
+      "classify": "章节分类与评分点对齐",
+      "tree": "生成技术文件目录树"
+    }
   },
   "upload": {
-    "subtitle": "粘贴或上传招标文件，AI 自动拆解出评分点与废标红线",
-    "dropzone": "拖拽招标文件到此处，或选择示例文件快速体验",
+    "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",
+    "dropzone": "点击选择或拖拽上传招标文件（可多选）",
     "use_sample": "使用示例招标文件 · 智慧园区建设项目",
     "package_label": "分包（多包必填，单包留空）",
     "paste_placeholder": "粘贴招标文件正文文本…",
     "file_label": "选择文件（.txt / .md）",
     "start": "开始拆标",
-    "or_sample": "或"
+    "or_sample": "或",
+    "heading": "新建标书项目",
+    "back_to_workbench": "返回工作台",
+    "files_header": "招标文件",
+    "files_hint": "支持上传多个文件",
+    "load_sample": "载入示例文件",
+    "dropzone_hint": "招标文件、补遗、评标办法、技术需求等 · TXT / Markdown（PDF/Word 二期支持）",
+    "file_ready": "已就绪",
+    "files_added": "已添加 {{count}} 个文件",
+    "name_header": "项目名称",
+    "name_manual": "手动输入",
+    "name_smart": "从标书中智能获取",
+    "name_manual_placeholder": "请输入标书项目名称，例如：智慧园区建设项目投标书",
+    "name_smart_desc": "项目名称将在拆解招标文件时自动识别，你也可以稍后修改。",
+    "create": "创建并开始拆解 →",
+    "create_hint": "请先上传招标文件"
   },
   "projects": {
     "title": "我的标书项目",
@@ -74,6 +132,12 @@
     "empty": "还没有标书项目，点击「新建标书」开始",
     "loading": "加载中…",
     "back": "返回项目列表",
+    "back_to_platform": "返回 Wegent 平台首页",
+    "search_placeholder": "按项目名称搜索…",
+    "all_status": "全部状态",
+    "sort_newest": "最新创建",
+    "sort_oldest": "最早创建",
+    "no_match": "没有匹配的项目，试试调整搜索或筛选条件",
     "created_at": "创建于",
     "load_failed": "加载项目列表失败",
     "retry": "重试",
@@ -95,9 +159,20 @@
       "parse_failed": "拆标失败",
       "done": "已完成",
       "in_progress": "进行中"
-    }
+    },
+    "subtitle": "每一份标书即一个项目，从拆解招标文件到导出正式标书全流程在此管理",
+    "new_project": "＋ 新建标书项目",
+    "workbench_name": "标书工作台",
+    "status_label": "状态",
+    "sort_label": "排序",
+    "count": "共 {{count}} 个项目",
+    "open": "打开项目 →",
+    "owner_role": "项目负责人",
+    "stage_text": "第 {{gate}} 关 · {{phase}}"
   },
-  "parsing": { "title": "拆标神探正在拆解招标文件…" },
+  "parsing": {
+    "title": "拆标神探正在拆解招标文件…"
+  },
   "phase1": {
     "title": "拆标 · 评分点与红线",
     "scoring": "评分矩阵",
@@ -251,5 +326,7 @@
     "soon": "即将支持",
     "settings_note": "排版设置为预览；当前装订采用默认模板"
   },
-  "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
+  "errors": {
+    "parse_failed": "拆标失败，请检查招标文件后重试"
+  }
 }

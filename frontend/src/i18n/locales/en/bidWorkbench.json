@@ -1,11 +1,26 @@
 {
   "title": "Bid Writing Workbench",
   "stages": {
-    "1": { "label": "Stage 1 · Parse", "desc": "Upload the tender; auto-extract the outline" },
-    "2": { "label": "Stage 2 · Materials", "desc": "Upload materials and writing requirements" },
-    "3": { "label": "Stage 3 · Generate", "desc": "Agents collaborate to draft content" },
-    "4": { "label": "Stage 4 · Review", "desc": "Read and refine or regenerate" },
-    "5": { "label": "Stage 5 · Check & Export", "desc": "Review, typeset and export the bid" }
+    "1": {
+      "label": "Stage 1 · Parse",
+      "desc": "Upload the tender; auto-extract the outline"
+    },
+    "2": {
+      "label": "Stage 2 · Materials",
+      "desc": "Upload materials and writing requirements"
+    },
+    "3": {
+      "label": "Stage 3 · Generate",
+      "desc": "Agents collaborate to draft content"
+    },
+    "4": {
+      "label": "Stage 4 · Review",
+      "desc": "Read and refine or regenerate"
+    },
+    "5": {
+      "label": "Stage 5 · Check & Export",
+      "desc": "Review, typeset and export the bid"
+    }
   },
   "phaseHeader": {
     "1": {
@@ -62,17 +77,54 @@
     "uncovered_scoring": "Uncovered scoring item",
     "uncovered_clause": "Uncovered red-line clause",
     "changelog": "Outline change log",
-    "changelog_init": "Initial parse · auto-generated"
+    "changelog_init": "Initial parse · auto-generated",
+    "file_count": "{{count}} file(s)",
+    "expand_all": "Expand all",
+    "collapse_all": "Collapse all",
+    "reset_view": "Reset view",
+    "add_node": "Add node",
+    "reupload": "Re-upload",
+    "reparse": "Auto-parse",
+    "scoring_points": "Scoring pts",
+    "detail_words": "Suggested length",
+    "detail_priority": "Priority",
+    "words_hint": "~{{n}} chars",
+    "accept": "Accept",
+    "dismiss": "Dismiss",
+    "canvas_hint": "Drag onto a node to nest; drag within a column to reorder; double-click to rename (drag is a later feature)",
+    "new_leaf": "Response to {{id}}",
+    "changelog_build": "Built the technical outline framework",
+    "log_items": {
+      "ocr": "Tender OCR completed",
+      "toc": "Extracted TOC & chapters",
+      "classify": "Classified chapters & aligned scoring",
+      "tree": "Generated the technical outline tree"
+    }
   },
   "upload": {
-    "subtitle": "Paste or upload the tender document; AI extracts scoring points and red lines",
-    "dropzone": "Drag the tender file here, or pick a sample to try",
+    "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",
+    "dropzone": "Click to choose or drag tender documents here (multiple)",
     "use_sample": "Use sample tender · Smart Park project",
     "package_label": "Package (required for multi-package, leave blank for single)",
     "paste_placeholder": "Paste the tender document text…",
     "file_label": "Choose a file (.txt / .md)",
     "start": "Start parsing",
-    "or_sample": "or"
+    "or_sample": "or",
+    "heading": "New Bid Project",
+    "back_to_workbench": "Back to workbench",
+    "files_header": "Tender documents",
+    "files_hint": "Multiple files supported",
+    "load_sample": "Load sample file",
+    "dropzone_hint": "Tender, addenda, scoring rules, spec attachments · TXT / Markdown (PDF/Word coming later)",
+    "file_ready": "Ready",
+    "files_added": "{{count}} file(s) added",
+    "name_header": "Project name",
+    "name_manual": "Manual",
+    "name_smart": "Detect from tender",
+    "name_manual_placeholder": "Enter a project name, e.g. Smart Park Construction Bid",
+    "name_smart_desc": "The name will be detected from the tender during parsing — you can edit it later.",
+    "create": "Create & start parsing →",
+    "create_hint": "Please upload the tender document first"
   },
   "projects": {
     "title": "My Bid Projects",
@@ -80,6 +132,12 @@
     "empty": "No bid projects yet — click \"New Bid\" to start",
     "loading": "Loading…",
     "back": "Back to projects",
+    "back_to_platform": "Back to Wegent",
+    "search_placeholder": "Search by project name…",
+    "all_status": "All statuses",
+    "sort_newest": "Newest first",
+    "sort_oldest": "Oldest first",
+    "no_match": "No matching projects — try adjusting search or filters",
     "created_at": "Created",
     "load_failed": "Failed to load projects",
     "retry": "Retry",
@@ -101,9 +159,20 @@
       "parse_failed": "Failed",
       "done": "Done",
       "in_progress": "In progress"
-    }
+    },
+    "subtitle": "Each bid is a project — manage the whole flow from parsing the tender to exporting the final document",
+    "new_project": "+ New Bid Project",
+    "workbench_name": "Bid Workbench",
+    "status_label": "Status",
+    "sort_label": "Sort",
+    "count": "{{count}} projects",
+    "open": "Open →",
+    "owner_role": "Project owner",
+    "stage_text": "Gate {{gate}} · {{phase}}"
   },
-  "parsing": { "title": "Tender Sleuth is parsing the document…" },
+  "parsing": {
+    "title": "Tender Sleuth is parsing the document…"
+  },
   "phase1": {
     "title": "Tender Analysis · Scoring & Red Lines",
     "scoring": "Scoring matrix",
@@ -257,5 +326,7 @@
     "soon": "Coming soon",
     "settings_note": "Typography settings are a preview; assembly uses the default template"
   },
-  "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
+  "errors": {
+    "parse_failed": "Parsing failed. Check the tender document and retry."
+  }
 }

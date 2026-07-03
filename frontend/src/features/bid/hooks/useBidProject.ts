@@ -57,7 +57,12 @@ export function useBidProject() {
         await pollUntilParsed(id)
         const res = await bidApis.getTender(id)
         setTender(res.tender)
-        setPhase('ready')
+        // Design: parsing flows straight into the populated Stage 1 canvas —
+        // build the outline automatically (no intermediate scoring table).
+        const built = await bidApis.buildOutline(id)
+        setOutline(built.outline)
+        setCoverage(built.coverage)
+        setPhase('outline_ready')
       } catch (e) {
         setError(e instanceof Error ? e.message : 'unknown')
         setPhase('error')
@@ -79,7 +84,10 @@ export function useBidProject() {
             await pollUntilParsed(project.id)
             const res = await bidApis.getTender(project.id)
             setTender(res.tender)
-            setPhase('ready')
+            const built = await bidApis.buildOutline(project.id)
+            setOutline(built.outline)
+            setCoverage(built.coverage)
+            setPhase('outline_ready')
             return
           }
           setPhase('import')
@@ -94,7 +102,13 @@ export function useBidProject() {
             setCoverage(o.coverage)
             setPhase('outline_ready')
           } catch {
-            setPhase('ready')
+            // Parsed but no outline yet — build it (shows the canvas in its
+            // building state), matching the new-project flow.
+            setPhase('outline_building')
+            const built = await bidApis.buildOutline(project.id)
+            setOutline(built.outline)
+            setCoverage(built.coverage)
+            setPhase('outline_ready')
           }
           return
         }
@@ -124,12 +138,14 @@ export function useBidProject() {
   )
 
   const startFromText = useCallback(
-    async (text: string, pkg?: string) => {
+    async (text: string, name?: string, pkg?: string) => {
       setError(null)
       let id: number
       try {
         setPhase('creating')
-        const project = await bidApis.createProject('标书项目')
+        // Manual name when provided; the default placeholder lets the backend
+        // derive the title from the parsed tender (smart naming).
+        const project = await bidApis.createProject(name?.trim() || '标书项目')
         setProjectId(project.id)
         id = project.id
       } catch (e) {

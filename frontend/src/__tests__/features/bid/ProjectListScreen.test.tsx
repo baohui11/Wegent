@@ -8,6 +8,12 @@ jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+}))
+jest.mock('@/features/common/UserContext', () => ({
+  useUser: () => ({ user: { user_name: 'tester', real_name: '测试用户', department_name: null } }),
+}))
 
 const proj = (over: Partial<BidProject>): BidProject => ({
   id: 1,

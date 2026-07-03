@@ -122,6 +122,15 @@ const nextConfig = {
   generateEtags: false,
   // Configure cache headers for Safari compatibility
   async headers() {
+    // In dev, turbopack reuses path-stable chunk URLs (e.g. frontend_src_*.js)
+    // whose CONTENT changes on every edit. Marking them `immutable` would make
+    // the browser cache stale bundles for a year and silently break hot reload.
+    // Only apply long-term immutable caching in production builds, where static
+    // asset filenames are content-hashed.
+    const isProd = process.env.NODE_ENV === 'production'
+    const longTermCache = isProd
+      ? 'public, max-age=31536000, immutable'
+      : 'no-store, must-revalidate'
     return [
       {
         // HTML pages - allow caching but require revalidation
@@ -134,22 +143,22 @@ const nextConfig = {
         ],
       },
       {
-        // Static assets with hash in filename - long-term cache (immutable)
+        // Static assets with hash in filename - long-term cache (immutable) in prod
         source: '/_next/static/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: longTermCache,
           },
         ],
       },
       {
-        // Public assets (fonts, images) - long-term cache
+        // Public assets (fonts, images) - long-term cache in prod
         source: '/fonts/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: longTermCache,
           },
         ],
       },
