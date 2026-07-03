@@ -45,5 +45,16 @@
     "complete": "进入起草",
     "json_error": "JSON 格式错误"
   },
+  "phase4": {
+    "title": "起草",
+    "start": "开始起草",
+    "progress": "已完成",
+    "finished": "起草完成",
+    "pick_section": "点击左侧已完成章节查看正文",
+    "status_pending": "待起草",
+    "status_drafting": "起草中",
+    "status_done": "已完成",
+    "status_error": "失败"
+  },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }

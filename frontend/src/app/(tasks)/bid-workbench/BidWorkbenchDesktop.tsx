@@ -10,6 +10,7 @@ import { ParsingScreen } from '@/features/bid/components/ParsingScreen'
 import { TenderResultView } from '@/features/bid/components/TenderResultView'
 import { OutlineEditor } from '@/features/bid/components/OutlineEditor'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
+import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
 
 const SAMPLE_TENDER = '（示例招标正文占位——真实流程由上传或后端示例项目提供）'
 
@@ -28,6 +29,7 @@ export function BidWorkbenchDesktop() {
     reset,
     enterMaterials,
     completeMaterials,
+    startDrafting,
   } = useBidProject()
 
   return (
@@ -67,12 +69,21 @@ export function BidWorkbenchDesktop() {
       )}
       {phase === 'materials_done' && (
         <div
-          className="flex h-full items-center justify-center text-sm text-text-secondary"
+          className="flex h-full flex-col items-center justify-center gap-4"
           data-testid="bid-materials-done"
         >
-          {t('phase3.complete')} ✓
+          <div className="text-sm text-text-secondary">{t('phase3.complete')} ✓</div>
+          <button
+            type="button"
+            onClick={startDrafting}
+            data-testid="bid-start-drafting-button"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
+          >
+            {t('phase4.start')}
+          </button>
         </div>
       )}
+      {phase === 'drafting' && projectId != null && <DraftingScreen projectId={projectId} />}
       {phase === 'error' && (
         <div
           className="flex h-full flex-col items-center justify-center gap-4"
