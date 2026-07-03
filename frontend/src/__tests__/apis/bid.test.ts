@@ -180,4 +180,15 @@ describe('bidApis', () => {
     expect(revokeURL).toHaveBeenCalledWith('blob:x')
     spy.mockRestore()
   })
+
+  it('verifyAudit posts to /audit/verify', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValue({
+      verdict: 'NEED_FIX',
+      summary: {},
+      checks: [],
+    })
+    const r = await bidApis.verifyAudit(5)
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/audit/verify')
+    expect(r.verdict).toBe('NEED_FIX')
+  })
 })
