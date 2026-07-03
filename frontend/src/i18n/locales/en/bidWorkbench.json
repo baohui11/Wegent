@@ -3,7 +3,8 @@
   "upload": {
     "subtitle": "Upload the tender document; AI extracts scoring points and red lines",
     "dropzone": "Drag the tender file here, or pick a sample to try",
-    "use_sample": "Use sample tender · Smart Park project"
+    "use_sample": "Use sample tender · Smart Park project",
+    "package_label": "Package (required for multi-package, leave blank for single)"
   },
   "parsing": { "title": "Tender Sleuth is parsing the document…" },
   "phase1": {
@@ -18,6 +19,21 @@
     "col_weight": "Weight",
     "col_section": "Section",
     "col_text": "Clause"
+  },
+  "phase2": {
+    "title": "Outline",
+    "build": "Confirm & build outline",
+    "sections": "Technical sections",
+    "volumes": "Commercial/Qualification/Price volumes",
+    "coverage": "Coverage",
+    "coverage_ok": "Fully covered",
+    "uncovered_scoring": "Uncovered scoring item",
+    "covers": "Covered scoring/red-line IDs (comma-separated)",
+    "add_child": "+ child",
+    "delete": "Delete",
+    "new_node": "New node",
+    "save": "Save outline",
+    "next": "Next"
   },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }

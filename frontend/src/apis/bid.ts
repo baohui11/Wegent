@@ -42,6 +42,32 @@ export interface TenderDoc {
   [k: string]: unknown
 }
 
+export interface OutlineNode {
+  id?: string
+  title?: string
+  covers?: string[]
+  children?: OutlineNode[]
+  [k: string]: unknown
+}
+
+export interface OutlineDoc {
+  sections?: OutlineNode[]
+  volumes?: OutlineNode[]
+  [k: string]: unknown
+}
+
+export interface CoverageReport {
+  total: number
+  covered: number
+  uncovered_scoring: string[]
+  uncovered_clauses: string[]
+}
+
+export interface OutlineResponse {
+  outline: OutlineDoc
+  coverage: CoverageReport
+}
+
 export const bidApis = {
   createProject: (title: string): Promise<BidProject> =>
     apiClient.post<BidProject>('/bid/projects', { title }),
@@ -53,4 +79,14 @@ export const bidApis = {
     }),
   getTender: (id: number): Promise<{ tender: TenderDoc }> =>
     apiClient.get<{ tender: TenderDoc }>(`/bid/projects/${id}/tender`),
+  buildOutline: (id: number): Promise<OutlineResponse> =>
+    apiClient.post<OutlineResponse>(`/bid/projects/${id}/outline`),
+  getOutline: (id: number): Promise<OutlineResponse> =>
+    apiClient.get<OutlineResponse>(`/bid/projects/${id}/outline`),
+  saveOutline: (id: number, outline: OutlineDoc): Promise<OutlineResponse> =>
+    apiClient.put<OutlineResponse>(`/bid/projects/${id}/outline`, { outline }),
+  getCoverage: (id: number): Promise<CoverageReport> =>
+    apiClient.get<CoverageReport>(`/bid/projects/${id}/coverage`),
+  declarePackage: (id: number, pkg: string): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/bid/projects/${id}/package`, { package: pkg }),
 }
