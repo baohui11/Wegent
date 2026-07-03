@@ -227,5 +227,26 @@
     "verify": "深度核验（接地保真）",
     "verifying": "核验中…"
   },
+  "export": {
+    "typography": "排版要求",
+    "page": "页面设置",
+    "margin": "页边距",
+    "font_cn": "中文字体",
+    "font_en": "英文字体",
+    "font_size": "字号",
+    "cover": "封面设置",
+    "cover_std": "标准红头",
+    "cover_dark": "深色简约",
+    "cover_light": "浅色轻盈",
+    "toc": "目录设置",
+    "toc_auto": "自动生成目录",
+    "toc_page": "显示页码",
+    "toc_fig": "生成图表目录",
+    "export_title": "导出完整标书",
+    "pdf": "导出 PDF (.pdf)",
+    "zip": "导出压缩包（含附件）",
+    "soon": "即将支持",
+    "settings_note": "排版设置为预览；当前装订采用默认模板"
+  },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }

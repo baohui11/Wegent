@@ -233,5 +233,26 @@
     "verify": "Deep verify (fidelity)",
     "verifying": "Verifying…"
   },
+  "export": {
+    "typography": "Typography",
+    "page": "Page size",
+    "margin": "Margin",
+    "font_cn": "CN font",
+    "font_en": "EN font",
+    "font_size": "Font size",
+    "cover": "Cover",
+    "cover_std": "Standard red header",
+    "cover_dark": "Dark minimal",
+    "cover_light": "Light",
+    "toc": "Table of contents",
+    "toc_auto": "Auto-generate TOC",
+    "toc_page": "Show page numbers",
+    "toc_fig": "Generate figure list",
+    "export_title": "Export the full bid",
+    "pdf": "Export PDF (.pdf)",
+    "zip": "Export archive (with attachments)",
+    "soon": "Coming soon",
+    "settings_note": "Typography settings are a preview; assembly uses the default template"
+  },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }
