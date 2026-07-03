@@ -35,6 +35,8 @@ it('phase2 without outline -> ready', async () => {
     await result.current.open(proj({ current_phase: 2, status: 'parsed' }))
   })
   await waitFor(() => expect(result.current.phase).toBe('ready'))
+  expect(bidApis.getTender).toHaveBeenCalledWith(5)
+  expect(result.current.tender).toEqual({ scoring: [] })
 })
 
 it('phase2 with outline -> outline_ready', async () => {
@@ -48,6 +50,14 @@ it('phase2 with outline -> outline_ready', async () => {
     await result.current.open(proj({ current_phase: 2, status: 'parsed' }))
   })
   await waitFor(() => expect(result.current.phase).toBe('outline_ready'))
+  expect(bidApis.getOutline).toHaveBeenCalledWith(5)
+  expect(result.current.outline).toEqual({ sections: [], volumes: [] })
+  expect(result.current.coverage).toEqual({
+    total: 0,
+    covered: 0,
+    uncovered_scoring: [],
+    uncovered_clauses: [],
+  })
 })
 
 it('phase3 -> materials', async () => {
@@ -100,6 +110,8 @@ it('phase1 parsing -> polls then ready', async () => {
     await result.current.open(proj({ current_phase: 1, status: 'parsing' }))
   })
   await waitFor(() => expect(result.current.phase).toBe('ready'))
+  expect(bidApis.getTender).toHaveBeenCalledWith(5)
+  expect(result.current.tender).toEqual({})
 })
 
 it('open lands error when getTender throws', async () => {
@@ -109,4 +121,5 @@ it('open lands error when getTender throws', async () => {
     await result.current.open(proj({ current_phase: 2, status: 'parsed' }))
   })
   await waitFor(() => expect(result.current.phase).toBe('error'))
+  expect(result.current.error).toBe('boom')
 })
