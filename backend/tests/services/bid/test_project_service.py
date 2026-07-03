@@ -47,3 +47,10 @@ def test_set_phase_done_generic(test_db):
     BidProjectService.set_phase_done(test_db, project=p, phase=2)
     assert p.phase_status["phase2"] == "done" and p.current_phase == 3
     assert p.max_phase_reached == 3
+
+
+def test_begin_draft_atomic(test_db):
+    p = BidProjectService.create(test_db, user_id=1, title="D", workspace_ref="w")
+    assert BidProjectService.begin_draft(test_db, project_id=p.id, user_id=1) is True
+    # Already drafting: a second lock attempt fails.
+    assert BidProjectService.begin_draft(test_db, project_id=p.id, user_id=1) is False

@@ -77,3 +77,17 @@ class BidProjectService:
         project.max_phase_reached = max(project.max_phase_reached, phase + 1)
         db.commit()
         db.refresh(project)
+
+    @staticmethod
+    def begin_draft(db: Session, *, project_id: int, user_id: int) -> bool:
+        updated = (
+            db.query(BidProject)
+            .filter(
+                BidProject.id == project_id,
+                BidProject.user_id == user_id,
+                BidProject.status != "drafting",
+            )
+            .update({BidProject.status: "drafting"}, synchronize_session=False)
+        )
+        db.commit()
+        return updated == 1
