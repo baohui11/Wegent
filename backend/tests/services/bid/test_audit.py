@@ -44,3 +44,26 @@ def test_read_report_none_then_value(tmp_path):
     _seed(ws)
     audit.run_audit(ws)
     assert audit.read_report(ws)["verdict"] in ("PASS", "NEED_FIX", "NEED_FIX_VETO")
+
+
+def test_read_fidelity_tasks(tmp_path):
+    ws = BidWorkspace("fv1", root=tmp_path)
+    assert audit.read_fidelity_tasks(ws) == []
+    ws.write_json(
+        "workspace/_fidelity_tasks.json",
+        {"stage": "audit", "tasks": [{"id": "SF-0"}]},
+    )
+    assert audit.read_fidelity_tasks(ws) == [{"id": "SF-0"}]
+
+
+def test_write_verdicts_and_rerun_with_verdicts(tmp_path):
+    ws = BidWorkspace("fv2", root=tmp_path)
+    _seed(ws)  # tender/outline/sections/qualifications from Plan 11 test helper
+    audit.write_verdicts(
+        ws,
+        [{"id": "SF-0", "verdict": "uncertain", "reason": "x", "severity": "medium"}],
+    )
+    assert ws.path("workspace/_fidelity_verdicts.json").exists()
+    report = audit.run_audit_verdicts(ws)
+    assert report["verdict"] in ("PASS", "NEED_FIX", "NEED_FIX_VETO")
+    assert "checks" in report

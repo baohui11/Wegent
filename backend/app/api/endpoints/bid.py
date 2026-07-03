@@ -54,6 +54,7 @@ from app.services.bid.outline_service import (
 )
 from app.services.bid.parse_pipeline import BidPipelineError, parse_tender
 from app.services.bid.project_service import BidProjectService
+from app.services.bid.specialists import call_fact_checker
 from app.services.bid.workspace import BidWorkspace
 
 router = APIRouter()
@@ -560,3 +561,30 @@ def download_bid(
         raise HTTPException(status_code=404, detail="not finalized yet")
     # Starlette FileResponse emits RFC 5987 filename* for the non-ASCII name.
     return FileResponse(str(path), media_type=_DOCX_MIME, filename="投标文件.docx")
+
+
+@router.post("/projects/{project_id}/audit/verify")
+async def verify_audit(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Second layer (LLM): judge fidelity tasks -> verdicts -> re-run audit with
+    # --verdicts to fold them in. Rework gate: does NOT advance phase.
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    tasks = audit_service.read_fidelity_tasks(ws)
+    if not tasks:
+        report = audit_service.read_report(ws)
+        if report is None:
+            raise HTTPException(status_code=409, detail="run audit first")
+        return report
+    model, model_config = resolve_tender_model(db, current_user)
+    verdicts = await call_fact_checker(
+        model=model, model_config=model_config, tasks=tasks
+    )
+    audit_service.write_verdicts(ws, verdicts)
+    try:
+        return await anyio.to_thread.run_sync(audit_service.run_audit_verdicts, ws)
+    except BidPipelineError as e:
+        raise HTTPException(status_code=422, detail=str(e))

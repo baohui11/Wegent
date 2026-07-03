@@ -445,3 +445,92 @@ def test_audit_finalize_download(test_client, test_token, tmp_path, monkeypatch)
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
     assert dl.content[:2] == b"PK"  # docx is a zip
+
+
+def test_audit_verify_folds_fidelity_verdicts(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock, patch
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "V"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "project": {
+                "name": "P",
+                "id": "1",
+                "budget": "100",
+                "bid_deadline": "2026-12-31T00:00:00",
+            },
+            "submission_rules": {"blind_bid": False},
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "s1", "title": "总述", "covers": []}]},
+    )
+    ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    ws.path("workspace/sections/s1.md").write_text("# 总述\n正文。", encoding="utf-8")
+    ws.write_json("corpus/qualifications.json", {"company": "测试公司", "items": []})
+
+    # no tasks yet, no report -> 409
+    assert (
+        test_client.post(f"/api/bid/projects/{pid}/audit/verify", headers=h).status_code
+        == 409
+    )
+
+    # seed a fidelity task (as Plan 11 /audit first pass would)
+    ws.write_json(
+        "workspace/_fidelity_tasks.json",
+        {
+            "stage": "audit",
+            "tasks": [
+                {
+                    "id": "SF-0",
+                    "type": "clause_faithfulness",
+                    "claim": "响应全部技术要求",
+                    "candidate_sources": [],
+                }
+            ],
+        },
+    )
+    with (
+        patch(
+            "app.api.endpoints.bid.call_fact_checker",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "id": "SF-0",
+                        "verdict": "uncertain",
+                        "reason": "证据不足",
+                        "severity": "medium",
+                    }
+                ]
+            ),
+        ) as fc,
+        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+    ):
+        r = test_client.post(f"/api/bid/projects/{pid}/audit/verify", headers=h)
+    assert r.status_code == 200 and r.json()["verdict"] in (
+        "PASS",
+        "NEED_FIX",
+        "NEED_FIX_VETO",
+    )
+    fc.assert_awaited_once()
+    assert ws.path("workspace/_fidelity_verdicts.json").exists()
+    # verify does NOT advance phase
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
+        == 1
+    )

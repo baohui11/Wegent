@@ -164,3 +164,39 @@ async def call_ghostwriter(
         metadata={"section": section.get("id")},
     )
     return _strip_fence(raw)
+
+
+_FC_PROMPT = (
+    Path(__file__).parent / "vendor" / "prompts" / "fact-checker.md"
+).read_text(encoding="utf-8")
+
+
+async def call_fact_checker(
+    *,
+    model: str,
+    model_config: dict | None,
+    tasks: list[dict],
+) -> list[dict]:
+    if not tasks:
+        return []
+    instructions = (
+        _FC_PROMPT
+        + '\n\n## 后端调用输出格式\n只返回一个 JSON 对象 {"verdicts": [...]}，'
+        + "不要 markdown 围栏、不要复述原文、不要解释。"
+    )
+    raw = await complete_text(
+        model=model,
+        model_config=model_config,
+        input_messages=[
+            {
+                "role": "user",
+                "content": json.dumps({"tasks": tasks}, ensure_ascii=False),
+            }
+        ],
+        instructions=instructions,
+        metadata={"stage": "fact_check", "count": len(tasks)},
+    )
+    obj = json.loads(_strip_fence(raw))
+    if isinstance(obj, dict):
+        return obj.get("verdicts", [])
+    return obj if isinstance(obj, list) else []
