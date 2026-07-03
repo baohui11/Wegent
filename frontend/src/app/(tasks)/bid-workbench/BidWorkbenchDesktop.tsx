@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidThemeVars } from '@/features/bid/theme'
 import { useBidProject } from '@/features/bid/hooks/useBidProject'
@@ -79,6 +79,19 @@ export function BidWorkbenchDesktop() {
     enterAudit,
     finalizeBid,
   } = useBidProject()
+
+  // Best-effort load of the mockup's Noto fonts; falls back to the theme's
+  // system stack if the network/CSP blocks it.
+  useEffect(() => {
+    const id = 'bid-noto-fonts'
+    if (document.getElementById(id)) return
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    link.href =
+      'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;900&family=Noto+Serif+SC:wght@400;600;700&display=swap'
+    document.head.appendChild(link)
+  }, [])
 
   const openProject = async (p: BidProject) => {
     setTitle(p.title)

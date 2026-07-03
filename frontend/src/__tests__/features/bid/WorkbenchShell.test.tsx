@@ -7,7 +7,7 @@ jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-it('renders title, children, and highlights the gate for the phase', () => {
+it('renders title, children, and highlights the stage for the phase', () => {
   render(
     <WorkbenchShell phase="materials" title="政务数据中心" onBack={jest.fn()}>
       <div data-testid="child" />
@@ -15,8 +15,18 @@ it('renders title, children, and highlights the gate for the phase', () => {
   )
   expect(screen.getByText('政务数据中心')).toBeInTheDocument()
   expect(screen.getByTestId('child')).toBeInTheDocument()
-  expect(screen.getByTestId('bid-stepper-gate-3')).toHaveAttribute('data-current', 'true')
-  expect(screen.getByTestId('bid-stepper-gate-1')).toHaveAttribute('data-current', 'false')
+  // materials maps to stage 2 in the five-stage stepper
+  expect(screen.getByTestId('bid-stepper-stage-2')).toHaveAttribute('data-current', 'true')
+  expect(screen.getByTestId('bid-stepper-stage-1')).toHaveAttribute('data-current', 'false')
+})
+
+it('maps audit/export phases to stage 5', () => {
+  render(
+    <WorkbenchShell phase="audit" title="x" onBack={jest.fn()}>
+      <div />
+    </WorkbenchShell>
+  )
+  expect(screen.getByTestId('bid-stepper-stage-5')).toHaveAttribute('data-current', 'true')
 })
 
 it('fires onBack when the back button is clicked', () => {

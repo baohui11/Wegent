@@ -82,7 +82,7 @@ it('opening a phase-3 project resumes at the materials screen', async () => {
   render(<BidWorkbenchDesktop />)
   fireEvent.click(await screen.findByTestId('bid-project-card-7'))
   await screen.findByTestId('bid-materials-screen')
-  expect(screen.getByTestId('bid-stepper-gate-3')).toHaveAttribute('data-current', 'true')
+  expect(screen.getByTestId('bid-stepper-stage-2')).toHaveAttribute('data-current', 'true')
 })
 
 it('opening a parse_failed project resumes to import panel and parses the existing project', async () => {

@@ -1,5 +1,40 @@
 {
   "title": "Bid Writing Workbench",
+  "stages": {
+    "1": { "label": "Stage 1 · Parse", "desc": "Upload the tender; auto-extract the outline" },
+    "2": { "label": "Stage 2 · Materials", "desc": "Upload materials and writing requirements" },
+    "3": { "label": "Stage 3 · Generate", "desc": "Agents collaborate to draft content" },
+    "4": { "label": "Stage 4 · Review", "desc": "Read and refine or regenerate" },
+    "5": { "label": "Stage 5 · Check & Export", "desc": "Review, typeset and export the bid" }
+  },
+  "phaseHeader": {
+    "1": {
+      "title": "Stage 1 · Parse tender",
+      "subtitle": "Upload the tender, auto-extract the outline, and edit it on the canvas"
+    },
+    "2": {
+      "title": "Stage 2 · Materials & requirements",
+      "subtitle": "Upload materials and writing requirements per node for content generation"
+    },
+    "3": {
+      "title": "Stage 3 · Agent generation",
+      "subtitle": "Multiple agents collaborate to draft each section"
+    },
+    "4": {
+      "title": "Stage 4 · Read & regenerate",
+      "subtitle": "Read the content and refine or regenerate as needed"
+    },
+    "5": {
+      "title": "Stage 5 · Check & export",
+      "subtitle": "Review the full bid, set typography, and export the final document"
+    }
+  },
+  "parsingSteps": {
+    "ocr": "OCR recognition",
+    "toc": "Outline extraction",
+    "classify": "Chapter classification",
+    "tree": "Tree structure"
+  },
   "upload": {
     "subtitle": "Paste or upload the tender document; AI extracts scoring points and red lines",
     "dropzone": "Drag the tender file here, or pick a sample to try",
