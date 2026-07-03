@@ -129,6 +129,23 @@
     "save": "Save outline",
     "next": "Next"
   },
+  "materials": {
+    "kb_title": "Bidder knowledge base",
+    "kb_hint": "Structured company qualifications, track record, team (JSON)",
+    "quals_title": "Qualifications",
+    "quals_hint": "Company name and certificate entries (JSON)",
+    "attachments_title": "Attachments",
+    "attachments_hint": "Upload licenses, certificates, contracts (image / PDF)",
+    "completeness": "Completeness",
+    "c_kb": "Knowledge base",
+    "c_quals": "Qualifications",
+    "c_attachments": "Attachments",
+    "done": "Filled",
+    "todo": "Empty",
+    "requirements_title": "Writing requirements (per node)",
+    "requirements_soon": "Per-node writing requirements (style / length / figures) coming soon",
+    "upload_hint": "Click to upload or drag files here"
+  },
   "phase3": {
     "title": "Materials · Knowledge base",
     "kb": "Bidder knowledge base",

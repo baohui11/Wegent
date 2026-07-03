@@ -123,6 +123,23 @@
     "save": "保存大纲",
     "next": "进入下一步"
   },
+  "materials": {
+    "kb_title": "投标人知识库",
+    "kb_hint": "公司资质、业绩、团队等结构化信息（JSON）",
+    "quals_title": "资质库",
+    "quals_hint": "公司名称与资质证照条目（JSON）",
+    "attachments_title": "附件素材",
+    "attachments_hint": "上传营业执照、证书、业绩合同等（图片 / PDF）",
+    "completeness": "填写完成度",
+    "c_kb": "知识库",
+    "c_quals": "资质库",
+    "c_attachments": "附件",
+    "done": "已填写",
+    "todo": "未填写",
+    "requirements_title": "编写要求（逐节点）",
+    "requirements_soon": "逐节点编写要求（写作风格 / 字数 / 配图）即将支持",
+    "upload_hint": "点击上传或拖拽文件到此处"
+  },
   "phase3": {
     "title": "素材 · 知识库",
     "kb": "投标人知识库",
