@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -51,3 +52,14 @@ async def test_draft_all_marks_section_error(tmp_path):
     ):
         await dp.draft_all(ws, model="m", model_config=None)
     assert ds.read_status(ws)["sections"]["s1"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_launch_drafting_schedules_under_running_loop():
+    # Regression: launch_drafting uses asyncio.create_task, which requires a
+    # running event loop. Called from an async context (as the async /draft
+    # endpoint does) it must schedule without RuntimeError.
+    with patch.object(dp, "_run_drafting", new=AsyncMock(return_value=None)) as run:
+        dp.launch_drafting(1, 1, "m", None)
+        await asyncio.sleep(0)  # let the scheduled task run
+    run.assert_awaited_once()

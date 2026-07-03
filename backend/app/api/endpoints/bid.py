@@ -351,11 +351,13 @@ def complete_materials(
 
 
 @router.post("/projects/{project_id}/draft", response_model=SimpleStatusResponse)
-def start_draft(
+async def start_draft(
     project_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Must be async: launch_drafting() calls asyncio.create_task, which requires a
+    # running event loop. A sync endpoint runs in a threadpool thread with no loop.
     project = _require(db, current_user, project_id)
     ws = BidWorkspace(project.workspace_ref)
     if not ws.path("workspace/outline.json").exists():
