@@ -87,6 +87,31 @@ export interface DraftSection {
   status: string
 }
 
+export interface AuditIssue {
+  desc: string
+  severity: string
+  veto?: boolean
+  [k: string]: unknown
+}
+
+export interface AuditCheck {
+  check: string
+  ok: boolean
+  issues: AuditIssue[]
+  [k: string]: unknown
+}
+
+export interface AuditReport {
+  verdict: string
+  summary: {
+    total_issues: number
+    veto_issues: number
+    high_issues: number
+    scoring_coverage: string
+  }
+  checks: AuditCheck[]
+}
+
 export const bidApis = {
   createProject: (title: string): Promise<BidProject> =>
     apiClient.post<BidProject>('/bid/projects', { title }),
@@ -160,4 +185,26 @@ export const bidApis = {
     apiClient.get(`/bid/projects/${id}/review/status`),
   completeReview: (id: number): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/review/complete`),
+  runAudit: (id: number): Promise<AuditReport> =>
+    apiClient.post<AuditReport>(`/bid/projects/${id}/audit`),
+  getAuditReport: (id: number): Promise<AuditReport> =>
+    apiClient.get<AuditReport>(`/bid/projects/${id}/audit/report`),
+  finalize: (id: number): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/bid/projects/${id}/finalize`),
+  downloadBid: async (id: number): Promise<void> => {
+    const token = getToken()
+    const res = await fetch(`${getApiBaseUrl()}/bid/projects/${id}/download`, {
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    })
+    if (!res.ok) throw new Error(`download failed: ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '投标文件.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
 }
