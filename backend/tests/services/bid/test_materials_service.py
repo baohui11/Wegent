@@ -29,3 +29,24 @@ def test_read_missing_raises(tmp_path):
     ws = BidWorkspace("m3", root=tmp_path)
     with pytest.raises(FileNotFoundError):
         ms.read_knowledge_base(ws)
+
+
+def test_save_and_list_attachment(tmp_path):
+    ws = BidWorkspace("m4", root=tmp_path)
+    info = ms.save_attachment(ws, "iso9001.pdf", b"PDFDATA")
+    assert info == {"name": "iso9001.pdf", "size": 7}
+    assert ms.list_attachments(ws) == [{"name": "iso9001.pdf", "size": 7}]
+
+
+def test_attachment_filename_is_basenamed(tmp_path):
+    ws = BidWorkspace("m5", root=tmp_path)
+    # path components in the name are stripped -> stored flat, no traversal
+    info = ms.save_attachment(ws, "../../evil.pdf", b"x")
+    assert info["name"] == "evil.pdf"
+    assert (ws.dir() / "corpus" / "attachments" / "evil.pdf").exists()
+    with pytest.raises(ValueError):
+        ms.save_attachment(ws, "/", b"x")  # empty basename
+
+
+def test_list_attachments_empty_when_absent(tmp_path):
+    assert ms.list_attachments(BidWorkspace("m6", root=tmp_path)) == []
