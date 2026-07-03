@@ -65,6 +65,7 @@ export function BidWorkbenchDesktop() {
     coverage,
     error,
     startFromText,
+    parseExisting,
     startNew,
     open,
     buildOutline,
@@ -81,8 +82,8 @@ export function BidWorkbenchDesktop() {
 
   const openProject = async (p: BidProject) => {
     setTitle(p.title)
-    await open(p)
     setView('workbench')
+    await open(p)
   }
   const newProject = () => {
     setTitle(t('projects.new'))
@@ -106,7 +107,13 @@ export function BidWorkbenchDesktop() {
     <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
       <WorkbenchShell phase={phase} title={title} onBack={backToList}>
         {(phase === 'import' || phase === 'creating') && (
-          <UploadScreen onUseSample={pkg => startFromText(SAMPLE_TENDER, pkg || undefined)} />
+          <UploadScreen
+            onUseSample={pkg =>
+              projectId != null
+                ? parseExisting(projectId, SAMPLE_TENDER, pkg || undefined)
+                : startFromText(SAMPLE_TENDER, pkg || undefined)
+            }
+          />
         )}
         {phase === 'parsing' && <ParsingScreen />}
         {phase === 'ready' && tender && (

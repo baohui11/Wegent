@@ -71,6 +71,48 @@ it('opening a phase-3 project resumes at the materials screen', async () => {
   expect(screen.getByTestId('bid-stepper-gate-3')).toHaveAttribute('data-current', 'true')
 })
 
+it('opening a parse_failed project resumes to import panel and parses the existing project', async () => {
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([
+    {
+      id: 7,
+      title: 'x',
+      current_phase: 1,
+      max_phase_reached: 1,
+      status: 'parse_failed',
+      created_at: '2026-07-03T00:00:00Z',
+    },
+  ])
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
+  ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsing' })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(await screen.findByTestId('bid-project-card-7'))
+  await screen.findByTestId('bid-upload-screen')
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  await screen.findByTestId('bid-tender-result')
+  expect(bidApis.createProject).not.toHaveBeenCalled()
+  expect(bidApis.parse).toHaveBeenCalledWith(7, expect.any(String))
+})
+
+it('opening a parsing project mounts the workbench shell and resolves to ready', async () => {
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([
+    {
+      id: 8,
+      title: 'y',
+      current_phase: 1,
+      max_phase_reached: 1,
+      status: 'parsing',
+      created_at: '2026-07-03T00:00:00Z',
+    },
+  ])
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(await screen.findByTestId('bid-project-card-8'))
+  await screen.findByTestId('bid-workbench-shell')
+  await screen.findByTestId('bid-tender-result')
+})
+
 it('shows the error screen when parse fails, with a retry button', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 1 })
   ;(bidApis.parse as jest.Mock).mockRejectedValue(new Error('boom'))
