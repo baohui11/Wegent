@@ -63,9 +63,39 @@ async def _run_merge_async(ws):
     return await anyio.to_thread.run_sync(run_merge, ws)
 
 
+# Hard-required top-level blocks (mirrors merge_tender.py REQUIRED_BLOCKS).
+_REQUIRED_BLOCKS = [
+    "project",
+    "qualifications",
+    "scoring",
+    "mandatory_clauses",
+    "submission_rules",
+    "required_outline",
+    "requirements",
+    "commitment_terms",
+    "target_package",
+]
+
+
 def _write_parts(ws, parts: dict) -> None:
+    # merge_tender.py iterates each part file with ``data.items()``; it must be a
+    # ``{block: value}`` dict. call_tender_sleuth returns bare block values (some
+    # are lists, e.g. scoring), so re-wrap under the block key.
     for key, content in parts.items():
-        ws.write_json(f"workspace/tender_parts/{key}.json", content)
+        ws.write_json(f"workspace/tender_parts/{key}.json", {key: content})
+
+
+def _tender_complete(ws) -> bool:
+    # merge_tender.py always writes tender.json (even with advisory
+    # _meta.merge_issues) and exits non-zero on ANY issue, including soft
+    # closure warnings. Accept the parse once every REQUIRED_BLOCK is present;
+    # advisory quality issues are surfaced later in coverage/audit and reviewed
+    # by the human (segment-internal auto, segment-boundary manual).
+    try:
+        tender = ws.read_json("workspace/tender.json")
+    except FileNotFoundError:
+        return False
+    return all(b in tender for b in _REQUIRED_BLOCKS)
 
 
 def _read_ctx(ws):
@@ -84,31 +114,37 @@ def _read_ctx(ws):
     )
 
 
+def _merge_issues(ws) -> list:
+    # merge_tender.py may not write tender.json on a hard failure; degrade to []
+    # so the caller reports the merge stderr instead of crashing with 500.
+    try:
+        return (
+            ws.read_json("workspace/tender.json")
+            .get("_meta", {})
+            .get("merge_issues", [])
+        )
+    except FileNotFoundError:
+        return []
+
+
 async def parse_tender(ws, *, model: str, model_config: dict | None) -> dict:
     await _run_segment_async(ws)
     ctx = _read_ctx(ws)
     parts = await call_tender_sleuth(model=model, model_config=model_config, **ctx)
     _write_parts(ws, parts)
-    code, output = await _run_merge_async(ws)
-    if code != 0:
+    _, output = await _run_merge_async(ws)
+    if not _tender_complete(ws):
         # In-phase single retry: feed merge_issues back to the specialist, re-merge.
-        issues = (
-            ws.read_json("workspace/tender.json")
-            .get("_meta", {})
-            .get("merge_issues", [])
-        )
+        issues = _merge_issues(ws)
         retry_parts = await call_tender_sleuth(
             model=model,
             model_config=model_config,
             **{**ctx, "bid_config": {**ctx["bid_config"], "_merge_issues": issues}},
         )
         _write_parts(ws, retry_parts)
-        code, output = await _run_merge_async(ws)
-        if code != 0:
-            issues = (
-                ws.read_json("workspace/tender.json")
-                .get("_meta", {})
-                .get("merge_issues", [])
+        _, output = await _run_merge_async(ws)
+        if not _tender_complete(ws):
+            raise BidPipelineError(
+                f"merge failed after retry: {_merge_issues(ws) or output}"
             )
-            raise BidPipelineError(f"merge failed after retry: {issues or output}")
     return ws.read_json("workspace/tender.json")
