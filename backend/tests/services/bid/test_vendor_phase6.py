@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Smoke: vendored phase-6 skill entry scripts import & expose --help."""
+
 import subprocess
 import sys
 from pathlib import Path

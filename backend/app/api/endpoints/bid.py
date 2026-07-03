@@ -3,7 +3,9 @@
 
 import uuid
 
+import anyio
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -33,6 +35,7 @@ from app.schemas.bid import (
     SimpleStatusResponse,
     TenderDocResponse,
 )
+from app.services.bid import assemble_service, audit_service
 from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
 from app.services.bid import review_service as review
@@ -496,3 +499,64 @@ def complete_review(
     project = _require(db, current_user, project_id)
     BidProjectService.set_phase_done(db, project=project, phase=5)
     return SimpleStatusResponse(status="review_done")
+
+
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+@router.post("/projects/{project_id}/audit")
+async def run_audit_endpoint(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Health-check (rework gate): does NOT advance phase; may loop back to ④⑤.
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        return await anyio.to_thread.run_sync(audit_service.run_audit, ws)
+    except BidPipelineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/projects/{project_id}/audit/report")
+def get_audit_report(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    report = audit_service.read_report(BidWorkspace(project.workspace_ref))
+    if report is None:
+        raise HTTPException(status_code=404, detail="no audit report")
+    return report
+
+
+@router.post("/projects/{project_id}/finalize", response_model=SimpleStatusResponse)
+async def finalize_bid(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        await anyio.to_thread.run_sync(assemble_service.finalize, ws)
+    except BidPipelineError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    BidProjectService.set_phase_done(db, project=project, phase=6)
+    return SimpleStatusResponse(status="finalized")
+
+
+@router.get("/projects/{project_id}/download")
+def download_bid(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    path = BidWorkspace(project.workspace_ref).path(assemble_service.DOCX_REL)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="not finalized yet")
+    # Starlette FileResponse emits RFC 5987 filename* for the non-ASCII name.
+    return FileResponse(str(path), media_type=_DOCX_MIME, filename="投标文件.docx")
