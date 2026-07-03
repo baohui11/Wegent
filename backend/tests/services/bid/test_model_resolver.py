@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Regression for resolve_tender_model against the real ModelAggregationService API.
+"""Regression for resolve_tender_model.
 
-The bug this guards: model_resolver constructed ``ModelAggregationService(db)``
-but the class takes no constructor args (db is a per-call arg on resolve_model).
-API tests patched resolve_tender_model wholesale, so its body was never exercised
-and the TypeError only surfaced in real-machine E2E.
+Guards two bugs found only in real-machine E2E (API tests patched
+resolve_tender_model wholesale, so its body was never exercised):
+
+1. It constructed ``ModelAggregationService(db)`` (takes no args).
+2. Worse, ``resolve_model`` strips the sensitive ``env`` block, so the returned
+   config had no api_key/base_url -> chat_shell fell back to gpt-4/OpenAI with
+   "Missing credentials". The fix mirrors prompt_draft: look up the Model Kind
+   and run the shared ``extract_and_process_model_config`` (which decrypts env).
 """
 
 from unittest.mock import MagicMock, patch
@@ -12,39 +16,53 @@ from unittest.mock import MagicMock, patch
 from app.services.bid.model_resolver import resolve_tender_model
 
 
-def test_resolve_tender_model_empty_name_returns_default(monkeypatch):
+def test_empty_name_returns_default(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "BID_TENDER_MODEL_NAME", "")
     assert resolve_tender_model(MagicMock(), MagicMock()) == ("", None)
 
 
-def test_resolve_tender_model_constructs_service_with_no_args(monkeypatch):
+def test_resolves_credential_bearing_config(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "BID_TENDER_MODEL_NAME", "qwen3.7-max")
-    db, user = MagicMock(), MagicMock()
+    user = MagicMock(id=1, user_name="admin")
+    kind = MagicMock()
+    kind.json = {"spec": {"protocol": "anthropic", "modelConfig": {"env": {}}}}
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = kind
 
-    with patch("app.services.model_aggregation_service.ModelAggregationService") as Svc:
-        Svc.return_value.resolve_model.return_value = {
-            "name": "qwen3.7-max",
-            "config": {"model": "qwen3.7-max", "provider": "anthropic"},
-        }
-        model_name, cfg = resolve_tender_model(db, user)
+    full_cfg = {
+        "api_key": "sk-secret",
+        "base_url": "https://api.example.com/v1",
+        "model_id": "qwen3.7-max",
+        "model": "anthropic",
+    }
+    with patch(
+        "app.services.chat.config.extract_and_process_model_config",
+        return_value=full_cfg,
+    ) as ex:
+        model_id, cfg = resolve_tender_model(db, user)
 
-    # Constructor must take NO args (the original bug passed db here).
-    Svc.assert_called_once_with()
-    Svc.return_value.resolve_model.assert_called_once_with(
-        db, current_user=user, name="qwen3.7-max"
+    ex.assert_called_once_with(
+        model_spec={"protocol": "anthropic", "modelConfig": {"env": {}}},
+        user_id=1,
+        user_name="admin",
     )
-    assert model_name == "qwen3.7-max"
-    assert cfg == {"model": "qwen3.7-max", "provider": "anthropic"}
+    assert model_id == "qwen3.7-max"
+    # The whole point: credentials must survive to chat_shell.
+    assert cfg["api_key"] == "sk-secret"
+    assert cfg["base_url"] == "https://api.example.com/v1"
 
 
-def test_resolve_tender_model_unresolved_returns_name_none(monkeypatch):
+def test_model_not_found_returns_name_none(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "BID_TENDER_MODEL_NAME", "missing")
-    with patch("app.services.model_aggregation_service.ModelAggregationService") as Svc:
-        Svc.return_value.resolve_model.return_value = None
-        assert resolve_tender_model(MagicMock(), MagicMock()) == ("missing", None)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    assert resolve_tender_model(db, MagicMock(id=1, user_name="admin")) == (
+        "missing",
+        None,
+    )

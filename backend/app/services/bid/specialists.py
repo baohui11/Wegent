@@ -2,9 +2,12 @@
 """拆标神探 over Chat, sharded per required block by route_tags."""
 
 import json
+import logging
 from pathlib import Path
 
 from app.services.chat_shell_model_service import complete_text
+
+logger = logging.getLogger(__name__)
 
 _PROMPT = (Path(__file__).parent / "vendor" / "prompts" / "tender_sleuth.md").read_text(
     encoding="utf-8"
@@ -101,7 +104,19 @@ async def call_tender_sleuth(
             instructions=instructions,
             metadata={"block": block},
         )
-        obj = json.loads(_strip_fence(raw))
+        stripped = _strip_fence(raw)
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            # A single block's malformed LLM output must not abort the whole
+            # parse; skip it (merge validates REQUIRED_BLOCKS) and log the raw.
+            logger.warning(
+                "tender_sleuth block %s: non-JSON LLM response (%d chars): %r",
+                block,
+                len(raw or ""),
+                (raw or "")[:400],
+            )
+            continue
         if block in obj:
             parts[block] = obj[block]
     return parts
