@@ -156,6 +156,15 @@
     "complete": "Start drafting",
     "json_error": "JSON format error"
   },
+  "drafting": {
+    "canvas": "Generation canvas",
+    "log": "Generation log",
+    "overall": "Overall progress",
+    "empty_log": "Waiting for agents to generate…",
+    "log_done": "Finished «{{id}}»",
+    "log_drafting": "Drafting «{{id}}»",
+    "ghostwriter": "Ghostwriter"
+  },
   "phase4": {
     "title": "Drafting",
     "start": "Start drafting",

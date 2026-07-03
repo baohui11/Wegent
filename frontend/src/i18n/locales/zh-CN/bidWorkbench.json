@@ -150,6 +150,15 @@
     "complete": "进入起草",
     "json_error": "JSON 格式错误"
   },
+  "drafting": {
+    "canvas": "生成画布",
+    "log": "生成日志",
+    "overall": "总体进度",
+    "empty_log": "等待智能体生成…",
+    "log_done": "已完成《{{id}}》",
+    "log_drafting": "正在起草《{{id}}》",
+    "ghostwriter": "标书枪手"
+  },
   "phase4": {
     "title": "起草",
     "start": "开始起草",
