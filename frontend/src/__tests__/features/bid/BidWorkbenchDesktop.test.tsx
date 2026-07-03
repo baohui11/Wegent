@@ -41,6 +41,20 @@ it('new -> import panel inside the shell, then sample -> ready', async () => {
   await waitFor(() => expect(screen.getByTestId('bid-tender-result')).toBeInTheDocument())
 })
 
+it('new -> paste real tender text -> start parse submits that text', async () => {
+  ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 5 })
+  ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
+  ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
+  await enterNewImport()
+  fireEvent.change(screen.getByTestId('bid-tender-input'), {
+    target: { value: '我方真实招标文件正文' },
+  })
+  fireEvent.click(screen.getByTestId('bid-start-parse-button'))
+  await waitFor(() => expect(screen.getByTestId('bid-tender-result')).toBeInTheDocument())
+  expect(bidApis.parse).toHaveBeenCalledWith(5, '我方真实招标文件正文')
+})
+
 it('back button returns from the shell to the project list', async () => {
   await enterNewImport()
   fireEvent.click(screen.getByTestId('bid-workbench-back'))

@@ -1,33 +1,84 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 
-export function UploadScreen({ onUseSample }: { onUseSample: (pkg: string) => void }) {
+export function UploadScreen({
+  onSubmit,
+  onUseSample,
+  sampleText,
+}: {
+  onSubmit: (tenderText: string, pkg: string) => void
+  onUseSample: (pkg: string) => void
+  sampleText: string
+}) {
   const { t } = useTranslation('bidWorkbench')
+  const [text, setText] = useState('')
   const [pkg, setPkg] = useState('')
+
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    file.text().then(setText)
+  }
+
   return (
     <div
-      className="flex h-full flex-col items-center justify-center gap-6"
+      className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center gap-4 p-6"
       data-testid="bid-upload-screen"
     >
-      <div className="text-2xl font-bold">{t('title')}</div>
       <div className="text-sm text-text-secondary">{t('upload.subtitle')}</div>
-      <div className="w-[520px] rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
-        <div className="mb-3 text-3xl">📄</div>
-        <div className="mb-4 text-sm text-text-secondary">{t('upload.dropzone')}</div>
-        <input
-          value={pkg}
-          onChange={e => setPkg(e.target.value)}
-          placeholder={t('upload.package_label')}
-          data-testid="bid-package-input"
-          className="mb-4 w-full rounded-lg border border-border px-3 py-2 text-sm"
+      <div className="w-full rounded-2xl border border-border bg-surface p-6">
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder={t('upload.paste_placeholder')}
+          data-testid="bid-tender-input"
+          rows={10}
+          className="mb-3 w-full resize-y rounded-lg border border-border bg-base px-3 py-2 text-sm"
         />
+        <div className="mb-3 flex items-center gap-3">
+          <label
+            className="cursor-pointer text-xs text-primary"
+            data-testid="bid-tender-file-label"
+          >
+            {t('upload.file_label')}
+            <input
+              type="file"
+              accept=".txt,.md,text/plain,text/markdown"
+              onChange={onFile}
+              data-testid="bid-tender-file"
+              className="hidden"
+            />
+          </label>
+          <input
+            value={pkg}
+            onChange={e => setPkg(e.target.value)}
+            placeholder={t('upload.package_label')}
+            data-testid="bid-package-input"
+            className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </div>
         <button
           type="button"
-          onClick={() => onUseSample(pkg)}
+          onClick={() => onSubmit(text, pkg)}
+          disabled={!text.trim()}
+          data-testid="bid-start-parse-button"
+          className="w-full rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {t('upload.start')}
+        </button>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-text-muted">
+        <span>{t('upload.or_sample')}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setText(sampleText)
+            onUseSample(pkg)
+          }}
           data-testid="bid-upload-sample-button"
-          className="rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-white"
+          className="rounded-lg border border-primary px-4 py-2 text-sm text-primary"
         >
           {t('upload.use_sample')}
         </button>

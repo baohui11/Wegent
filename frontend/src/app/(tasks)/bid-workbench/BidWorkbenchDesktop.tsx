@@ -108,6 +108,12 @@ export function BidWorkbenchDesktop() {
       <WorkbenchShell phase={phase} title={title} onBack={backToList}>
         {(phase === 'import' || phase === 'creating') && (
           <UploadScreen
+            sampleText={SAMPLE_TENDER}
+            onSubmit={(text, pkg) =>
+              projectId != null
+                ? parseExisting(projectId, text, pkg || undefined)
+                : startFromText(text, pkg || undefined)
+            }
             onUseSample={pkg =>
               projectId != null
                 ? parseExisting(projectId, SAMPLE_TENDER, pkg || undefined)

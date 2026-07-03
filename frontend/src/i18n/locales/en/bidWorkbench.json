@@ -1,10 +1,14 @@
 {
   "title": "Bid Writing Workbench",
   "upload": {
-    "subtitle": "Upload the tender document; AI extracts scoring points and red lines",
+    "subtitle": "Paste or upload the tender document; AI extracts scoring points and red lines",
     "dropzone": "Drag the tender file here, or pick a sample to try",
     "use_sample": "Use sample tender · Smart Park project",
-    "package_label": "Package (required for multi-package, leave blank for single)"
+    "package_label": "Package (required for multi-package, leave blank for single)",
+    "paste_placeholder": "Paste the tender document text…",
+    "file_label": "Choose a file (.txt / .md)",
+    "start": "Start parsing",
+    "or_sample": "or"
   },
   "projects": {
     "title": "My Bid Projects",

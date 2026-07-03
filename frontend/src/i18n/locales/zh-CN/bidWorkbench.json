@@ -1,10 +1,14 @@
 {
   "title": "标书智写工作台",
   "upload": {
-    "subtitle": "上传招标文件，AI 自动拆解出评分点与废标红线",
+    "subtitle": "粘贴或上传招标文件，AI 自动拆解出评分点与废标红线",
     "dropzone": "拖拽招标文件到此处，或选择示例文件快速体验",
     "use_sample": "使用示例招标文件 · 智慧园区建设项目",
-    "package_label": "分包（多包必填，单包留空）"
+    "package_label": "分包（多包必填，单包留空）",
+    "paste_placeholder": "粘贴招标文件正文文本…",
+    "file_label": "选择文件（.txt / .md）",
+    "start": "开始拆标",
+    "or_sample": "或"
   },
   "projects": {
     "title": "我的标书项目",
