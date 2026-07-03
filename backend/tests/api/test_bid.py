@@ -296,3 +296,54 @@ def test_draft_trigger_and_status(test_client, test_token, tmp_path, monkeypatch
         ]
         == "正文一"
     )
+
+
+def test_review_redraft_accept_complete(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "R"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "s1", "covers": []}]})
+
+    # section not in outline -> 404
+    assert (
+        test_client.post(
+            f"/api/bid/projects/{pid}/sections/zzz/redraft", json={}, headers=h
+        ).status_code
+        == 404
+    )
+
+    with (
+        patch("app.api.endpoints.bid.launch_redraft") as launch,
+        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+    ):
+        r = test_client.post(
+            f"/api/bid/projects/{pid}/sections/s1/redraft",
+            json={"instruction": "更简洁"},
+            headers=h,
+        )
+    assert r.status_code == 200 and r.json()["status"] == "drafting"
+    launch.assert_called_once()
+
+    assert (
+        test_client.post(
+            f"/api/bid/projects/{pid}/sections/s1/accept", headers=h
+        ).json()["status"]
+        == "accepted"
+    )
+    assert test_client.get(f"/api/bid/projects/{pid}/review/status", headers=h).json()[
+        "accepted"
+    ] == {"s1": True}
+    assert (
+        test_client.post(f"/api/bid/projects/{pid}/review/complete", headers=h).json()[
+            "status"
+        ]
+        == "review_done"
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
+        == 6
+    )

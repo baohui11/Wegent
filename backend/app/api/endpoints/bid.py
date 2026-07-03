@@ -25,6 +25,8 @@ from app.schemas.bid import (
     ParseTriggerResponse,
     QualificationsResponse,
     QualificationsSaveRequest,
+    RedraftRequest,
+    ReviewStatusResponse,
     SectionContentResponse,
     SectionListResponse,
     SectionStatus,
@@ -33,8 +35,13 @@ from app.schemas.bid import (
 )
 from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
+from app.services.bid import review_service as review
 from app.services.bid.coverage import compute_coverage
-from app.services.bid.draft_pipeline import launch_drafting
+from app.services.bid.draft_pipeline import (
+    find_section,
+    launch_drafting,
+    launch_redraft,
+)
 from app.services.bid.model_resolver import resolve_tender_model
 from app.services.bid.outline_pipeline import build_outline_for_project
 from app.services.bid.outline_service import (
@@ -420,3 +427,72 @@ def get_section(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="section not drafted yet")
     return SectionContentResponse(id=section_id, content=content)
+
+
+@router.post(
+    "/projects/{project_id}/sections/{section_id}/redraft",
+    response_model=SimpleStatusResponse,
+)
+async def redraft_section(
+    project_id: int,
+    section_id: str,
+    body: RedraftRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # async: launch_redraft uses asyncio.create_task (needs a running loop).
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    outline = (
+        ws.read_json("workspace/outline.json")
+        if ws.path("workspace/outline.json").exists()
+        else {}
+    )
+    if find_section(outline, section_id) is None:
+        raise HTTPException(status_code=404, detail="section not in outline")
+    drafting.set_section_status(ws, section_id, "drafting")
+    model, model_config = resolve_tender_model(db, current_user)
+    launch_redraft(
+        project.id, current_user.id, section_id, body.instruction, model, model_config
+    )
+    return SimpleStatusResponse(status="drafting")
+
+
+@router.post(
+    "/projects/{project_id}/sections/{section_id}/accept",
+    response_model=SimpleStatusResponse,
+)
+def accept_section(
+    project_id: int,
+    section_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    review.mark_accepted(BidWorkspace(project.workspace_ref), section_id)
+    return SimpleStatusResponse(status="accepted")
+
+
+@router.get("/projects/{project_id}/review/status", response_model=ReviewStatusResponse)
+def review_status(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    return ReviewStatusResponse(
+        **review.read_review(BidWorkspace(project.workspace_ref))
+    )
+
+
+@router.post(
+    "/projects/{project_id}/review/complete", response_model=SimpleStatusResponse
+)
+def complete_review(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    BidProjectService.set_phase_done(db, project=project, phase=5)
+    return SimpleStatusResponse(status="review_done")
