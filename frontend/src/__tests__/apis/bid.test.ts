@@ -54,4 +54,34 @@ describe('bidApis', () => {
       package: '包件二',
     })
   })
+
+  it('saveKnowledgeBase puts wrapped body', async () => {
+    ;(apiClient.put as jest.Mock).mockResolvedValue({ knowledge_base: {} })
+    await bidApis.saveKnowledgeBase(5, { bidder_knowledge_base: { a: 1 } })
+    expect(apiClient.put).toHaveBeenCalledWith('/bid/projects/5/materials/knowledge-base', {
+      knowledge_base: { bidder_knowledge_base: { a: 1 } },
+    })
+  })
+
+  it('listAttachments gets items', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValue({ items: [{ name: 'a.pdf', size: 3 }] })
+    const r = await bidApis.listAttachments(5)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/5/materials/attachments')
+    expect(r.items[0].name).toBe('a.pdf')
+  })
+
+  it('uploadAttachment posts multipart via fetch', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ name: 'a.pdf', size: 3 }),
+    })
+    ;(global as unknown as { fetch: jest.Mock }).fetch = fetchMock
+    const file = new File(['x'], 'a.pdf', { type: 'application/pdf' })
+    const info = await bidApis.uploadAttachment(5, file)
+    expect(info).toEqual({ name: 'a.pdf', size: 3 })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/bid/projects/5/materials/attachments')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeInstanceOf(FormData)
+  })
 })

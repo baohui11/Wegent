@@ -10,6 +10,8 @@ type Phase =
   | 'ready'
   | 'outline_building'
   | 'outline_ready'
+  | 'materials'
+  | 'materials_done'
   | 'error'
 
 export function useBidProject() {
@@ -72,6 +74,14 @@ export function useBidProject() {
     setError(null)
   }, [])
 
+  const enterMaterials = useCallback(() => setPhase('materials'), [])
+
+  const completeMaterials = useCallback(async () => {
+    if (projectId == null) return
+    await bidApis.completeMaterials(projectId)
+    setPhase('materials_done')
+  }, [projectId])
+
   return {
     phase,
     projectId,
@@ -83,5 +93,7 @@ export function useBidProject() {
     buildOutline,
     saveOutline,
     reset,
+    enterMaterials,
+    completeMaterials,
   }
 }

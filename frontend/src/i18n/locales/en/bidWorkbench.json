@@ -35,5 +35,15 @@
     "save": "Save outline",
     "next": "Next"
   },
+  "phase3": {
+    "title": "Materials · Knowledge base",
+    "kb": "Bidder knowledge base",
+    "quals": "Qualifications",
+    "attachments": "Attachments",
+    "save_kb": "Save knowledge base",
+    "save_quals": "Save qualifications",
+    "complete": "Start drafting",
+    "json_error": "JSON format error"
+  },
   "errors": { "parse_failed": "Parsing failed. Check the tender document and retry." }
 }

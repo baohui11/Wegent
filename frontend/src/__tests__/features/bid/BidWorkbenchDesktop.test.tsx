@@ -53,3 +53,27 @@ it('builds outline from tender-ready and shows editor', async () => {
   fireEvent.click(screen.getByTestId('bid-build-outline-button'))
   await screen.findByTestId('bid-outline-editor')
 })
+
+it('enters materials screen after outline next', async () => {
+  ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
+  ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
+  ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: {} })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
+    outline: { sections: [], volumes: [] },
+    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
+  })
+  ;(bidApis.getKnowledgeBase as jest.Mock).mockResolvedValue({
+    knowledge_base: { bidder_knowledge_base: {} },
+  })
+  ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
+    qualifications: { company: '', items: {} },
+  })
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(screen.getByTestId('bid-upload-sample-button'))
+  await screen.findByTestId('bid-tender-result')
+  fireEvent.click(screen.getByTestId('bid-build-outline-button'))
+  await screen.findByTestId('bid-outline-editor')
+  fireEvent.click(screen.getByTestId('outline-next-button')) // coverage clean -> enabled
+  await screen.findByTestId('bid-materials-screen')
+})
