@@ -347,3 +347,101 @@ def test_review_redraft_accept_complete(test_client, test_token, tmp_path, monke
         test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
         == 6
     )
+
+
+def test_audit_finalize_download(test_client, test_token, tmp_path, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "F"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "project": {
+                "name": "P",
+                "id": "1",
+                "budget": "100",
+                "bid_deadline": "2026-12-31T00:00:00",
+            },
+            "submission_rules": {"blind_bid": False},
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "s1", "title": "总述", "covers": []}]},
+    )
+    ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    ws.path("workspace/sections/s1.md").write_text(
+        "# 总述\n\n由{{bidder}}实施{{qual:CMMI3}}。", encoding="utf-8"
+    )
+    ws.write_json(
+        "corpus/qualifications.json",
+        {
+            "company": "测试公司",
+            "items": [
+                {
+                    "id": "CMMI3",
+                    "name": "CMMI3 证书",
+                    "file": "cmmi3.png",
+                    "expiry": "2027-08-01",
+                }
+            ],
+        },
+    )
+
+    # download before finalize -> 404
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/download", headers=h).status_code
+        == 404
+    )
+    # audit report before audit -> 404
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/audit/report", headers=h).status_code
+        == 404
+    )
+
+    # audit does NOT advance phase (rework gate)
+    r = test_client.post(f"/api/bid/projects/{pid}/audit", headers=h)
+    assert r.status_code == 200 and r.json()["verdict"] in (
+        "PASS",
+        "NEED_FIX",
+        "NEED_FIX_VETO",
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
+        == 1
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/audit/report", headers=h).json()[
+            "verdict"
+        ]
+        == r.json()["verdict"]
+    )
+
+    # finalize -> docx + phase advanced to 7 (set_phase_done(6))
+    assert (
+        test_client.post(f"/api/bid/projects/{pid}/finalize", headers=h).json()[
+            "status"
+        ]
+        == "finalized"
+    )
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
+        == 7
+    )
+
+    # download -> 200 docx
+    dl = test_client.get(f"/api/bid/projects/{pid}/download", headers=h)
+    assert dl.status_code == 200
+    assert dl.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert dl.content[:2] == b"PK"  # docx is a zip
