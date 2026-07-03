@@ -35,5 +35,15 @@
     "save": "保存大纲",
     "next": "进入下一步"
   },
+  "phase3": {
+    "title": "素材 · 知识库",
+    "kb": "投标人知识库",
+    "quals": "资质库",
+    "attachments": "附件",
+    "save_kb": "保存知识库",
+    "save_quals": "保存资质库",
+    "complete": "进入起草",
+    "json_error": "JSON 格式错误"
+  },
   "errors": { "parse_failed": "拆标失败，请检查招标文件后重试" }
 }

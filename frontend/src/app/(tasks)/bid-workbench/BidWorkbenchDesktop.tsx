@@ -9,6 +9,7 @@ import { UploadScreen } from '@/features/bid/components/UploadScreen'
 import { ParsingScreen } from '@/features/bid/components/ParsingScreen'
 import { TenderResultView } from '@/features/bid/components/TenderResultView'
 import { OutlineEditor } from '@/features/bid/components/OutlineEditor'
+import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 
 const SAMPLE_TENDER = '（示例招标正文占位——真实流程由上传或后端示例项目提供）'
 
@@ -16,6 +17,7 @@ export function BidWorkbenchDesktop() {
   const { t } = useTranslation('bidWorkbench')
   const {
     phase,
+    projectId,
     tender,
     outline,
     coverage,
@@ -24,6 +26,8 @@ export function BidWorkbenchDesktop() {
     buildOutline,
     saveOutline,
     reset,
+    enterMaterials,
+    completeMaterials,
   } = useBidProject()
 
   return (
@@ -55,8 +59,19 @@ export function BidWorkbenchDesktop() {
           outline={outline}
           coverage={coverage}
           onSave={saveOutline}
-          onNext={() => {}}
+          onNext={enterMaterials}
         />
+      )}
+      {phase === 'materials' && projectId != null && (
+        <MaterialsScreen projectId={projectId} onComplete={completeMaterials} />
+      )}
+      {phase === 'materials_done' && (
+        <div
+          className="flex h-full items-center justify-center text-sm text-text-secondary"
+          data-testid="bid-materials-done"
+        >
+          {t('phase3.complete')} ✓
+        </div>
       )}
       {phase === 'error' && (
         <div
