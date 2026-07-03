@@ -17,12 +17,14 @@ def test_knowledge_base_roundtrip_and_validation(tmp_path):
 def test_qualifications_roundtrip_and_validation(tmp_path):
     ws = BidWorkspace("m2", root=tmp_path)
     ms.write_qualifications(
-        ws, {"company": "好大一家", "items": {"Q1": {"title": "ISO9001"}}}
+        ws, {"company": "好大一家", "items": [{"id": "Q1", "name": "ISO9001"}]}
     )
     q = ms.read_qualifications(ws)
-    assert q["items"]["Q1"]["title"] == "ISO9001"
+    assert q["items"][0]["id"] == "Q1"
     with pytest.raises(ValueError):
         ms.write_qualifications(ws, {"company": "x"})  # missing items
+    with pytest.raises(ValueError):
+        ms.write_qualifications(ws, {"items": {"Q1": {}}})  # dict, not list
 
 
 def test_read_missing_raises(tmp_path):
