@@ -201,7 +201,10 @@ def test_materials_kb_quals_attachments_and_complete(
 
     # qualifications
     q = {
-        "qualifications": {"company": "好大一家", "items": {"Q1": {"title": "ISO9001"}}}
+        "qualifications": {
+            "company": "好大一家",
+            "items": [{"id": "Q1", "name": "ISO9001"}],
+        }
     }
     assert (
         test_client.put(

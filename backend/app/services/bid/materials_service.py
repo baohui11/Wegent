@@ -34,8 +34,10 @@ def read_qualifications(ws: BidWorkspace) -> dict:
 
 
 def write_qualifications(ws: BidWorkspace, doc: dict) -> None:
-    if not isinstance(doc.get("items"), dict):
-        raise ValueError("qualifications must have a top-level 'items' object")
+    # The vendored resolve_quals.py / check_checklist.py consume ``items`` as a
+    # LIST of {id, name, expiry, file} objects; keep the stored shape aligned.
+    if not isinstance(doc.get("items"), list):
+        raise ValueError("qualifications must have a top-level 'items' list")
     ws.write_json(_QUALS, doc)
 
 
