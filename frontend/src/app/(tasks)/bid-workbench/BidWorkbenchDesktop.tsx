@@ -12,7 +12,7 @@ import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
 import { ParsingScreen } from '@/features/bid/components/ParsingScreen'
 import { TenderResultView } from '@/features/bid/components/TenderResultView'
-import { OutlineEditor } from '@/features/bid/components/OutlineEditor'
+import { OutlineCanvas } from '@/features/bid/components/OutlineCanvas'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
 import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
@@ -154,9 +154,10 @@ export function BidWorkbenchDesktop() {
         )}
         {phase === 'outline_building' && <ParsingScreen />}
         {phase === 'outline_ready' && outline && coverage && (
-          <OutlineEditor
+          <OutlineCanvas
             outline={outline}
             coverage={coverage}
+            title={title}
             onSave={saveOutline}
             onNext={enterMaterials}
           />
