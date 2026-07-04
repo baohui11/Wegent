@@ -1,22 +1,39 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Phase 4 (起草) orchestration: background, concurrency-bounded drafting."""
+"""Phase 4 (起草) orchestration.
+
+Drafting runs as a ClaudeCode sandbox agent: bid spins up a sandbox via
+executor_manager, seeds the project corpus into it over envd, fires the agent
+through ``/v1/responses`` (the agent uses the ``bid-section-writer`` skill to
+read the corpus on demand and write each section), then reads the section
+markdown back over envd while the sandbox is alive. The specialist-based
+per-section path (``call_ghostwriter``) is retained only for single-section
+redraft (deferred from the sandbox migration)."""
 
 import asyncio
 import logging
 
+from app.core.config import settings
 from app.services.bid import drafting_service as ds
 from app.services.bid import materials_service
+from app.services.bid import sandbox_config as sc
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
+from app.services.bid.sandbox_runtime import SandboxRuntime
+from app.services.bid.skill_registrar import ensure_bid_skill_registered
 from app.services.bid.specialists import call_ghostwriter
 from app.services.bid.workspace import BidWorkspace
 
 logger = logging.getLogger(__name__)
 
-# Cooperative pause: between sections the pipeline polls the status-file flag
-# (file-based because the API runs multiple uvicorn workers; the pause endpoint
-# may be served by a different process than the one running this pipeline).
-PAUSE_POLL_SECONDS = 1.0
+# How long to wait for a single section file to appear in the sandbox (C2:
+# completion = poll envd output file). Sections are produced sequentially by the
+# agent, so this is per-section, not for the whole draft.
+_SECTION_AWAIT_POLL_S = 4
+_SECTION_AWAIT_MAX_TRIES = 90
+
+# Where the agent writes section markdown inside the sandbox (matches the
+# bid-section-writer SKILL.md contract).
+_SECTION_REMOTE_DIR = "/home/user/sections"
 
 
 def flatten_sections(outline: dict) -> list[dict]:
@@ -32,59 +49,175 @@ def flatten_sections(outline: dict) -> list[dict]:
     return out
 
 
-async def draft_all(
-    ws: BidWorkspace,
+def find_section(outline: dict, section_id: str) -> dict | None:
+    for s in flatten_sections(outline):
+        if str(s.get("id")) == str(section_id):
+            return s
+    return None
+
+
+# ---- sandbox drafting (full draft) ------------------------------------------
+
+
+async def _seed_corpus(rt: SandboxRuntime, envd: str, ws: BidWorkspace) -> None:
+    """Upload the project corpus into the sandbox ``/home/user`` workspace.
+
+    The agent reads these on demand (per the bid-section-writer methodology) so
+    uploaded materials actually drive the drafting instead of being dead storage.
+    Missing files are skipped (not every project has qualifications/briefs)."""
+    # JSON artifacts: tender, outline, briefs, knowledge base, qualifications.
+    json_rels = [
+        ("workspace/tender.json", "tender.json"),
+        ("workspace/outline.json", "outline.json"),
+        ("corpus/node_briefs.json", "node_briefs.json"),
+        ("corpus/bidder_knowledge_base.json", "bidder_knowledge_base.json"),
+        ("corpus/qualifications.json", "qualifications.json"),
+    ]
+    for rel, name in json_rels:
+        p = ws.path(rel)
+        if not p.exists():
+            continue
+        await rt.seed_file(envd, f"/home/user/{name}", p.read_bytes(), name)
+    # Raw attachment files (PDFs, images, ...): the agent reads/extracts them
+    # in-container (D6/D10 — materials actually enter drafting).
+    attach_dir = ws.path("corpus/attachments")
+    if attach_dir.is_dir():
+        for f in sorted(attach_dir.iterdir()):
+            if f.is_file():
+                await rt.seed_file(
+                    envd,
+                    f"/home/user/corpus/attachments/{f.name}",
+                    f.read_bytes(),
+                    f.name,
+                )
+
+
+def _drafting_prompt(outline: dict) -> tuple[str, str]:
+    """Build (prompt, instructions) guiding the agent to draft every outline
+    section to ``/home/user/sections/<id>.md`` using the bid-section-writer
+    skill and the seeded corpus."""
+    section_ids = [str(s["id"]) for s in flatten_sections(outline)]
+    instructions = (
+        "You are a bid proposal technical writer. Use the `bid-section-writer` "
+        "skill's methodology: respond point-by-point, ground every claim in the "
+        "seeded corpus, and avoid fabrication. Before writing a section, inspect "
+        "the relevant materials under /home/user/ (tender.json, outline.json, "
+        "node_briefs.json, bidder_knowledge_base.json, qualifications.json, and "
+        "corpus/attachments/*) and read what you need."
+    )
+    prompt = (
+        f"Draft every outline section listed below into Markdown, one file per "
+        f"section at `/home/user/sections/<section_id>.md`. Section ids to "
+        f"produce: {', '.join(section_ids)}. Do not skip any. Write each file "
+        f"with the section's id as the filename stem (e.g. "
+        f"/home/user/sections/{section_ids[0] if section_ids else '<id>'}.md)."
+    )
+    return prompt, instructions
+
+
+async def _collect_sections(
+    rt: SandboxRuntime, envd: str, ws: BidWorkspace, outline: dict
+) -> None:
+    """Await + read each section back from the sandbox and persist it to the
+    project workspace, updating drafting status as we go."""
+    sections = flatten_sections(outline)
+    for section in sections:
+        sid = str(section["id"])
+        remote = f"{_SECTION_REMOTE_DIR}/{sid}.md"
+        ds.set_section_status(ws, sid, "drafting")
+        present = await rt.await_file(
+            envd,
+            remote,
+            poll_s=_SECTION_AWAIT_POLL_S,
+            max_tries=_SECTION_AWAIT_MAX_TRIES,
+        )
+        if not present:
+            logger.warning("section %s never appeared in sandbox", sid)
+            ds.set_section_status(ws, sid, "error")
+            continue
+        body = await rt.read_file(envd, remote)
+        if body is None:
+            ds.set_section_status(ws, sid, "error")
+            continue
+        target = ws.path(f"workspace/sections/{sid}.md")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(body)
+        ds.set_section_status(ws, sid, "done")
+
+
+async def run_drafting_sandbox(
     *,
+    db,
+    workspace: BidWorkspace,
+    outline: dict,
+    project_id: int,
+    user_id: int,
+    user_name: str,
     model: str,
     model_config: dict | None,
-    concurrency: int = 3,
-    project_id: int | None = None,
-    user_id: int | None = None,
 ) -> None:
-    outline = ws.read_json("workspace/outline.json")
-    tender = ws.read_json("workspace/tender.json")
-    try:
-        kb = ws.read_json("corpus/bidder_knowledge_base.json")
-    except FileNotFoundError:
-        kb = {}
-    briefs = materials_service.read_briefs(ws).get("briefs", {})
+    """Run full drafting as a ClaudeCode sandbox agent.
+
+    Lifecycle (D9): create sandbox -> wait running -> seed corpus -> fire agent
+    via /v1/responses (C1) -> collect sections by polling envd (C2) -> mark
+    phase done -> delete sandbox. The sandbox is always cleaned up in ``finally``.
+    """
+    bot_env = sc.build_bot_config(model, model_config)  # Task 1: ANTHROPIC_* env
+    tid = sc.synthetic_task_id(project_id)
+
+    ensure_bid_skill_registered(db)  # executor must be able to pull the skill
+
+    rt = SandboxRuntime(
+        em_url=settings.EXECUTOR_MANAGER_URL,
+        rewrite_host=settings.BID_SANDBOX_REWRITE_HOST,
+    )
+
     sections = flatten_sections(outline)
-    ds.init_status(ws, [str(s["id"]) for s in sections])
-    sem = asyncio.Semaphore(concurrency)
+    ds.init_status(workspace, [str(s["id"]) for s in sections])
 
-    async def one(section: dict) -> None:
-        sid = str(section["id"])
-        async with sem:
-            while ds.is_paused(ws):
-                await asyncio.sleep(PAUSE_POLL_SECONDS)
-            ds.set_section_status(ws, sid, "drafting")
-            try:
-                md = await call_ghostwriter(
-                    model=model,
-                    model_config=model_config,
-                    section=section,
-                    tender=tender,
-                    knowledge_base=kb,
-                    brief=briefs.get(sid),
-                    project_id=project_id,
-                    user_id=user_id,
-                )
-                target = ws.path(f"workspace/sections/{sid}.md")
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(md, encoding="utf-8")
-                ds.set_section_status(ws, sid, "done")
-            except Exception as e:  # per-section failure is isolated, not fatal
-                logger.warning("draft section %s failed: %s", sid, e)
-                ds.set_section_status(ws, sid, "error")
+    sid = await rt.create(
+        task_id=tid,
+        user_id=user_id,
+        user_name=user_name,
+        bot_config=bot_env,
+    )
+    try:
+        envd = await rt.wait_running(sid)
+        await _seed_corpus(rt, envd, workspace)
+        prompt, instructions = _drafting_prompt(outline)
+        await rt.run_agent(
+            envd,
+            prompt=prompt,
+            instructions=instructions,
+            model=model,
+            model_config=model_config,
+            bot_env=bot_env,
+            task_id=tid,
+            subtask_id=tid,
+            user_id=user_id,
+            user_name=user_name,
+        )
+        await _collect_sections(rt, envd, workspace, outline)
+        ds.mark_finished(workspace)
+    except Exception as e:
+        # Surface agent/infra failures on the status file so the frontend can
+        # show them; the sandbox is still torn down below.
+        ds.mark_finished(workspace, error=str(e))
+        raise
+    finally:
+        await rt.delete(sid)
 
-    await asyncio.gather(*[one(s) for s in sections])
-    ds.mark_finished(ws)
+
+def set_phase_done(db, project, phase: int) -> None:
+    """Thin wrapper so tests can patch phase transition without DB."""
+    BidProjectService.set_phase_done(db, project=project, phase=phase)
 
 
-async def _run_drafting(
+async def _run_drafting_sandbox(
     project_id: int, user_id: int, model: str, model_config: dict | None
 ) -> None:
     from app.db.session import SessionLocal
+    from app.models.user import User
 
     db = SessionLocal()
     try:
@@ -93,14 +226,26 @@ async def _run_drafting(
             return
         ws = BidWorkspace(project.workspace_ref)
         try:
-            await draft_all(
-                ws,
-                model=model,
-                model_config=model_config,
+            outline = ws.read_json("workspace/outline.json")
+        except FileNotFoundError:
+            ds.mark_finished(ws, error="outline not built")
+            project.status = "draft_failed"
+            db.commit()
+            return
+        # run_drafting_sandbox needs user.user_name for the sandbox create payload.
+        user = db.query(User).filter(User.id == user_id).first()
+        try:
+            await run_drafting_sandbox(
+                db=db,
+                workspace=ws,
+                outline=outline,
                 project_id=project_id,
                 user_id=user_id,
+                user_name=(user.user_name if user else ""),
+                model=model,
+                model_config=model_config,
             )
-            BidProjectService.set_phase_done(db, project=project, phase=4)
+            set_phase_done(db, project, 4)
         except BidPipelineError as e:
             ds.mark_finished(ws, error=str(e))
             project.status = "draft_failed"
@@ -112,14 +257,10 @@ async def _run_drafting(
 def launch_drafting(
     project_id: int, user_id: int, model: str, model_config: dict | None
 ) -> None:
-    asyncio.create_task(_run_drafting(project_id, user_id, model, model_config))
+    asyncio.create_task(_run_drafting_sandbox(project_id, user_id, model, model_config))
 
 
-def find_section(outline: dict, section_id: str) -> dict | None:
-    for s in flatten_sections(outline):
-        if str(s.get("id")) == str(section_id):
-            return s
-    return None
+# ---- redraft (specialist path; deferred from sandbox migration) -------------
 
 
 async def redraft_one(
