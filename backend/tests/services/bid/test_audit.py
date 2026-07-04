@@ -39,6 +39,24 @@ def test_run_audit_creates_pricing_stub_and_report(tmp_path):
     assert ws.path("workspace/audit_report.json").exists()
 
 
+def test_run_audit_stubs_missing_corpus_inputs(tmp_path):
+    # A project can reach 体检 without ever filling the bidder-info card, so
+    # corpus/qualifications.json and corpus/bidder_knowledge_base.json may be
+    # absent. run_audit eagerly load()s both -> hard crash. They must be stubbed
+    # empty (like pricing) so the audit degrades gracefully instead of 500-ing.
+    ws = BidWorkspace("aud_stub", root=tmp_path)
+    _seed(ws)
+    ws.path("corpus/qualifications.json").unlink()  # _seed wrote it; remove
+    assert not ws.path("corpus/qualifications.json").exists()
+    assert not ws.path("corpus/bidder_knowledge_base.json").exists()
+    report = audit.run_audit(ws)  # must not raise
+    assert ws.path("corpus/qualifications.json").exists()
+    assert ws.path("corpus/bidder_knowledge_base.json").exists()
+    # empty stubs must not fabricate a veto (checklist/knowledge_base pass)
+    assert report["summary"]["veto_issues"] == 0
+    assert report["verdict"] in ("PASS", "NEED_FIX", "NEED_FIX_VETO")
+
+
 def _seed_with_scoring(ws: BidWorkspace, scoring) -> None:
     _seed(ws)
     tender = ws.read_json("workspace/tender.json")

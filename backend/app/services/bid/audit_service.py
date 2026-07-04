@@ -24,6 +24,8 @@ _SCRIPT = (
 )
 _REPORT = "workspace/audit_report.json"
 _PRICING = "workspace/pricing.json"
+_QUALS = "corpus/qualifications.json"
+_KB = "corpus/bidder_knowledge_base.json"
 _TASKS = "workspace/_fidelity_tasks.json"
 _VERDICTS = "workspace/_fidelity_verdicts.json"
 _TENDER = "workspace/tender.json"
@@ -81,6 +83,13 @@ def _run(ws: BidWorkspace, *, verdicts: bool) -> dict:
     # false veto. Business/pricing volume is out of the closed-loop scope.
     if not ws.path(_PRICING).exists():
         ws.write_json(_PRICING, {})
+    # run_audit eagerly load()s the corpus + knowledge base; a project can reach
+    # 体检 without filling the bidder-info card, so stub both empty. Empty items/
+    # kb produce no false veto (checklist + knowledge_base checks pass vacuously).
+    if not ws.path(_QUALS).exists():
+        ws.write_json(_QUALS, {"company": "", "items": []})
+    if not ws.path(_KB).exists():
+        ws.write_json(_KB, {"bidder_knowledge_base": {}})
     tender_path = _prepare_tender(ws)
     proc = subprocess.run(
         _audit_args(verdicts, tender_path),
