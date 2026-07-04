@@ -11,6 +11,7 @@ export interface BidProject {
   current_phase: number
   max_phase_reached: number
   status: string
+  model_name?: string
   created_at: string
 }
 
@@ -150,8 +151,10 @@ export interface AuditReport {
 }
 
 const realBidApis = {
-  createProject: (title: string): Promise<BidProject> =>
-    apiClient.post<BidProject>('/bid/projects', { title }),
+  listModels: (): Promise<{ items: { name: string }[] }> =>
+    apiClient.get<{ items: { name: string }[] }>('/models?page=1&limit=100'),
+  createProject: (title: string, model_name?: string): Promise<BidProject> =>
+    apiClient.post<BidProject>('/bid/projects', { title, model_name: model_name ?? '' }),
   listProjects: (): Promise<BidProject[]> => apiClient.get<BidProject[]>('/bid/projects'),
   getProject: (id: number): Promise<BidProject> => apiClient.get<BidProject>(`/bid/projects/${id}`),
   deleteProject: (id: number): Promise<{ status: string }> =>

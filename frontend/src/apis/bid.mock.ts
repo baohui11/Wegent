@@ -334,6 +334,7 @@ const snapshot = (p: MockProject): BidProject => ({
   current_phase: p.current_phase,
   max_phase_reached: p.max_phase_reached,
   status: p.status,
+  model_name: p.model_name ?? '',
   created_at: p.created_at,
 })
 
@@ -376,12 +377,15 @@ const need = (id: number): MockProject => {
 }
 
 export const bidMockApis = {
-  createProject: (title: string): Promise<BidProject> => {
+  listModels: (): Promise<{ items: { name: string }[] }> =>
+    delay({ items: [{ name: 'mock-model' }] }),
+  createProject: (title: string, model_name?: string): Promise<BidProject> => {
     const p = seed({
       id: nextId++,
       title: title || '标书项目',
       current_phase: 1,
       status: 'created',
+      model_name: model_name ?? '',
       created_at: new Date('2026-07-03T09:00:00Z').toISOString(),
     })
     store.set(p.id, p)

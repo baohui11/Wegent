@@ -23,6 +23,7 @@ beforeEach(() => jest.clearAllMocks())
 // Helper: land on the list, click "new", reach the standalone new-project screen.
 async function enterNewImport() {
   ;(bidApis.listProjects as jest.Mock).mockResolvedValue([])
+  ;(bidApis.listModels as jest.Mock).mockResolvedValue({ items: [] })
   render(<BidWorkbenchDesktop />)
   await screen.findByTestId('bid-project-list')
   fireEvent.click(screen.getByTestId('bid-new-project-button'))

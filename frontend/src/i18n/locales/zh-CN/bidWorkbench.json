@@ -131,6 +131,8 @@
     "name_smart": "从标书中智能获取",
     "name_manual_placeholder": "请输入标书项目名称，例如：智慧园区建设项目投标书",
     "name_smart_desc": "项目名称将在拆解招标文件时自动识别，你也可以稍后修改。",
+    "model_label": "模型",
+    "model_default": "使用全局默认",
     "create": "创建并开始拆解 →",
     "create_hint": "请先上传招标文件"
   },

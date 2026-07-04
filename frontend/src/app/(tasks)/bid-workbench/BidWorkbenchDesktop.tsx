@@ -140,8 +140,10 @@ export function BidWorkbenchDesktop() {
         <UploadScreen
           sampleText={SAMPLE_TENDER}
           onBack={backToList}
-          onCreate={(text, name) =>
-            projectId != null ? parseExisting(projectId, text) : startFromText(text, name)
+          onCreate={(text, name, model) =>
+            projectId != null
+              ? parseExisting(projectId, text)
+              : startFromText(text, name, undefined, model)
           }
         />
       </div>
