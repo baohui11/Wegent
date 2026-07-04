@@ -120,3 +120,50 @@ async def test_call_ghostwriter_includes_instruction():
             instruction="语言更简洁，补充业绩数据",
         )
     assert "语言更简洁，补充业绩数据" in m.await_args.kwargs["instructions"]
+
+
+def test_route_map_tags_match_segmenter_vocabulary():
+    # segment_tender.py only emits these route_tags (plus "unrouted"); any
+    # other tag in ROUTE_MAP silently matches nothing and falls back to
+    # feeding ALL segments to the LLM.
+    from pathlib import Path
+
+    from app.services.bid import specialists
+
+    kw = json.loads(
+        (
+            Path(specialists.__file__).parent
+            / "vendor"
+            / "skills"
+            / "tender-parser"
+            / "references"
+            / "segment_keywords.json"
+        ).read_text(encoding="utf-8")
+    )
+    vocab = set(kw["route_keywords"].keys()) | {"unrouted"}
+    for block, cfg in specialists.ROUTE_MAP.items():
+        assert (
+            set(cfg["tags"]) <= vocab
+        ), f"{block}: unknown tags {set(cfg['tags']) - vocab}"
+
+
+def test_route_segments_picks_tagged_subset():
+    from app.services.bid.specialists import _route_segments
+
+    manifest = {
+        "segments": [
+            {"file": "a.md", "route_tags": ["scoring"]},
+            {"file": "b.md", "route_tags": ["unrouted"]},
+            {"file": "c.md", "route_tags": ["mandatory_clauses"]},
+        ]
+    }
+    segments = {"a.md": "A", "b.md": "B", "c.md": "C"}
+    # tag hit -> strict subset, no fallback
+    assert _route_segments(manifest, segments, ["scoring"], False) == {"a.md": "A"}
+    # "unrouted" usable directly as a tag
+    assert _route_segments(manifest, segments, ["unrouted"], False) == {"b.md": "B"}
+    # include_unrouted (veto blocks) adds unrouted segments
+    assert _route_segments(manifest, segments, ["scoring"], True) == {
+        "a.md": "A",
+        "b.md": "B",
+    }

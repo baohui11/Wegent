@@ -13,28 +13,45 @@ _PROMPT = (Path(__file__).parent / "vendor" / "prompts" / "tender_sleuth.md").re
     encoding="utf-8"
 )
 
-# top-level block -> routing hints. route_tag names calibrated against vendor
-# segment_tender.py output (references/segment_keywords.json route_keywords).
+# top-level block -> routing hints. Tags MUST come from the segmenter's real
+# vocabulary: segment_tender.py emits route_tags from references/
+# segment_keywords.json route_keywords (scoring / mandatory_clauses /
+# required_outline / submission_rules) plus the literal "unrouted" for
+# everything else. Body-like blocks route to "unrouted" (the document bulk);
+# structured blocks get their focused segments. cfg["veto"]=True additionally
+# includes unrouted segments (see _route_segments) and injects veto candidates.
 ROUTE_MAP: dict[str, dict] = {
-    "project": {"tags": ["project", "notice"], "veto": False, "regions": False},
-    "qualifications": {"tags": ["qualification"], "veto": True, "regions": False},
-    "target_package": {"tags": ["scoring", "price"], "veto": False, "regions": True},
+    "project": {"tags": ["unrouted"], "veto": False, "regions": False},
+    "qualifications": {
+        "tags": ["mandatory_clauses", "submission_rules"],
+        "veto": True,
+        "regions": False,
+    },
+    "target_package": {
+        "tags": ["scoring", "submission_rules"],
+        "veto": False,
+        "regions": True,
+    },
     "scoring": {"tags": ["scoring"], "veto": False, "regions": True},
-    "mandatory_clauses": {"tags": ["clause", "veto"], "veto": True, "regions": False},
-    "submission_rules": {
-        "tags": ["submission", "format"],
+    "mandatory_clauses": {
+        "tags": ["mandatory_clauses"],
+        "veto": True,
+        "regions": False,
+    },
+    "submission_rules": {"tags": ["submission_rules"], "veto": False, "regions": False},
+    "required_outline": {"tags": ["required_outline"], "veto": False, "regions": True},
+    "requirements": {
+        "tags": ["required_outline", "unrouted"],
         "veto": False,
         "regions": False,
     },
-    "required_outline": {"tags": ["outline", "toc"], "veto": False, "regions": True},
-    "requirements": {"tags": ["requirement", "spec"], "veto": False, "regions": False},
     "commitment_terms": {
-        "tags": ["commitment", "contract"],
+        "tags": ["mandatory_clauses", "submission_rules", "unrouted"],
         "veto": False,
         "regions": False,
     },
     "derived_outline": {
-        "tags": ["spec", "requirement"],
+        "tags": ["required_outline", "unrouted"],
         "veto": False,
         "regions": True,
     },
