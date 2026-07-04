@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import type { OutlineDoc } from '@/apis/bid'
+import { bidApis, type BriefsDoc, type NodeBrief, type OutlineDoc } from '@/apis/bid'
 import {
   dfsOrder,
   flattenOutline,
@@ -54,9 +54,11 @@ function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean
 }
 
 export function MaterialsScreen({
+  projectId,
   outline,
   onComplete,
 }: {
+  projectId: number | null
   outline?: OutlineDoc
   onComplete: () => void
 }) {
@@ -71,6 +73,7 @@ export function MaterialsScreen({
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [company, setCompany] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   // Select the first leaf once the outline is available.
@@ -78,9 +81,61 @@ export function MaterialsScreen({
     if (!selectedId && leaves.length) setSelectedId(leaves[0].id)
   }, [leaves, selectedId])
 
+  // Load persisted briefs + bidder info once per project.
+  useEffect(() => {
+    if (projectId == null) return
+    let alive = true
+    bidApis
+      .getBriefs(projectId)
+      .then(doc => {
+        if (!alive) return
+        const cfgs: Record<string, NodeConfig> = {}
+        const reqs: Record<string, string> = {}
+        Object.entries(doc.briefs ?? {}).forEach(([id, b]) => {
+          const { requirements: r, ...rest } = b as Record<string, unknown>
+          cfgs[id] = { ...defaultConfig(), ...(rest as Partial<NodeConfig>) }
+          if (typeof r === 'string') reqs[id] = r
+        })
+        setConfigs(cfgs)
+        setRequirements(reqs)
+        setMaterials((doc.materials ?? []) as Material[])
+      })
+      .catch(() => {
+        /* first visit: nothing persisted yet */
+      })
+    bidApis
+      .getQualifications(projectId)
+      .then(q => {
+        if (alive) setCompany(String((q.qualifications as { company?: unknown }).company ?? ''))
+      })
+      .catch(() => {
+        /* not prefilled yet */
+      })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
   const getConfig = (id: string): NodeConfig => configs[id] ?? defaultConfig()
   const patchConfig = (id: string, patch: Partial<NodeConfig>) =>
     setConfigs(prev => ({ ...prev, [id]: { ...getConfig(id), ...patch } }))
+
+  const buildDoc = (mats: Material[] = materials): BriefsDoc => {
+    const ids = new Set([...Object.keys(configs), ...Object.keys(requirements)])
+    const briefs: Record<string, NodeBrief> = {}
+    ids.forEach(id => {
+      briefs[id] = { ...getConfig(id), requirements: requirements[id] ?? '' }
+    })
+    return { briefs, materials: mats }
+  }
+  const persist = async (mats?: Material[]) => {
+    if (projectId == null) return
+    try {
+      await bidApis.saveBriefs(projectId, buildDoc(mats))
+    } catch {
+      /* keep editing; next save retries */
+    }
+  }
 
   const completion = (id: string): number => {
     const files = materials.filter(m => m.linkedNodeIds.includes(id)).length
@@ -106,21 +161,54 @@ export function MaterialsScreen({
       return next
     })
 
-  const onFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedId) return
+  const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedId || projectId == null) return
     const picked = Array.from(e.target.files ?? [])
-    if (picked.length) {
-      setMaterials(prev => [
-        ...prev,
-        ...picked.map(f => ({
-          id: `m${Date.now()}_${matSeq++}`,
-          name: f.name,
-          size: f.size,
-          linkedNodeIds: [selectedId],
-        })),
-      ])
-    }
     e.target.value = ''
+    if (!picked.length) return
+    const added: Material[] = []
+    for (const f of picked) {
+      try {
+        const info = await bidApis.uploadAttachment(projectId, f)
+        added.push({
+          id: `m${Date.now()}_${matSeq++}`,
+          name: info.name,
+          size: info.size,
+          linkedNodeIds: [selectedId],
+        })
+      } catch {
+        /* skip failed upload; user can retry */
+      }
+    }
+    if (added.length) {
+      const next = [...materials, ...added]
+      setMaterials(next)
+      void persist(next)
+    }
+  }
+
+  const saveBidder = async () => {
+    if (projectId == null) return
+    const trimmed = company.trim()
+    let quals: Record<string, unknown> = { items: [] }
+    try {
+      quals = (await bidApis.getQualifications(projectId)).qualifications
+    } catch {
+      /* not prefilled yet */
+    }
+    if (!Array.isArray(quals.items)) quals.items = []
+    await bidApis.saveQualifications(projectId, { ...quals, company: trimmed })
+    let inner: Record<string, unknown> = {}
+    try {
+      const kb = (await bidApis.getKnowledgeBase(projectId)).knowledge_base
+      const existing = kb.bidder_knowledge_base
+      if (existing && typeof existing === 'object') inner = existing as Record<string, unknown>
+    } catch {
+      /* kb not set yet */
+    }
+    await bidApis.saveKnowledgeBase(projectId, {
+      bidder_knowledge_base: { ...inner, company: trimmed },
+    })
   }
 
   const removeMaterial = (mid: string, nodeId: string) =>
@@ -181,6 +269,7 @@ export function MaterialsScreen({
   }
   const saveNext = () => {
     if (!selectedId) return
+    void persist()
     const idx = leaves.findIndex(l => l.id === selectedId)
     if (idx >= 0 && idx < leaves.length - 1) setSelectedId(leaves[idx + 1].id)
   }
@@ -464,6 +553,8 @@ export function MaterialsScreen({
             <div className="mt-5 flex gap-2.5">
               <button
                 type="button"
+                onClick={() => void persist()}
+                data-testid="bid-materials-save"
                 className="flex-1 rounded-[9px] py-2.5 text-[13px] font-bold"
                 style={{
                   background: '#fff',
@@ -505,6 +596,39 @@ export function MaterialsScreen({
       >
         {selected && (
           <>
+            <div>
+              <SectionLabel>{t('phase2.bidder_info')}</SectionLabel>
+              <InfoCard>
+                <div className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
+                  {t('phase2.bidder_company')}
+                </div>
+                <input
+                  value={company}
+                  onChange={e => setCompany(e.target.value)}
+                  placeholder={t('phase2.bidder_company_placeholder')}
+                  data-testid="bid-bidder-company"
+                  className="w-full rounded-[7px] px-2 py-1.5 text-xs outline-none"
+                  style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void saveBidder()}
+                  data-testid="bid-bidder-save"
+                  className="rounded-[7px] px-2 py-1.5 text-[11px] font-bold"
+                  style={{
+                    background: 'var(--bid-primary-soft)',
+                    border: '1px solid var(--bid-primary)',
+                    color: 'var(--bid-primary)',
+                  }}
+                >
+                  {t('phase2.bidder_save')}
+                </button>
+                <div className="text-[10px]" style={{ color: 'var(--bid-muted-3)' }}>
+                  {t('phase2.bidder_hint')}
+                </div>
+              </InfoCard>
+            </div>
+
             <div>
               <SectionLabel>{t('phase2.node_info')}</SectionLabel>
               <InfoCard>
@@ -594,7 +718,10 @@ export function MaterialsScreen({
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
                 <button
                   type="button"
-                  onClick={onComplete}
+                  onClick={async () => {
+                    await persist()
+                    onComplete()
+                  }}
                   data-testid="bid-materials-complete-button"
                   className="rounded-[9px] px-3 py-2 text-left text-[11.5px] font-bold"
                   style={{

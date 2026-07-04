@@ -216,6 +216,7 @@ export function BidWorkbenchDesktop() {
         )}
         {phase === 'materials' && (
           <MaterialsScreen
+            projectId={projectId}
             outline={outline ?? undefined}
             onComplete={() => setConfirmDraft(true)}
           />
