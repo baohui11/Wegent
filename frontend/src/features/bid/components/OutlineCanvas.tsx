@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import type { CoverageReport, OutlineDoc } from '@/apis/bid'
+import type { CoverageReport, LlmCall, OutlineDoc } from '@/apis/bid'
 import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
 import {
   chapterColor,
@@ -13,7 +13,20 @@ import {
 } from '../canvas/outlineGraph'
 import type { Viewport } from '../canvas/useOutlineCanvas'
 
-const PARSE_STEPS = ['ocr', 'toc', 'classify', 'tree'] as const
+const PARSE_STEPS = ['segmenting', 'extracting', 'building_outline'] as const
+
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+// Map backend specialist names to display labels (keys live in i18n).
+const SPECIALIST_LABEL_KEY: Record<string, string> = {
+  tender_sleuth: 'outline.specialist_sleuth',
+  ghostwriter: 'outline.specialist_ghostwriter',
+  fact_checker: 'outline.specialist_factchecker',
+}
 
 export function OutlineCanvas({
   outline,
@@ -21,6 +34,8 @@ export function OutlineCanvas({
   title,
   onSave,
   parsing = false,
+  llmLog,
+  fileSize,
 }: {
   outline?: OutlineDoc
   coverage?: CoverageReport
@@ -30,6 +45,10 @@ export function OutlineCanvas({
   // parse-progress card and the canvas shows a skeleton (design's in-canvas
   // parsing state) instead of the populated outline.
   parsing?: boolean
+  // Real LLM call log from GET /llm-log (B3); drives the left "parse log" panel.
+  llmLog?: LlmCall[]
+  // Real tender file size in bytes; falls back to '—' when unknown.
+  fileSize?: number
 }) {
   const { t } = useTranslation('bidWorkbench')
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
@@ -138,7 +157,7 @@ export function OutlineCanvas({
                 {title || t('outline.tender_file')}
               </div>
               <div className="mt-0.5 text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                2.2 KB ·{' '}
+                {fileSize != null ? fmtBytes(fileSize) : '—'} ·{' '}
                 <span style={{ color: 'var(--bid-success)' }}>✓ {t('outline.parsed_ok')}</span>
               </div>
             </div>
@@ -253,19 +272,46 @@ export function OutlineCanvas({
               {t('outline.log')}
             </div>
             <div className="flex flex-col gap-2">
-              {PARSE_STEPS.map((k, i) => (
+              {(llmLog ?? []).length === 0 ? (
                 <div
-                  key={k}
-                  className="flex items-center gap-2 text-[11.5px]"
-                  style={{ color: 'var(--bid-sub)' }}
+                  className="rounded-[10px] p-3 text-[11.5px]"
+                  style={{
+                    background: '#fff',
+                    border: '1px solid var(--bid-border)',
+                    color: 'var(--bid-muted-3)',
+                  }}
                 >
-                  <span style={{ color: 'var(--bid-success)' }}>✓</span>
-                  <span className="flex-1">{t(`outline.log_items.${k}`)}</span>
-                  <span className="font-mono text-[10.5px]" style={{ color: 'var(--bid-muted-3)' }}>
-                    00:0{i + 1}
-                  </span>
+                  {t('outline.log_empty')}
                 </div>
-              ))}
+              ) : (
+                (llmLog ?? []).map(call => {
+                  const labelKey =
+                    SPECIALIST_LABEL_KEY[call.specialist] ?? 'outline.specialist_other'
+                  return (
+                    <div
+                      key={call.id}
+                      className="flex items-center gap-2 text-[11.5px]"
+                      style={{ color: 'var(--bid-sub)' }}
+                    >
+                      <span
+                        style={{
+                          color: call.status === 'ok' ? 'var(--bid-success)' : '#B3453D',
+                        }}
+                      >
+                        {call.status === 'ok' ? '✓' : '✕'}
+                      </span>
+                      <span className="flex-1">{t(labelKey)}</span>
+                      <span
+                        className="font-mono text-[10.5px]"
+                        style={{ color: 'var(--bid-muted-3)' }}
+                      >
+                        {(call.prompt_tokens + call.completion_tokens).toLocaleString()}t ·{' '}
+                        {(call.duration_ms / 1000).toFixed(1)}s
+                      </span>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
         )}
@@ -497,13 +543,16 @@ export function OutlineCanvas({
               />
               <Row
                 k={t('outline.detail_words')}
-                v={t('outline.words_hint', {
+                v={`${t('outline.words_hint', {
                   n: c.selected.hasChildren ? '1200–1800' : '600–1000',
-                })}
+                })}${t('outline.estimate_suffix')}`}
               />
               <div className="flex items-center justify-between gap-2">
                 <span className="flex-shrink-0 text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
                   {t('outline.detail_priority')}
+                  <span className="ml-1 text-[9.5px]" style={{ color: 'var(--bid-muted-3)' }}>
+                    {t('outline.estimate_suffix')}
+                  </span>
                 </span>
                 <span className="text-[12px]" style={{ color: '#E8A93C' }}>
                   {(c.selected.node.covers?.length ?? 0) > 0
@@ -597,17 +646,13 @@ export function OutlineCanvas({
                   <ChangeItem
                     color="var(--bid-primary)"
                     v={`v1.${c.edits}`}
-                    label={t('phase2.title')}
-                    who={t('projects.owner_role')}
-                    time="刚刚"
+                    label={t('outline.changelog_edit')}
                   />
                 )}
                 <ChangeItem
                   color="var(--bid-success)"
                   v="v1.0"
                   label={t('outline.changelog_build')}
-                  who="拆标神探"
-                  time="00:04"
                 />
               </div>
             </div>
@@ -920,19 +965,7 @@ function Row({ k, v }: { k: string; v: string }) {
   )
 }
 
-function ChangeItem({
-  color,
-  v,
-  label,
-  who,
-  time,
-}: {
-  color: string
-  v: string
-  label: string
-  who: string
-  time: string
-}) {
+function ChangeItem({ color, v, label }: { color: string; v: string; label: string }) {
   return (
     <div className="pl-2.5" style={{ borderLeft: `2px solid ${color}` }}>
       <div className="flex items-baseline gap-1.5">
@@ -942,9 +975,6 @@ function ChangeItem({
         <span className="text-[11px]" style={{ color: 'var(--bid-ink-2)' }}>
           {label}
         </span>
-      </div>
-      <div className="mt-px text-[10.5px]" style={{ color: 'var(--bid-muted-3)' }}>
-        {who} · {time}
       </div>
     </div>
   )
