@@ -143,3 +143,7 @@ class LlmCallInfo(BaseModel):
 
 class LlmLogResponse(BaseModel):
     items: list[LlmCallInfo]
+
+
+class ParseStageResponse(BaseModel):
+    stage: str

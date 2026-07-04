@@ -239,3 +239,12 @@ def test_prefill_tolerates_garbage(tmp_path):
     ws = BidWorkspace("q3", root=tmp_path)
     pp._prefill_qualifications(ws, {"qualifications": None})  # no raise
     pp._prefill_qualifications(ws, {})  # no raise
+
+
+def test_parse_stage_roundtrip(tmp_path):
+    ws = BidWorkspace("ps1", root=tmp_path)
+    assert pp.read_parse_stage(ws) == "idle"  # no file yet
+    pp.set_parse_stage(ws, "extracting")
+    assert pp.read_parse_stage(ws) == "extracting"
+    pp.set_parse_stage(ws, "done")
+    assert pp.read_parse_stage(ws) == "done"

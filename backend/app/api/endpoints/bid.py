@@ -29,6 +29,7 @@ from app.schemas.bid import (
     OutlineResponse,
     OutlineSaveRequest,
     PackageRequest,
+    ParseStageResponse,
     ParseTriggerRequest,
     ParseTriggerResponse,
     QualificationsResponse,
@@ -61,7 +62,11 @@ from app.services.bid.outline_service import (
     write_bid_config,
     write_outline,
 )
-from app.services.bid.parse_pipeline import BidPipelineError, launch_parse
+from app.services.bid.parse_pipeline import (
+    BidPipelineError,
+    launch_parse,
+    read_parse_stage,
+)
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_fact_checker
 from app.services.bid.tender_extract import TenderExtractError, extract_text
@@ -255,6 +260,18 @@ def get_llm_log(
         .all()
     )
     return LlmLogResponse(items=[LlmCallInfo.model_validate(r) for r in rows])
+
+
+@router.get("/projects/{project_id}/parse-stage", response_model=ParseStageResponse)
+def get_parse_stage(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    return ParseStageResponse(
+        stage=read_parse_stage(BidWorkspace(project.workspace_ref))
+    )
 
 
 @router.post("/projects/{project_id}/package", response_model=SimpleStatusResponse)

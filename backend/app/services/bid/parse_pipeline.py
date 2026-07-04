@@ -143,7 +143,9 @@ async def parse_tender(
     project_id: int | None = None,
     user_id: int | None = None,
 ) -> dict:
+    set_parse_stage(ws, "segmenting")
     await _run_segment_async(ws)
+    set_parse_stage(ws, "extracting")
     ctx = _read_ctx(ws)
     parts = await call_tender_sleuth(
         model=model,
@@ -153,6 +155,7 @@ async def parse_tender(
         **ctx,
     )
     _write_parts(ws, parts)
+    set_parse_stage(ws, "merging")
     _, output = await _run_merge_async(ws)
     if not _tender_complete(ws):
         # In-phase single retry: feed merge_issues back to the specialist, re-merge.
@@ -171,6 +174,27 @@ async def parse_tender(
                 f"merge failed after retry: {_merge_issues(ws) or output}"
             )
     return ws.read_json("workspace/tender.json")
+
+
+_PARSE_STAGE_FILE = "workspace/_parse_stage.json"
+
+
+def set_parse_stage(ws: BidWorkspace, stage: str) -> None:
+    """Write the current coarse parse stage so the frontend can show real
+    progress (segmenting → extracting → merging → building_outline → done)
+    instead of a fake spinner."""
+    try:
+        ws.write_json(_PARSE_STAGE_FILE, {"stage": stage})
+    except Exception:
+        logger.warning("failed to write parse stage %s", stage, exc_info=True)
+
+
+def read_parse_stage(ws: BidWorkspace) -> str:
+    """Read the current parse stage; 'idle' when no parse has run yet."""
+    try:
+        return ws.read_json(_PARSE_STAGE_FILE).get("stage", "idle")
+    except Exception:
+        return "idle"
 
 
 def _prefill_qualifications(ws: BidWorkspace, tender: dict) -> None:
@@ -244,10 +268,25 @@ async def _run_parse(
             keep_user_title = bool(current) and current != DEFAULT_PROJECT_TITLE
             title = None if keep_user_title else (derived or None)
             BidProjectService.complete_phase1(db, project=project, title=title)
+            # Auto-build the outline so the user lands on a populated canvas
+            # right after parsing (no manual "build outline" step needed).
+            set_parse_stage(ws, "building_outline")
+            try:
+                from app.services.bid.outline_pipeline import build_outline_for_project
+
+                await build_outline_for_project(ws)
+            except Exception:
+                logger.warning(
+                    "auto build_outline failed for project %s",
+                    project_id,
+                    exc_info=True,
+                )
+            set_parse_stage(ws, "done")
         except Exception as e:  # never leave the project stuck in 'parsing'
             logger.warning("parse failed for project %s: %s", project_id, e)
             project.status = "parse_failed"
             db.commit()
+            set_parse_stage(ws, "failed")
     finally:
         db.close()
 

@@ -633,3 +633,18 @@ def test_llm_log_endpoint_empty(test_client, test_token, tmp_path, monkeypatch):
         test_client.get(f"/api/bid/projects/{pid}/llm-log", headers=h).json()["items"]
         == []
     )
+
+
+def test_parse_stage_endpoint(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "ps"}, headers=h).json()[
+        "id"
+    ]
+    # idle before any parse runs
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/parse-stage", headers=h).json()[
+            "stage"
+        ]
+        == "idle"
+    )
