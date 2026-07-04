@@ -204,6 +204,18 @@ async def _run_parse(
                     project_id,
                     exc_info=True,
                 )
+            try:
+                from app.services.bid.tender_normalize import normalized_tender
+
+                ws.write_json(
+                    "workspace/tender_normalized.json", normalized_tender(tender)
+                )
+            except Exception:
+                logger.warning(
+                    "tender normalization failed for project %s",
+                    project_id,
+                    exc_info=True,
+                )
             derived = ((tender.get("project") or {}).get("name") or "").strip()
             # Preserve a user-chosen title; only fall back to the tender-derived
             # name when the project still carries the smart-naming placeholder.

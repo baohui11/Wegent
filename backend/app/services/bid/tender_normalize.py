@@ -125,3 +125,20 @@ def normalize_required_outline(ro):
     if isinstance(ro, list):
         return coerce_list(ro)
     return ro
+
+
+def normalized_tender(tender: dict) -> dict:
+    """One canonical normalized projection of the raw tender for ALL consumers
+    (coverage/frontend/build/audit): scoring flattened, clauses veto-aligned,
+    qualifications/required_outline coerced. Raw tender.json is never mutated."""
+    out = dict(tender)
+    out["scoring"] = normalize_scoring(tender)
+    if "mandatory_clauses" in tender:
+        out["mandatory_clauses"] = normalize_clauses(tender.get("mandatory_clauses"))
+    if "qualifications" in tender:
+        out["qualifications"] = normalize_qualifications(tender.get("qualifications"))
+    if "required_outline" in tender:
+        out["required_outline"] = normalize_required_outline(
+            tender.get("required_outline")
+        )
+    return out

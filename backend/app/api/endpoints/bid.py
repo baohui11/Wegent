@@ -194,9 +194,20 @@ def get_file(
     return {"path": path, "content": target.read_text(encoding="utf-8")}
 
 
+def _read_tender_for_coverage(ws: BidWorkspace) -> dict:
+    # Prefer the normalized projection (scoring flattened, clauses veto-aligned);
+    # fall back to normalizing the raw tender on the fly for pre-existing projects
+    # whose parse predates the canonical write.
+    if ws.path("workspace/tender_normalized.json").exists():
+        return ws.read_json("workspace/tender_normalized.json")
+    from app.services.bid.tender_normalize import normalized_tender
+
+    return normalized_tender(ws.read_json("workspace/tender.json"))
+
+
 def _coverage(ws) -> CoverageResponse:
     outline = read_outline(ws)
-    tender = ws.read_json("workspace/tender.json")
+    tender = _read_tender_for_coverage(ws)
     return CoverageResponse(**compute_coverage(outline, tender))
 
 

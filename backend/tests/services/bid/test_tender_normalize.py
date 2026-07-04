@@ -48,3 +48,17 @@ def test_normalize_clauses_maps_is_veto():
     assert out[1]["veto"] is True  # already veto -> preserved
     assert out[2]["veto"] is False  # None -> False
     assert normalize_clauses(None) == []
+
+
+def test_normalized_tender_full():
+    from app.services.bid.tender_normalize import normalized_tender
+
+    t = {
+        "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+        "mandatory_clauses": [{"id": "M1", "is_veto": True}],
+        "project": {"name": "X"},
+    }
+    out = normalized_tender(t)
+    assert isinstance(out["scoring"], list) and out["scoring"][0]["weight"] == 20
+    assert out["mandatory_clauses"][0]["veto"] is True
+    assert out["project"] == {"name": "X"}  # untouched passthrough

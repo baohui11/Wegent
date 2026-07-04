@@ -584,3 +584,27 @@ def test_extract_text_api(test_client, test_token):
         headers=h,
     )
     assert r.status_code == 422
+
+
+def test_coverage_endpoint_uses_normalized(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "cov"}, headers=h
+    ).json()["id"]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [{"id": "M1", "is_veto": True}],
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json", {"sections": [{"id": "s1", "covers": ["T1"]}]}
+    )
+    r = test_client.get(f"/api/bid/projects/{pid}/coverage", headers=h)
+    assert r.status_code == 200 and r.json()["total"] == 2 and r.json()["covered"] == 1

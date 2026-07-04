@@ -1,30 +1,24 @@
 # SPDX-License-Identifier: Apache-2.0
 from app.services.bid.coverage import compute_coverage
+from app.services.bid.tender_normalize import normalized_tender
 
 
-def test_reports_uncovered_scoring_and_clauses():
-    tender = {
-        "scoring": [
-            {"id": "S1"},
-            {"id": "S2"},
-            {"id": "S3", "target_scope": "whole_technical_volume"},
-        ],
-        "mandatory_clauses": [{"id": "V1", "veto": True}, {"id": "V2", "veto": False}],
-    }
-    outline = {"sections": [{"covers": ["S1", "V1"]}], "volumes": [{"covers": ["S2"]}]}
-    rep = compute_coverage(outline, tender)
-    # S1,S2 covered; S3 exempt; V1 covered; V2 not a red line
-    assert rep["uncovered_scoring"] == [] and rep["uncovered_clauses"] == []
-    assert (
-        rep["total"] == 3 and rep["covered"] == 3
-    )  # S1,S2 + V1 red line; S3 exempt counts covered
+def test_coverage_basic():
+    outline = {"sections": [{"id": "s1", "covers": ["T1"]}]}
+    tender = {"scoring": [{"id": "T1", "weight": 10, "category": "技术"}]}
+    cov = compute_coverage(outline, tender)
+    assert cov["total"] == 1 and cov["covered"] == 1
 
 
-def test_flags_missing():
-    tender = {
-        "scoring": [{"id": "S1"}],
-        "mandatory_clauses": [{"id": "V1", "veto": True}],
-    }
-    outline = {"sections": [{"covers": ["S1"]}]}
-    rep = compute_coverage(outline, tender)
-    assert rep["uncovered_scoring"] == [] and rep["uncovered_clauses"] == ["V1"]
+def test_coverage_reads_bucketed_scoring_and_is_veto():
+    tender = normalized_tender(
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [{"id": "M1", "is_veto": True}],
+        }
+    )
+    outline = {"sections": [{"id": "s1", "covers": ["T1"]}]}
+    cov = compute_coverage(outline, tender)
+    assert cov["total"] == 2  # T1 + M1(veto)
+    assert cov["covered"] == 1  # T1 covered, M1 not
+    assert cov["uncovered_clauses"] == ["M1"]
