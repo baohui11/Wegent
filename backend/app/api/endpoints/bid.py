@@ -51,7 +51,10 @@ from app.services.bid.draft_pipeline import (
     launch_drafting,
     launch_redraft,
 )
-from app.services.bid.model_resolver import resolve_tender_model
+from app.services.bid.model_resolver import (
+    resolve_project_model,
+    validate_model_config,
+)
 from app.services.bid.outline_pipeline import build_outline_for_project
 from app.services.bid.outline_service import (
     read_outline,
@@ -72,6 +75,22 @@ def _require(db, user, pid):
     if p is None:
         raise HTTPException(status_code=404, detail="bid project not found")
     return p
+
+
+def _resolve_and_validate_model(db, user, project):
+    """Resolve the project's model (or global fallback) and preflight-check it.
+
+    An empty model name means "let chat_shell use its default" — that path is
+    not validated. A named model with no resolvable credentials fails fast with
+    a 422 instead of letting chat_shell silently emit lifecycle-only SSE.
+    """
+    model, model_config = resolve_project_model(db, user, project)
+    if model:
+        try:
+            validate_model_config(model, model_config)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    return model, model_config
 
 
 @router.post("/extract-text", response_model=ExtractTextResponse)
@@ -150,9 +169,12 @@ async def parse_project(
         db, project_id=project.id, user_id=current_user.id
     ):
         raise HTTPException(status_code=409, detail="parse already running")
+    # begin_parse uses a bulk UPDATE that bypasses the identity map; refresh so
+    # the ORM object reflects the new status (and downstream GETs stay consistent).
+    db.refresh(project)
     ws = BidWorkspace(project.workspace_ref)
     ws.write_tender_text(body.tender_text)
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     # 拆标 is a minutes-long LLM pipeline; run it in the background and let the
     # client poll project status ('parsing' -> 'parsed'/'parse_failed').
     launch_parse(project.id, current_user.id, model, model_config)
@@ -465,7 +487,7 @@ async def start_draft(
     ):
         raise HTTPException(status_code=409, detail="drafting already running")
     drafting.init_status(ws, [])  # placeholder; draft_all re-inits with real ids
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_drafting(project.id, current_user.id, model, model_config)
     return SimpleStatusResponse(status="drafting")
 
@@ -564,7 +586,7 @@ async def redraft_section(
     if find_section(outline, section_id) is None:
         raise HTTPException(status_code=404, detail="section not in outline")
     drafting.set_section_status(ws, section_id, "drafting")
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_redraft(
         project.id, current_user.id, section_id, body.instruction, model, model_config
     )
@@ -689,7 +711,7 @@ async def verify_audit(
         if report is None:
             raise HTTPException(status_code=409, detail="run audit first")
         return report
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     verdicts = await call_fact_checker(
         model=model,
         model_config=model_config,

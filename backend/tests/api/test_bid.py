@@ -42,7 +42,10 @@ def test_bid_crud_and_parse(test_client, test_token, tmp_path, monkeypatch):
     # background task does not actually run in the test.
     with (
         patch("app.api.endpoints.bid.launch_parse") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(
             f"/api/bid/projects/{pid}/parse",
@@ -249,7 +252,10 @@ def test_draft_trigger_and_status(test_client, test_token, tmp_path, monkeypatch
 
     with (
         patch("app.api.endpoints.bid.launch_drafting") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(f"/api/bid/projects/{pid}/draft", headers=h)
     assert r.status_code == 200 and r.json()["status"] == "drafting"
@@ -299,7 +305,10 @@ def test_review_redraft_accept_complete(test_client, test_token, tmp_path, monke
 
     with (
         patch("app.api.endpoints.bid.launch_redraft") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(
             f"/api/bid/projects/{pid}/sections/s1/redraft",
@@ -500,7 +509,10 @@ def test_audit_verify_folds_fidelity_verdicts(
                 ]
             ),
         ) as fc,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(f"/api/bid/projects/{pid}/audit/verify", headers=h)
     assert r.status_code == 200 and r.json()["verdict"] in (

@@ -66,3 +66,30 @@ def test_model_not_found_returns_name_none(monkeypatch):
         "missing",
         None,
     )
+
+
+def test_resolve_project_model_falls_back_when_empty(monkeypatch):
+    from app.services.bid import model_resolver as mr
+
+    class P:
+        model_name = ""
+
+    # empty project model_name -> delegates to resolve_tender_model (global)
+    with patch.object(mr, "resolve_tender_model", return_value=("g", {"api_key": "k"})):
+        assert mr.resolve_project_model(MagicMock(), MagicMock(id=1), P()) == (
+            "g",
+            {"api_key": "k"},
+        )
+
+
+def test_validate_model_config_rejects_empty():
+    import pytest
+
+    from app.services.bid.model_resolver import validate_model_config
+
+    with pytest.raises(ValueError):
+        validate_model_config("qwen", None)
+    with pytest.raises(ValueError):
+        validate_model_config("qwen", {})  # no credentials
+    # credential-bearing config passes
+    validate_model_config("qwen", {"api_key": "k", "model_id": "qwen"})
