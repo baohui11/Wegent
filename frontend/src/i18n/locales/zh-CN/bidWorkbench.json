@@ -78,8 +78,8 @@
     "suggestions": "结构调整建议",
     "ai_badge": "AI 建议",
     "coverage_ok": "评分点全部覆盖",
-    "uncovered_scoring": "未覆盖评分项",
-    "uncovered_clause": "未覆盖废标红线",
+    "uncovered_scoring": "评分项",
+    "uncovered_clause": "废标红线",
     "changelog": "目录变更记录",
     "changelog_init": "初始拆解 · 系统自动拆解",
     "file_count": "{{count}} 个",
@@ -126,7 +126,10 @@
       "requirements": "要求矩阵",
       "commitment_terms": "承诺条款",
       "derived_outline": "派生大纲"
-    }
+    },
+    "coverage_badge": "覆盖检查",
+    "suggestions_hint": "以下评分点/废标红线尚未被任何章节覆盖，采纳将自动补一个章节。",
+    "uncovered_no_text": "（未提取到文本）"
   },
   "upload": {
     "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",

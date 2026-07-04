@@ -120,7 +120,9 @@ def test_outline_build_read_edit_coverage(
     ):
         r = test_client.post(f"/api/bid/projects/{pid}/outline", headers=h)
     assert r.status_code == 200
-    assert r.json()["coverage"]["uncovered_clauses"] == ["V1"]  # V1 not covered
+    # Uncovered items carry {id, text}; V1 has no text so text is "".
+    uc = r.json()["coverage"]["uncovered_clauses"]
+    assert [x["id"] for x in uc] == ["V1"]  # V1 not covered
 
     # Human edit writeback: add V1 to coverage.
     edited = {"sections": [{"id": "a", "covers": ["S1", "V1"]}], "volumes": []}

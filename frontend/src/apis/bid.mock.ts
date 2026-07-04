@@ -160,7 +160,7 @@ const MOCK_OUTLINE: OutlineDoc = {
 const MOCK_COVERAGE: CoverageReport = {
   total: 6,
   covered: 5,
-  uncovered_scoring: ['B1'],
+  uncovered_scoring: [{ id: 'B1', text: '投标报价（低价优先法）', target_section: '报价分册' }],
   uncovered_clauses: [],
 }
 

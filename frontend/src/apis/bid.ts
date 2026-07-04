@@ -60,11 +60,17 @@ export interface OutlineDoc {
   [k: string]: unknown
 }
 
+export interface UncoveredItem {
+  id: string
+  text: string
+  target_section?: string
+}
+
 export interface CoverageReport {
   total: number
   covered: number
-  uncovered_scoring: string[]
-  uncovered_clauses: string[]
+  uncovered_scoring: UncoveredItem[]
+  uncovered_clauses: UncoveredItem[]
 }
 
 export interface OutlineResponse {

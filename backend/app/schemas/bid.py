@@ -35,11 +35,17 @@ class TenderDocResponse(BaseModel):
     tender: dict
 
 
+class UncoveredItem(BaseModel):
+    id: str
+    text: str = ""
+    target_section: str = ""
+
+
 class CoverageResponse(BaseModel):
     total: int
     covered: int
-    uncovered_scoring: list[str]
-    uncovered_clauses: list[str]
+    uncovered_scoring: list[UncoveredItem]
+    uncovered_clauses: list[UncoveredItem]
 
 
 class OutlineResponse(BaseModel):

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import type { CoverageReport, LlmCall, OutlineDoc, TenderScoring } from '@/apis/bid'
+import type { CoverageReport, LlmCall, OutlineDoc } from '@/apis/bid'
 import { ParsedCallView } from './ParsedCallView'
 import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
 import {
@@ -56,7 +56,6 @@ export function OutlineCanvas({
   parseStage,
   llmLog,
   fileSize,
-  scoring,
 }: {
   outline?: OutlineDoc
   coverage?: CoverageReport
@@ -74,9 +73,6 @@ export function OutlineCanvas({
   llmLog?: LlmCall[]
   // Real tender file size in bytes; falls back to '—' when unknown.
   fileSize?: number
-  // Scoring items (with target_section) so acceptSuggestion can route an
-  // accepted uncovered item to its matching chapter instead of always the first.
-  scoring?: TenderScoring[]
 }) {
   const { t } = useTranslation('bidWorkbench')
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
@@ -110,12 +106,12 @@ export function OutlineCanvas({
     ]
   }, [c, cov.total, t])
 
-  const acceptSuggestion = (id: string) => {
-    // Route the new leaf under the chapter whose title matches the scoring
-    // item's target_section; fall back to the first chapter when no match.
+  const acceptSuggestion = (item: { id: string; text: string; targetSection?: string }) => {
+    // Route the new section under the chapter whose title matches the item's
+    // target_section; fall back to the first chapter when no match. The new
+    // node is named after the real content, never the internal id.
     const chapters = childrenOf(c.flat, null)
-    const target = (scoring ?? []).find(s => s.id === id)?.target_section
-    const lower = (target ?? '').trim().toLowerCase()
+    const lower = (item.targetSection ?? '').trim().toLowerCase()
     const match = lower
       ? chapters.find(ch => {
           const name = (ch.name ?? '').trim().toLowerCase()
@@ -126,18 +122,13 @@ export function OutlineCanvas({
     if (parent) {
       const siblings = childrenOf(c.flat, parent.id)
       const maxOrder = siblings.reduce((m, s) => Math.max(m, s.order), -1)
+      const name = item.text ? item.text.slice(0, 40) : t('outline.new_chapter')
       c.commit([
         ...c.flat,
-        {
-          id: genNodeId(),
-          parentId: parent.id,
-          order: maxOrder + 1,
-          name: t('outline.new_leaf', { id }),
-          covers: [id],
-        },
+        { id: genNodeId(), parentId: parent.id, order: maxOrder + 1, name, covers: [item.id] },
       ])
     }
-    setDismissed(prev => new Set(prev).add(id))
+    setDismissed(prev => new Set(prev).add(item.id))
   }
 
   const sectionLabel = 'text-xs font-extrabold'
@@ -147,11 +138,11 @@ export function OutlineCanvas({
 
   const suggestions = [
     ...cov.uncovered_scoring
-      .filter(id => !dismissed.has(id))
-      .map(id => ({ id, kind: 'scoring' as const })),
+      .filter(u => !dismissed.has(u.id))
+      .map(u => ({ ...u, kind: 'scoring' as const })),
     ...cov.uncovered_clauses
-      .filter(id => !dismissed.has(id))
-      .map(id => ({ id, kind: 'clause' as const })),
+      .filter(u => !dismissed.has(u.id))
+      .map(u => ({ ...u, kind: 'clause' as const })),
   ]
 
   const searchLower = c.search.trim().toLowerCase()
@@ -622,10 +613,13 @@ export function OutlineCanvas({
                 </div>
                 <span
                   className="rounded-md px-1.5 py-0.5 text-[10px]"
-                  style={{ background: 'var(--bid-primary-soft)', color: 'var(--bid-primary)' }}
+                  style={{ background: 'var(--bid-surface)', color: 'var(--bid-muted-2)' }}
                 >
-                  {t('outline.ai_badge')}
+                  {t('outline.coverage_badge')}
                 </span>
+              </div>
+              <div className="mb-2 text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
+                {t('outline.suggestions_hint')}
               </div>
               <div className="flex flex-col gap-2">
                 {suggestions.length === 0 ? (
@@ -642,22 +636,40 @@ export function OutlineCanvas({
                       className="rounded-[10px] p-2.5"
                       style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
                     >
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <span
+                          className="rounded px-1 py-px text-[9.5px] font-bold"
+                          style={
+                            s.kind === 'clause'
+                              ? { background: '#F6E0DE', color: '#B3453D' }
+                              : {
+                                  background: 'var(--bid-primary-soft)',
+                                  color: 'var(--bid-primary)',
+                                }
+                          }
+                        >
+                          {t(
+                            s.kind === 'scoring'
+                              ? 'outline.uncovered_scoring'
+                              : 'outline.uncovered_clause'
+                          )}
+                        </span>
+                      </div>
                       <div
-                        className="mb-0.5 text-[11.5px] font-bold"
+                        className="mb-2 text-[11.5px] leading-snug"
                         style={{ color: 'var(--bid-ink-2)' }}
                       >
-                        {t(
-                          s.kind === 'scoring'
-                            ? 'outline.uncovered_scoring'
-                            : 'outline.uncovered_clause'
-                        )}
+                        {s.text || t('outline.uncovered_no_text')}
                       </div>
-                      <div className="mb-2 text-[11px]" style={{ color: 'var(--bid-muted)' }}>
-                        {s.id}
-                      </div>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         <span
-                          onClick={() => acceptSuggestion(s.id)}
+                          onClick={() =>
+                            acceptSuggestion({
+                              id: s.id,
+                              text: s.text,
+                              targetSection: s.target_section,
+                            })
+                          }
                           className="rounded-md px-2.5 py-1 text-[11px] text-white"
                           style={{ background: 'var(--bid-primary)', cursor: 'pointer' }}
                         >

@@ -78,8 +78,8 @@
     "suggestions": "Structure suggestions",
     "ai_badge": "AI",
     "coverage_ok": "All scoring points covered",
-    "uncovered_scoring": "Uncovered scoring item",
-    "uncovered_clause": "Uncovered red-line clause",
+    "uncovered_scoring": "Scoring",
+    "uncovered_clause": "Red-line",
     "changelog": "Outline change log",
     "changelog_init": "Initial parse · auto-generated",
     "file_count": "{{count}} file(s)",
@@ -126,7 +126,10 @@
       "requirements": "Requirements",
       "commitment_terms": "Commitment terms",
       "derived_outline": "Derived outline"
-    }
+    },
+    "coverage_badge": "Coverage check",
+    "suggestions_hint": "These scoring points / red-line clauses are not covered by any chapter yet. Accept adds a section for it.",
+    "uncovered_no_text": "(no text extracted)"
   },
   "upload": {
     "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",

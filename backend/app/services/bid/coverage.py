@@ -12,25 +12,53 @@ def _covered_ids(outline: dict) -> set[str]:
     return ids
 
 
+def _scoring_text(s: dict) -> str:
+    return str(
+        s.get("item")
+        or s.get("name")
+        or s.get("title")
+        or s.get("target_section")
+        or ""
+    ).strip()
+
+
+def _clause_text(c: dict) -> str:
+    return str(
+        c.get("clause")
+        or c.get("clause_text")
+        or c.get("text")
+        or c.get("requirement")
+        or ""
+    ).strip()
+
+
 def compute_coverage(outline: dict, tender: dict) -> dict:
+    """Uncovered items carry their human text (from the normalized tender) so the
+    UI can show *what* is uncovered, not just an internal id."""
     covered = _covered_ids(outline)
-    scoring_required, uncovered_scoring = [], []
+    scoring_required, uncovered_scoring = 0, []
     for s in tender.get("scoring", []) or []:
         sid = str(s.get("id"))
         if s.get("target_scope") == "whole_technical_volume":
             continue  # whole-volume score, exempt from per-section coverage
-        scoring_required.append(sid)
+        scoring_required += 1
         if sid not in covered:
-            uncovered_scoring.append(sid)
-    clause_required, uncovered_clauses = [], []
+            uncovered_scoring.append(
+                {
+                    "id": sid,
+                    "text": _scoring_text(s),
+                    "target_section": str(s.get("target_section") or ""),
+                }
+            )
+    clause_required, uncovered_clauses = 0, []
     for c in tender.get("mandatory_clauses", []) or []:
         if not c.get("veto"):
             continue
         cid = str(c.get("id"))
-        clause_required.append(cid)
+        clause_required += 1
         if cid not in covered:
-            uncovered_clauses.append(cid)
-    total = len(scoring_required) + len(clause_required)
+            uncovered_clauses.append({"id": cid, "text": _clause_text(c)})
+    total = scoring_required + clause_required
     covered_n = total - len(uncovered_scoring) - len(uncovered_clauses)
     return {
         "total": total,
