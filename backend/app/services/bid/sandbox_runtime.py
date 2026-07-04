@@ -56,3 +56,36 @@ class SandboxRuntime:
                 await c.delete(f"{self._em}{_SANDBOX_API}/{sandbox_id}")
         except Exception:
             pass  # best-effort; sandbox auto-expires on timeout
+
+    async def seed_file(
+        self, envd, remote_path: str, data: bytes, filename: str
+    ) -> None:
+        async with httpx.AsyncClient(timeout=120.0) as c:
+            r = await c.post(
+                f"{envd}/files",
+                params={"path": remote_path},
+                files={"file": (filename, data)},
+            )
+            if r.status_code >= 300:
+                raise RuntimeError(f"seed {remote_path} failed {r.status_code}")
+
+    async def read_file(self, envd, remote_path: str) -> bytes | None:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            r = await c.get(f"{envd}/files", params={"path": remote_path})
+            if r.status_code == 404:
+                return None
+            if r.status_code >= 300:
+                raise RuntimeError(f"read {remote_path} failed {r.status_code}")
+            return r.content
+
+    async def list_dir(self, envd, path: str, depth: int = 1) -> list[str]:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            r = await c.post(
+                f"{envd}/filesystem.Filesystem/ListDir",
+                json={"path": path, "depth": depth},
+            )
+            if r.status_code >= 300:
+                return []
+            data = r.json()
+            # ListDir shape VERIFIED (C3): {"entries":[{"name","path",...}]}
+            return [e.get("path") or e.get("name") for e in data.get("entries", [])]
