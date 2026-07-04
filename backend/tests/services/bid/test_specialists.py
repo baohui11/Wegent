@@ -238,3 +238,49 @@ async def test_complete_ctx_reraises_non_context_error():
                 instructions="i",
                 metadata={},
             )
+
+
+@pytest.mark.asyncio
+async def test_ghostwriter_injects_brief():
+    from app.services.bid import specialists
+
+    seen = {}
+
+    async def fake_complete(**kw):
+        seen["content"] = kw["input_messages"][0]["content"]
+        seen["instructions"] = kw["instructions"]
+        return "正文"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "第一章"},
+            tender={},
+            knowledge_base={},
+            brief={"style": "专业", "wordMin": "800", "requirements": "写清楚"},
+        )
+    ctx = json.loads(seen["content"])
+    assert ctx["writing_brief"]["requirements"] == "写清楚"
+    assert "writing_brief" in seen["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_ghostwriter_no_brief_keeps_ctx_clean():
+    from app.services.bid import specialists
+
+    seen = {}
+
+    async def fake_complete(**kw):
+        seen["content"] = kw["input_messages"][0]["content"]
+        return "正文"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1"},
+            tender={},
+            knowledge_base={},
+        )
+    assert "writing_brief" not in json.loads(seen["content"])

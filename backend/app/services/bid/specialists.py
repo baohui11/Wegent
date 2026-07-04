@@ -238,6 +238,7 @@ async def call_ghostwriter(
     tender: dict,
     knowledge_base: dict,
     instruction: str | None = None,
+    brief: dict | None = None,
 ) -> str:
     covers = set(section.get("covers") or [])
     scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
@@ -256,12 +257,22 @@ async def call_ghostwriter(
         "mandatory_clauses": clauses,
         "bidder_knowledge_base": knowledge_base.get("bidder_knowledge_base", {}),
     }
+    if brief:
+        ctx["writing_brief"] = brief
     instructions = (
         _GW_PROMPT
         + "\n\n## 风格圣经（style-zhongda.md）\n"
         + _STYLE
         + "\n\n## 后端调用输出格式\n只返回本节正文 markdown，不要 JSON、不要代码围栏。"
     )
+    if brief:
+        instructions += (
+            "\n\n## 本节人工编写要求（writing_brief，必须遵守）\n"
+            "输入 JSON 中的 writing_brief 是用户在素材阶段为本节填写的编写要求"
+            "（风格 style、字数 wordMin-wordMax、深度 depth、模板 template、"
+            "重点 emphasis、是否配图 needFigure、具体要求 requirements、标签 tags）。"
+            "正文必须遵守这些要求；如与评分项覆盖冲突，以覆盖评分项为先。"
+        )
     if instruction:
         instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
     raw = await _complete_ctx(

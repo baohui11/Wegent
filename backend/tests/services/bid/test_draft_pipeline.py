@@ -104,3 +104,28 @@ async def test_launch_redraft_schedules_under_running_loop():
         dp.launch_redraft(1, 1, "s1", None, "m", None)
         await asyncio.sleep(0)
     run.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_draft_all_passes_node_brief(tmp_path):
+    from app.services.bid import materials_service as ms
+
+    ws = BidWorkspace("dp-brief", root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "s1", "covers": []}]})
+    ws.write_json("workspace/tender.json", {})
+    ms.write_briefs(ws, {"briefs": {"s1": {"requirements": "重点写安全"}}})
+    mock = AsyncMock(return_value="正文")
+    with patch.object(dp, "call_ghostwriter", new=mock):
+        await dp.draft_all(ws, model="m", model_config=None)
+    assert mock.call_args.kwargs["brief"] == {"requirements": "重点写安全"}
+
+
+@pytest.mark.asyncio
+async def test_draft_all_brief_none_when_unset(tmp_path):
+    ws = BidWorkspace("dp-nobrief", root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "s1", "covers": []}]})
+    ws.write_json("workspace/tender.json", {})
+    mock = AsyncMock(return_value="正文")
+    with patch.object(dp, "call_ghostwriter", new=mock):
+        await dp.draft_all(ws, model="m", model_config=None)
+    assert mock.call_args.kwargs["brief"] is None
