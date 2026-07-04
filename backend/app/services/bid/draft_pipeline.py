@@ -33,7 +33,13 @@ def flatten_sections(outline: dict) -> list[dict]:
 
 
 async def draft_all(
-    ws: BidWorkspace, *, model: str, model_config: dict | None, concurrency: int = 3
+    ws: BidWorkspace,
+    *,
+    model: str,
+    model_config: dict | None,
+    concurrency: int = 3,
+    project_id: int | None = None,
+    user_id: int | None = None,
 ) -> None:
     outline = ws.read_json("workspace/outline.json")
     tender = ws.read_json("workspace/tender.json")
@@ -60,6 +66,8 @@ async def draft_all(
                     tender=tender,
                     knowledge_base=kb,
                     brief=briefs.get(sid),
+                    project_id=project_id,
+                    user_id=user_id,
                 )
                 target = ws.path(f"workspace/sections/{sid}.md")
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +93,13 @@ async def _run_drafting(
             return
         ws = BidWorkspace(project.workspace_ref)
         try:
-            await draft_all(ws, model=model, model_config=model_config)
+            await draft_all(
+                ws,
+                model=model,
+                model_config=model_config,
+                project_id=project_id,
+                user_id=user_id,
+            )
             BidProjectService.set_phase_done(db, project=project, phase=4)
         except BidPipelineError as e:
             ds.mark_finished(ws, error=str(e))
@@ -115,6 +129,8 @@ async def redraft_one(
     model: str,
     model_config: dict | None,
     instruction: str | None,
+    project_id: int | None = None,
+    user_id: int | None = None,
 ) -> None:
     ds.set_section_status(ws, section_id, "drafting")
     try:
@@ -136,6 +152,8 @@ async def redraft_one(
             knowledge_base=kb,
             instruction=instruction,
             brief=brief,
+            project_id=project_id,
+            user_id=user_id,
         )
         target = ws.path(f"workspace/sections/{section_id}.md")
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -168,6 +186,8 @@ async def _run_redraft(
             model=model,
             model_config=model_config,
             instruction=instruction,
+            project_id=project_id,
+            user_id=user_id,
         )
     finally:
         db.close()

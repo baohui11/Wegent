@@ -10,13 +10,13 @@ from app.services.bid.specialists import ROUTE_MAP, call_tender_sleuth
 @pytest.mark.asyncio
 async def test_calls_once_per_block_and_keys_by_toplevel(monkeypatch):
     # Each block returns a {top-level key: {...}} JSON.
-    async def fake_complete(**kwargs):
+    async def fake_create(**kwargs):
         block = kwargs["metadata"]["block"]
         return json.dumps({block: {"ok": True}}, ensure_ascii=False)
 
     with patch(
-        "app.services.bid.specialists.complete_text",
-        new=AsyncMock(side_effect=fake_complete),
+        "app.services.bid.specialists.create_response",
+        new=AsyncMock(side_effect=fake_create),
     ) as m:
         parts = await call_tender_sleuth(
             model="m",
@@ -44,7 +44,7 @@ async def test_strips_code_fence():
         )
 
     with patch(
-        "app.services.bid.specialists.complete_text",
+        "app.services.bid.specialists.create_response",
         new=AsyncMock(side_effect=fake),
     ):
         parts = await call_tender_sleuth(
@@ -65,7 +65,7 @@ from app.services.bid.specialists import call_ghostwriter
 @pytest.mark.asyncio
 async def test_call_ghostwriter_returns_markdown():
     with patch(
-        "app.services.bid.specialists.complete_text",
+        "app.services.bid.specialists.create_response",
         new=AsyncMock(return_value="## 一、总体方案\n正文……"),
     ) as m:
         md = await call_ghostwriter(
@@ -92,7 +92,7 @@ async def test_call_ghostwriter_returns_markdown():
 @pytest.mark.asyncio
 async def test_call_ghostwriter_strips_fence():
     with patch(
-        "app.services.bid.specialists.complete_text",
+        "app.services.bid.specialists.create_response",
         new=AsyncMock(return_value="```markdown\n正文\n```"),
     ):
         md = await call_ghostwriter(
@@ -108,7 +108,7 @@ async def test_call_ghostwriter_strips_fence():
 @pytest.mark.asyncio
 async def test_call_ghostwriter_includes_instruction():
     with patch(
-        "app.services.bid.specialists.complete_text",
+        "app.services.bid.specialists.create_response",
         new=AsyncMock(return_value="正文"),
     ) as m:
         await call_ghostwriter(
@@ -204,13 +204,13 @@ async def test_complete_ctx_retries_on_context_error():
 
     calls = []
 
-    async def fake_complete(**kw):
+    async def fake_create(**kw):
         calls.append(kw)
         if len(calls) == 1:
             raise RuntimeError("This model's maximum context length is exceeded")
         return "ok"
 
-    with patch.object(specialists, "complete_text", new=fake_complete):
+    with patch.object(specialists, "create_response", new=fake_create):
         out = await specialists._complete_ctx(
             model="m",
             model_config=None,
@@ -218,6 +218,9 @@ async def test_complete_ctx_retries_on_context_error():
             shrink_order=["big"],
             instructions="i",
             metadata={},
+            specialist="tender_sleuth",
+            project_id=None,
+            user_id=None,
         )
     assert out == "ok" and len(calls) == 2
 
@@ -227,7 +230,7 @@ async def test_complete_ctx_reraises_non_context_error():
     from app.services.bid import specialists
 
     with patch.object(
-        specialists, "complete_text", new=AsyncMock(side_effect=RuntimeError("boom"))
+        specialists, "create_response", new=AsyncMock(side_effect=RuntimeError("boom"))
     ):
         with pytest.raises(RuntimeError, match="boom"):
             await specialists._complete_ctx(
@@ -237,7 +240,37 @@ async def test_complete_ctx_reraises_non_context_error():
                 shrink_order=[],
                 instructions="i",
                 metadata={},
+                specialist="ghostwriter",
+                project_id=None,
+                user_id=None,
             )
+
+
+@pytest.mark.asyncio
+async def test_complete_ctx_records_llm_call():
+    from app.services.bid import specialists
+
+    async def fake_create(**kw):
+        return "answer"  # extract_response_text passes strings through
+
+    with (
+        patch.object(specialists, "create_response", new=fake_create),
+        patch.object(specialists.llm_log, "record") as rec,
+    ):
+        out = await specialists._complete_ctx(
+            model="m",
+            model_config=None,
+            ctx={"a": 1},
+            shrink_order=[],
+            instructions="i",
+            metadata={},
+            specialist="ghostwriter",
+            project_id=7,
+            user_id=3,
+        )
+    assert out == "answer"
+    assert rec.call_args.kwargs["specialist"] == "ghostwriter"
+    assert rec.call_args.kwargs["project_id"] == 7
 
 
 @pytest.mark.asyncio
@@ -246,12 +279,12 @@ async def test_ghostwriter_injects_brief():
 
     seen = {}
 
-    async def fake_complete(**kw):
+    async def fake_create(**kw):
         seen["content"] = kw["input_messages"][0]["content"]
         seen["instructions"] = kw["instructions"]
         return "正文"
 
-    with patch.object(specialists, "complete_text", new=fake_complete):
+    with patch.object(specialists, "create_response", new=fake_create):
         await specialists.call_ghostwriter(
             model="m",
             model_config=None,
@@ -271,11 +304,11 @@ async def test_ghostwriter_no_brief_keeps_ctx_clean():
 
     seen = {}
 
-    async def fake_complete(**kw):
+    async def fake_create(**kw):
         seen["content"] = kw["input_messages"][0]["content"]
         return "正文"
 
-    with patch.object(specialists, "complete_text", new=fake_complete):
+    with patch.object(specialists, "create_response", new=fake_create):
         await specialists.call_ghostwriter(
             model="m",
             model_config=None,

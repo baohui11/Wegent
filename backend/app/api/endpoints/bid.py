@@ -667,7 +667,11 @@ async def verify_audit(
         return report
     model, model_config = resolve_tender_model(db, current_user)
     verdicts = await call_fact_checker(
-        model=model, model_config=model_config, tasks=tasks
+        model=model,
+        model_config=model_config,
+        tasks=tasks,
+        project_id=project_id,
+        user_id=current_user.id,
     )
     audit_service.write_verdicts(ws, verdicts)
     try:

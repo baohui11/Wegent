@@ -15,7 +15,7 @@ async def test_call_fact_checker_parses_verdicts():
         ]
     }
     with patch(
-        "app.services.bid.specialists.complete_text",
+        "app.services.bid.specialists.create_response",
         new=AsyncMock(return_value=json.dumps(payload, ensure_ascii=False)),
     ) as m:
         out = await call_fact_checker(
@@ -31,13 +31,13 @@ async def test_call_fact_checker_parses_verdicts():
             ],
         )
     assert out == payload["verdicts"]
-    # tasks are forwarded to the LLM
+    # tasks are forwarded to the LLM (serialized into input_messages content)
     assert "SF-000" in m.await_args.kwargs["input_messages"][0]["content"]
 
 
 @pytest.mark.asyncio
 async def test_call_fact_checker_empty_tasks_skips_llm():
-    with patch("app.services.bid.specialists.complete_text", new=AsyncMock()) as m:
+    with patch("app.services.bid.specialists.create_response", new=AsyncMock()) as m:
         out = await call_fact_checker(model="m", model_config=None, tasks=[])
     assert out == []
     m.assert_not_awaited()

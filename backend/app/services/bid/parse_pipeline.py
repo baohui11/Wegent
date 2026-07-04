@@ -135,10 +135,23 @@ def _merge_issues(ws) -> list:
         return []
 
 
-async def parse_tender(ws, *, model: str, model_config: dict | None) -> dict:
+async def parse_tender(
+    ws,
+    *,
+    model: str,
+    model_config: dict | None,
+    project_id: int | None = None,
+    user_id: int | None = None,
+) -> dict:
     await _run_segment_async(ws)
     ctx = _read_ctx(ws)
-    parts = await call_tender_sleuth(model=model, model_config=model_config, **ctx)
+    parts = await call_tender_sleuth(
+        model=model,
+        model_config=model_config,
+        project_id=project_id,
+        user_id=user_id,
+        **ctx,
+    )
     _write_parts(ws, parts)
     _, output = await _run_merge_async(ws)
     if not _tender_complete(ws):
@@ -147,6 +160,8 @@ async def parse_tender(ws, *, model: str, model_config: dict | None) -> dict:
         retry_parts = await call_tender_sleuth(
             model=model,
             model_config=model_config,
+            project_id=project_id,
+            user_id=user_id,
             **{**ctx, "bid_config": {**ctx["bid_config"], "_merge_issues": issues}},
         )
         _write_parts(ws, retry_parts)
@@ -194,7 +209,13 @@ async def _run_parse(
             return
         ws = BidWorkspace(project.workspace_ref)
         try:
-            tender = await parse_tender(ws, model=model, model_config=model_config)
+            tender = await parse_tender(
+                ws,
+                model=model,
+                model_config=model_config,
+                project_id=project_id,
+                user_id=user_id,
+            )
             try:
                 _prefill_qualifications(ws, tender)
             except Exception:

@@ -3,9 +3,14 @@
 
 import json
 import logging
+import time
 from pathlib import Path
 
-from app.services.chat_shell_model_service import complete_text
+from app.services.bid import llm_log
+from app.services.chat_shell_model_service import (
+    create_response,
+    extract_response_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +77,37 @@ def _strip_fence(t: str) -> str:
 # budget before sending instead of letting the provider reject the call.
 _MAX_PROMPT_CHARS = 200_000  # ~50k tokens at ~4 chars/token, conservative
 
+
+def extract_usage(response) -> tuple[int, int]:
+    """Best-effort (prompt_tokens, completion_tokens) from a chat_shell response.
+
+    bid responses arrive as an SSE string; token counts live in
+    ``response.status.updated`` context_metrics (used_input_tokens) and the
+    ``response.completed`` usage block. Returns (0, 0) if unparseable.
+    """
+    prompt_toks = 0
+    completion_toks = 0
+    text = response if isinstance(response, str) else ""
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        try:
+            ev = json.loads(line[len("data:") :].strip())
+        except json.JSONDecodeError:
+            continue
+        cm = ev.get("context_metrics") if isinstance(ev, dict) else None
+        if isinstance(cm, dict) and cm.get("used_input_tokens"):
+            prompt_toks = int(cm["used_input_tokens"])
+        usage = (
+            (ev.get("response") or {}).get("usage") if isinstance(ev, dict) else None
+        )
+        if isinstance(usage, dict):
+            prompt_toks = int(usage.get("input_tokens") or prompt_toks)
+            completion_toks = int(usage.get("output_tokens") or completion_toks)
+    return prompt_toks, completion_toks
+
+
 _CTX_ERR_MARKERS = (
     "context_length",
     "context window",
@@ -115,34 +151,64 @@ async def _complete_ctx(
     shrink_order: list[str],
     instructions: str,
     metadata: dict,
+    specialist: str,
+    project_id: int | None,
+    user_id: int | None,
 ) -> str:
-    """complete_text with pre-call budget trimming and one halved-budget retry
-    on provider context-length errors."""
+    """create_response with pre-call budget trimming and one halved-budget retry
+    on provider context-length errors. Single chokepoint for LLM call logging:
+    records usage (tokens) + duration + status to bid_llm_calls."""
     fitted = _fit_budget(ctx, shrink_order)
+    payload = json.dumps(fitted, ensure_ascii=False)
+    start = time.monotonic()
+    status, error, resp, text = "ok", None, None, ""
     try:
-        return await complete_text(
-            model=model,
-            model_config=model_config,
-            input_messages=[
-                {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)}
-            ],
-            instructions=instructions,
-            metadata=metadata,
-        )
+        try:
+            resp = await create_response(
+                model=model,
+                model_config=model_config,
+                input_messages=[{"role": "user", "content": payload}],
+                instructions=instructions,
+                metadata=metadata,
+                stream=False,
+            )
+        except Exception as e:
+            msg = str(e).lower()
+            if not any(m in msg for m in _CTX_ERR_MARKERS):
+                raise
+            logger.warning("context overflow, retrying with halved budget: %s", e)
+            halved = json.dumps(
+                _fit_budget(ctx, shrink_order, budget=_MAX_PROMPT_CHARS // 2),
+                ensure_ascii=False,
+            )
+            payload = halved
+            resp = await create_response(
+                model=model,
+                model_config=model_config,
+                input_messages=[{"role": "user", "content": halved}],
+                instructions=instructions,
+                metadata=metadata,
+                stream=False,
+            )
+        text = extract_response_text(resp)
+        return text
     except Exception as e:
-        msg = str(e).lower()
-        if not any(m in msg for m in _CTX_ERR_MARKERS):
-            raise
-        logger.warning("context overflow, retrying with halved budget: %s", e)
-        halved = _fit_budget(ctx, shrink_order, budget=_MAX_PROMPT_CHARS // 2)
-        return await complete_text(
+        status, error = "error", str(e)
+        raise
+    finally:
+        pt, ct = extract_usage(resp) if resp is not None else (0, 0)
+        llm_log.record(
+            project_id=project_id,
+            user_id=user_id,
+            specialist=specialist,
             model=model,
-            model_config=model_config,
-            input_messages=[
-                {"role": "user", "content": json.dumps(halved, ensure_ascii=False)}
-            ],
-            instructions=instructions,
-            metadata=metadata,
+            request=instructions + "\n\n" + payload,
+            response=text if status == "ok" else "",
+            prompt_tokens=pt,
+            completion_tokens=ct,
+            duration_ms=int((time.monotonic() - start) * 1000),
+            status=status,
+            error=error,
         )
 
 
@@ -172,6 +238,8 @@ async def call_tender_sleuth(
     regions: dict[str, str],
     veto: dict,
     bid_config: dict,
+    project_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict[str, dict]:
     parts: dict[str, dict] = {}
     for block, cfg in ROUTE_MAP.items():
@@ -198,6 +266,9 @@ async def call_tender_sleuth(
             shrink_order=["tender_regions", "tender_segments"],
             instructions=instructions,
             metadata={"block": block},
+            specialist="tender_sleuth",
+            project_id=project_id,
+            user_id=user_id,
         )
         stripped = _strip_fence(raw)
         try:
@@ -239,6 +310,8 @@ async def call_ghostwriter(
     knowledge_base: dict,
     instruction: str | None = None,
     brief: dict | None = None,
+    project_id: int | None = None,
+    user_id: int | None = None,
 ) -> str:
     covers = set(section.get("covers") or [])
     scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
@@ -282,6 +355,9 @@ async def call_ghostwriter(
         shrink_order=["bidder_knowledge_base"],
         instructions=instructions,
         metadata={"section": section.get("id")},
+        specialist="ghostwriter",
+        project_id=project_id,
+        user_id=user_id,
     )
     return _strip_fence(raw)
 
@@ -296,6 +372,8 @@ async def call_fact_checker(
     model: str,
     model_config: dict | None,
     tasks: list[dict],
+    project_id: int | None = None,
+    user_id: int | None = None,
 ) -> list[dict]:
     if not tasks:
         return []
@@ -304,17 +382,16 @@ async def call_fact_checker(
         + '\n\n## 后端调用输出格式\n只返回一个 JSON 对象 {"verdicts": [...]}，'
         + "不要 markdown 围栏、不要复述原文、不要解释。"
     )
-    raw = await complete_text(
+    raw = await _complete_ctx(
         model=model,
         model_config=model_config,
-        input_messages=[
-            {
-                "role": "user",
-                "content": json.dumps({"tasks": tasks}, ensure_ascii=False),
-            }
-        ],
+        ctx={"tasks": tasks},
+        shrink_order=["tasks"],
         instructions=instructions,
         metadata={"stage": "fact_check", "count": len(tasks)},
+        specialist="fact_checker",
+        project_id=project_id,
+        user_id=user_id,
     )
     obj = json.loads(_strip_fence(raw))
     if isinstance(obj, dict):
