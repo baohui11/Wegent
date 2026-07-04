@@ -429,6 +429,28 @@ def draft_status(
     )
 
 
+@router.post("/projects/{project_id}/draft/pause", response_model=SimpleStatusResponse)
+def pause_draft(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    drafting.set_paused(BidWorkspace(project.workspace_ref), True)
+    return SimpleStatusResponse(status="paused")
+
+
+@router.post("/projects/{project_id}/draft/resume", response_model=SimpleStatusResponse)
+def resume_draft(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    drafting.set_paused(BidWorkspace(project.workspace_ref), False)
+    return SimpleStatusResponse(status="drafting")
+
+
 @router.get("/projects/{project_id}/sections", response_model=SectionListResponse)
 def list_sections(
     project_id: int,

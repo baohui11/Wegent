@@ -92,6 +92,7 @@ class DraftStatusResponse(BaseModel):
     sections: dict
     finished: bool
     error: str | None = None
+    paused: bool = False
 
 
 class SectionStatus(BaseModel):

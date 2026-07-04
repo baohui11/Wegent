@@ -13,6 +13,11 @@ from app.services.bid.workspace import BidWorkspace
 
 logger = logging.getLogger(__name__)
 
+# Cooperative pause: between sections the pipeline polls the status-file flag
+# (file-based because the API runs multiple uvicorn workers; the pause endpoint
+# may be served by a different process than the one running this pipeline).
+PAUSE_POLL_SECONDS = 1.0
+
 
 def flatten_sections(outline: dict) -> list[dict]:
     out: list[dict] = []
@@ -44,6 +49,8 @@ async def draft_all(
     async def one(section: dict) -> None:
         sid = str(section["id"])
         async with sem:
+            while ds.is_paused(ws):
+                await asyncio.sleep(PAUSE_POLL_SECONDS)
             ds.set_section_status(ws, sid, "drafting")
             try:
                 md = await call_ghostwriter(
