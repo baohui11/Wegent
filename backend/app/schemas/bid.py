@@ -121,3 +121,23 @@ class RedraftRequest(BaseModel):
 
 class ReviewStatusResponse(BaseModel):
     accepted: dict
+
+
+class LlmCallInfo(BaseModel):
+    id: int
+    specialist: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    duration_ms: int
+    status: str
+    created_at: datetime
+    request: str
+    response: str
+
+    class Config:
+        from_attributes = True
+
+
+class LlmLogResponse(BaseModel):
+    items: list[LlmCallInfo]

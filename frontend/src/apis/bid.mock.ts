@@ -14,6 +14,7 @@ import type {
   DraftSection,
   DraftStatus,
   ExtractedFile,
+  LlmCall,
   OutlineDoc,
   OutlineResponse,
   TenderDoc,
@@ -441,6 +442,23 @@ export const bidMockApis = {
     need(id).quals = q
     return delay({ qualifications: q })
   },
+  getLlmLog: (_id: number): Promise<{ items: LlmCall[] }> =>
+    delay({
+      items: [
+        {
+          id: 1,
+          specialist: 'tender_sleuth',
+          model: 'mock',
+          prompt_tokens: 4200,
+          completion_tokens: 800,
+          duration_ms: 12000,
+          status: 'ok',
+          created_at: iso(0),
+          request: '（拆标请求）',
+          response: '（拆标结果）',
+        },
+      ],
+    }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {

@@ -98,6 +98,19 @@ export interface ExtractedFile {
   text: string
 }
 
+export interface LlmCall {
+  id: number
+  specialist: string
+  model: string
+  prompt_tokens: number
+  completion_tokens: number
+  duration_ms: number
+  status: string
+  created_at: string
+  request: string
+  response: string
+}
+
 export interface DraftStatus {
   total: number
   sections: Record<string, string>
@@ -173,6 +186,8 @@ const realBidApis = {
     q: Record<string, unknown>
   ): Promise<{ qualifications: Record<string, unknown> }> =>
     apiClient.put(`/bid/projects/${id}/materials/qualifications`, { qualifications: q }),
+  getLlmLog: (id: number): Promise<{ items: LlmCall[] }> =>
+    apiClient.get<{ items: LlmCall[] }>(`/bid/projects/${id}/llm-log`),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     apiClient.get<BriefsDoc>(`/bid/projects/${id}/materials/briefs`),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> =>

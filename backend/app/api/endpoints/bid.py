@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user
+from app.models.bid_llm_call import BidLlmCall
 from app.models.user import User
 from app.schemas.bid import (
     AttachmentInfo,
@@ -22,6 +23,8 @@ from app.schemas.bid import (
     ExtractTextResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
+    LlmCallInfo,
+    LlmLogResponse,
     NodeBriefsPayload,
     OutlineResponse,
     OutlineSaveRequest,
@@ -209,6 +212,26 @@ def _coverage(ws) -> CoverageResponse:
     outline = read_outline(ws)
     tender = _read_tender_for_coverage(ws)
     return CoverageResponse(**compute_coverage(outline, tender))
+
+
+@router.get("/projects/{project_id}/llm-log", response_model=LlmLogResponse)
+def get_llm_log(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require(db, current_user, project_id)  # ownership
+    rows = (
+        db.query(BidLlmCall)
+        .filter(
+            BidLlmCall.project_id == project_id,
+            BidLlmCall.user_id == current_user.id,
+        )
+        .order_by(BidLlmCall.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return LlmLogResponse(items=[LlmCallInfo.model_validate(r) for r in rows])
 
 
 @router.post("/projects/{project_id}/package", response_model=SimpleStatusResponse)

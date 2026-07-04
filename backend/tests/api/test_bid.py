@@ -608,3 +608,16 @@ def test_coverage_endpoint_uses_normalized(
     )
     r = test_client.get(f"/api/bid/projects/{pid}/coverage", headers=h)
     assert r.status_code == 200 and r.json()["total"] == 2 and r.json()["covered"] == 1
+
+
+def test_llm_log_endpoint_empty(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "log"}, headers=h
+    ).json()["id"]
+    # empty first (no calls recorded yet)
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/llm-log", headers=h).json()["items"]
+        == []
+    )
