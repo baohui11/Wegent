@@ -94,3 +94,85 @@ async def test_list_dir_returns_entry_paths():
         C.return_value.__aenter__.return_value = client
         paths = await rt.list_dir("http://localhost:10001", "/home/user")
     assert paths == ["/home/user/out.md", "/home/user/sections"]
+
+
+@pytest.mark.asyncio
+async def test_run_agent_posts_v1responses_with_bot():
+    # C1: execute goes direct to envd /v1/responses (not em /sandboxes/{id}/execute,
+    # which is a platform regression). metadata.bot must carry shell_type +
+    # agent_config.env or the executor rejects with "Unsupported agent type: ''".
+    rt = SandboxRuntime(em_url="http://em:8001", rewrite_host=False)
+    client = AsyncMock()
+    client.post.return_value = _resp({"status": "queued"}, 200)
+    with patch("app.services.bid.sandbox_runtime.httpx.AsyncClient") as C:
+        C.return_value.__aenter__.return_value = client
+        await rt.run_agent(
+            "http://localhost:10001",
+            prompt="draft it",
+            instructions="sys",
+            model="mimo-v2.5",
+            model_config={"api_key": "k"},
+            bot_env={"env": {"model": "claude", "model_id": "mimo-v2.5"}},
+            task_id=2000000030,
+            subtask_id=2000000030,
+            user_id=1,
+            user_name="admin",
+        )
+    url = client.post.call_args[0][0]
+    assert url == "http://localhost:10001/v1/responses"  # C1: envd, not em
+    body = client.post.call_args[1]["json"]
+    assert body["background"] is True and body["input"] == "draft it"
+    bot = body["metadata"]["bot"][0]
+    assert bot["shell_type"] == "ClaudeCode"  # C1: agent type
+    assert bot["agent_config"]["env"]["model"] == "claude"  # C1: model injection
+    assert body["metadata"]["subtask_id"] == 2000000030
+
+
+@pytest.mark.asyncio
+async def test_run_agent_raises_on_non_2xx():
+    rt = SandboxRuntime(em_url="http://em:8001", rewrite_host=False)
+    client = AsyncMock()
+    client.post.return_value = _resp({"detail": "bad"}, 500)
+    with patch("app.services.bid.sandbox_runtime.httpx.AsyncClient") as C:
+        C.return_value.__aenter__.return_value = client
+        with pytest.raises(RuntimeError):
+            await rt.run_agent(
+                "http://localhost:10001",
+                prompt="x",
+                instructions="y",
+                model="m",
+                model_config={},
+                bot_env={"env": {"model": "claude"}},
+                task_id=1,
+                subtask_id=1,
+                user_id=1,
+                user_name="u",
+            )
+
+
+@pytest.mark.asyncio
+async def test_await_file_polls_until_present():
+    # C2: completion detection = poll envd output file (no executions endpoint).
+    rt = SandboxRuntime(em_url="http://em:8001", rewrite_host=False)
+    # read_file returns None twice then bytes; must use a real async generator
+    # of side effects keyed on call order.
+    reads = iter([None, None, b"DONE"])
+
+    async def fake_read(envd, remote_path):
+        return next(reads)
+
+    with patch.object(rt, "read_file", new=AsyncMock(side_effect=fake_read)):
+        present = await rt.await_file(
+            "http://localhost:10001", "/home/user/sections/s1.md", poll_s=0, max_tries=5
+        )
+    assert present is True
+
+
+@pytest.mark.asyncio
+async def test_await_file_returns_false_on_timeout():
+    rt = SandboxRuntime(em_url="http://em:8001", rewrite_host=False)
+    with patch.object(rt, "read_file", new=AsyncMock(return_value=None)):
+        present = await rt.await_file(
+            "http://localhost:10001", "/home/user/sections/x.md", poll_s=0, max_tries=3
+        )
+    assert present is False
