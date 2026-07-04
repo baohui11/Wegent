@@ -76,6 +76,28 @@ export interface AttachmentInfo {
   size: number
 }
 
+export interface NodeBrief {
+  [k: string]: unknown
+}
+
+export interface MaterialEntry {
+  id: string
+  name: string
+  size: number
+  linkedNodeIds: string[]
+}
+
+export interface BriefsDoc {
+  briefs: Record<string, NodeBrief>
+  materials: MaterialEntry[]
+}
+
+export interface ExtractedFile {
+  name: string
+  size: number
+  text: string
+}
+
 export interface DraftStatus {
   total: number
   sections: Record<string, string>
@@ -151,6 +173,10 @@ const realBidApis = {
     q: Record<string, unknown>
   ): Promise<{ qualifications: Record<string, unknown> }> =>
     apiClient.put(`/bid/projects/${id}/materials/qualifications`, { qualifications: q }),
+  getBriefs: (id: number): Promise<BriefsDoc> =>
+    apiClient.get<BriefsDoc>(`/bid/projects/${id}/materials/briefs`),
+  saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> =>
+    apiClient.put<BriefsDoc>(`/bid/projects/${id}/materials/briefs`, doc),
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     apiClient.get(`/bid/projects/${id}/materials/attachments`),
   uploadAttachment: async (id: number, file: File): Promise<AttachmentInfo> => {
@@ -163,6 +189,26 @@ const realBidApis = {
       body: form,
     })
     if (!res.ok) throw new Error(`upload failed: ${res.status}`)
+    return res.json()
+  },
+  extractTenderText: async (file: File): Promise<ExtractedFile> => {
+    const form = new FormData()
+    form.append('file', file)
+    const token = getToken()
+    const res = await fetch(`${getApiBaseUrl()}/bid/extract-text`, {
+      method: 'POST',
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+      body: form,
+    })
+    if (!res.ok) {
+      let detail = `extract failed: ${res.status}`
+      try {
+        detail = (await res.json()).detail ?? detail
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(detail)
+    }
     return res.json()
   },
   completeMaterials: (id: number): Promise<{ status: string }> =>

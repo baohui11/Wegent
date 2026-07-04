@@ -120,3 +120,167 @@ async def test_call_ghostwriter_includes_instruction():
             instruction="语言更简洁，补充业绩数据",
         )
     assert "语言更简洁，补充业绩数据" in m.await_args.kwargs["instructions"]
+
+
+def test_route_map_tags_match_segmenter_vocabulary():
+    # segment_tender.py only emits these route_tags (plus "unrouted"); any
+    # other tag in ROUTE_MAP silently matches nothing and falls back to
+    # feeding ALL segments to the LLM.
+    from pathlib import Path
+
+    from app.services.bid import specialists
+
+    kw = json.loads(
+        (
+            Path(specialists.__file__).parent
+            / "vendor"
+            / "skills"
+            / "tender-parser"
+            / "references"
+            / "segment_keywords.json"
+        ).read_text(encoding="utf-8")
+    )
+    vocab = set(kw["route_keywords"].keys()) | {"unrouted"}
+    for block, cfg in specialists.ROUTE_MAP.items():
+        assert (
+            set(cfg["tags"]) <= vocab
+        ), f"{block}: unknown tags {set(cfg['tags']) - vocab}"
+
+
+def test_route_segments_picks_tagged_subset():
+    from app.services.bid.specialists import _route_segments
+
+    manifest = {
+        "segments": [
+            {"file": "a.md", "route_tags": ["scoring"]},
+            {"file": "b.md", "route_tags": ["unrouted"]},
+            {"file": "c.md", "route_tags": ["mandatory_clauses"]},
+        ]
+    }
+    segments = {"a.md": "A", "b.md": "B", "c.md": "C"}
+    # tag hit -> strict subset, no fallback
+    assert _route_segments(manifest, segments, ["scoring"], False) == {"a.md": "A"}
+    # "unrouted" usable directly as a tag
+    assert _route_segments(manifest, segments, ["unrouted"], False) == {"b.md": "B"}
+    # include_unrouted (veto blocks) adds unrouted segments
+    assert _route_segments(manifest, segments, ["scoring"], True) == {
+        "a.md": "A",
+        "b.md": "B",
+    }
+
+
+def test_fit_budget_untouched_when_under():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"a": "x" * 10, "b": "y" * 10}
+    assert _fit_budget(ctx, ["a"], budget=10_000) == ctx
+
+
+def test_fit_budget_shrinks_in_priority_order():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"keep": "k" * 50, "first": "f" * 500, "second": "s" * 500}
+    out = _fit_budget(ctx, ["first", "second"], budget=700)
+    # "first" is truncated/dropped before "second" is touched; "keep" never.
+    assert out["keep"] == ctx["keep"]
+    assert len(json.dumps(out, ensure_ascii=False)) <= 700 + 20  # marker slack
+    assert out.get("second") == ctx["second"] or "…[truncated]" in str(
+        out.get("first", "")
+    )
+
+
+def test_fit_budget_drops_key_when_zero_room():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"keep": "k" * 100, "big": "b" * 1000}
+    out = _fit_budget(ctx, ["big"], budget=120)
+    assert "big" not in out or len(str(out["big"])) < 1000
+    assert out["keep"] == ctx["keep"]
+
+
+@pytest.mark.asyncio
+async def test_complete_ctx_retries_on_context_error():
+    from app.services.bid import specialists
+
+    calls = []
+
+    async def fake_complete(**kw):
+        calls.append(kw)
+        if len(calls) == 1:
+            raise RuntimeError("This model's maximum context length is exceeded")
+        return "ok"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        out = await specialists._complete_ctx(
+            model="m",
+            model_config=None,
+            ctx={"keep": "k", "big": "b" * 100},
+            shrink_order=["big"],
+            instructions="i",
+            metadata={},
+        )
+    assert out == "ok" and len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_complete_ctx_reraises_non_context_error():
+    from app.services.bid import specialists
+
+    with patch.object(
+        specialists, "complete_text", new=AsyncMock(side_effect=RuntimeError("boom"))
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            await specialists._complete_ctx(
+                model="m",
+                model_config=None,
+                ctx={"a": 1},
+                shrink_order=[],
+                instructions="i",
+                metadata={},
+            )
+
+
+@pytest.mark.asyncio
+async def test_ghostwriter_injects_brief():
+    from app.services.bid import specialists
+
+    seen = {}
+
+    async def fake_complete(**kw):
+        seen["content"] = kw["input_messages"][0]["content"]
+        seen["instructions"] = kw["instructions"]
+        return "正文"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "第一章"},
+            tender={},
+            knowledge_base={},
+            brief={"style": "专业", "wordMin": "800", "requirements": "写清楚"},
+        )
+    ctx = json.loads(seen["content"])
+    assert ctx["writing_brief"]["requirements"] == "写清楚"
+    assert "writing_brief" in seen["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_ghostwriter_no_brief_keeps_ctx_clean():
+    from app.services.bid import specialists
+
+    seen = {}
+
+    async def fake_complete(**kw):
+        seen["content"] = kw["input_messages"][0]["content"]
+        return "正文"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1"},
+            tender={},
+            knowledge_base={},
+        )
+    assert "writing_brief" not in json.loads(seen["content"])

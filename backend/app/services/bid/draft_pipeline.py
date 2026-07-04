@@ -5,12 +5,18 @@ import asyncio
 import logging
 
 from app.services.bid import drafting_service as ds
+from app.services.bid import materials_service
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_ghostwriter
 from app.services.bid.workspace import BidWorkspace
 
 logger = logging.getLogger(__name__)
+
+# Cooperative pause: between sections the pipeline polls the status-file flag
+# (file-based because the API runs multiple uvicorn workers; the pause endpoint
+# may be served by a different process than the one running this pipeline).
+PAUSE_POLL_SECONDS = 1.0
 
 
 def flatten_sections(outline: dict) -> list[dict]:
@@ -35,6 +41,7 @@ async def draft_all(
         kb = ws.read_json("corpus/bidder_knowledge_base.json")
     except FileNotFoundError:
         kb = {}
+    briefs = materials_service.read_briefs(ws).get("briefs", {})
     sections = flatten_sections(outline)
     ds.init_status(ws, [str(s["id"]) for s in sections])
     sem = asyncio.Semaphore(concurrency)
@@ -42,6 +49,8 @@ async def draft_all(
     async def one(section: dict) -> None:
         sid = str(section["id"])
         async with sem:
+            while ds.is_paused(ws):
+                await asyncio.sleep(PAUSE_POLL_SECONDS)
             ds.set_section_status(ws, sid, "drafting")
             try:
                 md = await call_ghostwriter(
@@ -50,6 +59,7 @@ async def draft_all(
                     section=section,
                     tender=tender,
                     knowledge_base=kb,
+                    brief=briefs.get(sid),
                 )
                 target = ws.path(f"workspace/sections/{sid}.md")
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -117,6 +127,7 @@ async def redraft_one(
         node = find_section(outline, section_id)
         if node is None:
             raise BidPipelineError(f"section {section_id} not in outline")
+        brief = materials_service.read_briefs(ws).get("briefs", {}).get(str(section_id))
         md = await call_ghostwriter(
             model=model,
             model_config=model_config,
@@ -124,6 +135,7 @@ async def redraft_one(
             tender=tender,
             knowledge_base=kb,
             instruction=instruction,
+            brief=brief,
         )
         target = ws.path(f"workspace/sections/{section_id}.md")
         target.parent.mkdir(parents=True, exist_ok=True)

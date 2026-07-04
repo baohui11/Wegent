@@ -72,10 +72,14 @@ it('new -> upload a real tender file -> create submits that file text', async ()
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
   ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
+  // UploadScreen now extracts via the backend; return the deterministic text.
+  ;(bidApis.extractTenderText as jest.Mock).mockResolvedValue({
+    name: 'tender.txt',
+    size: 0,
+    text: '我方真实招标文件正文',
+  })
   await enterNewImport()
   const file = new File(['我方真实招标文件正文'], 'tender.txt', { type: 'text/plain' })
-  // jsdom's File.text() is unreliable; make it deterministic for the read step.
-  Object.defineProperty(file, 'text', { value: () => Promise.resolve('我方真实招标文件正文') })
   fireEvent.change(screen.getByTestId('bid-tender-file'), { target: { files: [file] } })
   await screen.findByText('tender.txt')
   fireEvent.click(screen.getByTestId('bid-name-mode-smart'))
@@ -107,6 +111,10 @@ it('opening a phase-3 project resumes at the materials screen', async () => {
   ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
     qualifications: { company: '', items: {} },
   })
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValue({ briefs: {}, materials: [] })
+  ;(bidApis.saveBriefs as jest.Mock).mockImplementation((_id: number, d: unknown) =>
+    Promise.resolve(d)
+  )
   ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
   render(<BidWorkbenchDesktop />)
   fireEvent.click(await screen.findByTestId('bid-project-card-7'))

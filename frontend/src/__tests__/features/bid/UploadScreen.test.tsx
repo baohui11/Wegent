@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
 
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
+jest.mock('@/apis/bid', () => ({
+  bidApis: {
+    extractTenderText: jest.fn((file: File) =>
+      Promise.resolve({ name: file.name, size: file.size, text: `TEXT(${file.name})` })
+    ),
+  },
+}))
+import { bidApis } from '@/apis/bid'
 
 it('create is disabled until a tender file is added', () => {
   render(<UploadScreen onCreate={jest.fn()} onBack={jest.fn()} sampleText="SAMPLE" />)
@@ -47,4 +55,29 @@ it('back button invokes onBack', () => {
   render(<UploadScreen onCreate={jest.fn()} onBack={onBack} sampleText="SAMPLE" />)
   fireEvent.click(screen.getByTestId('bid-upload-back-button'))
   expect(onBack).toHaveBeenCalled()
+})
+
+it('extracts picked files via the backend and submits their text', async () => {
+  const onCreate = jest.fn()
+  render(<UploadScreen onCreate={onCreate} onBack={jest.fn()} sampleText="示例" />)
+  const input = screen.getByTestId('bid-tender-file')
+  const file = new File(['x'], '标书.docx', { type: 'application/whatever' })
+  fireEvent.change(input, { target: { files: [file] } })
+  await screen.findByText('标书.docx')
+  expect(bidApis.extractTenderText).toHaveBeenCalledTimes(1)
+  fireEvent.change(screen.getByTestId('bid-project-name-input'), {
+    target: { value: '我的项目' },
+  })
+  fireEvent.click(screen.getByTestId('bid-start-parse-button'))
+  await waitFor(() => expect(onCreate).toHaveBeenCalledWith('TEXT(标书.docx)', '我的项目'))
+})
+
+it('shows an error state when extraction fails and blocks submit', async () => {
+  ;(bidApis.extractTenderText as jest.Mock).mockRejectedValueOnce(new Error('扫描版'))
+  render(<UploadScreen onCreate={jest.fn()} onBack={jest.fn()} sampleText="示例" />)
+  fireEvent.change(screen.getByTestId('bid-tender-file'), {
+    target: { files: [new File(['x'], 'scan.pdf')] },
+  })
+  await screen.findByText(/扫描版/)
+  expect(screen.getByTestId('bid-start-parse-button')).toBeDisabled()
 })

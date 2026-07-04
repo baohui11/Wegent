@@ -9,9 +9,11 @@ import type {
   AttachmentInfo,
   AuditReport,
   BidProject,
+  BriefsDoc,
   CoverageReport,
   DraftSection,
   DraftStatus,
+  ExtractedFile,
   OutlineDoc,
   OutlineResponse,
   TenderDoc,
@@ -236,6 +238,7 @@ interface MockProject extends BidProject {
   kb?: Record<string, unknown>
   quals?: Record<string, unknown>
   attachments?: AttachmentInfo[]
+  briefsDoc?: BriefsDoc
   accepted?: Record<string, boolean>
   audit?: AuditReport
 }
@@ -438,6 +441,12 @@ export const bidMockApis = {
     need(id).quals = q
     return delay({ qualifications: q })
   },
+  getBriefs: (id: number): Promise<BriefsDoc> =>
+    delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
+  saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {
+    need(id).briefsDoc = doc
+    return delay(doc)
+  },
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     delay({ items: need(id).attachments ?? [] }),
   uploadAttachment: (id: number, file: File): Promise<AttachmentInfo> => {
@@ -445,6 +454,11 @@ export const bidMockApis = {
     const p = need(id)
     p.attachments = [...(p.attachments ?? []), info]
     return delay(info)
+  },
+  extractTenderText: async (file: File): Promise<ExtractedFile> => {
+    // Mock mode reads the file client-side (no backend to extract docx/pdf).
+    const text = await file.text()
+    return delay({ name: file.name, size: file.size, text })
   },
   completeMaterials: (id: number): Promise<{ status: string }> => {
     const p = need(id)

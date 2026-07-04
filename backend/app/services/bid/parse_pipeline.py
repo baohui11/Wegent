@@ -158,6 +158,28 @@ async def parse_tender(ws, *, model: str, model_config: dict | None) -> dict:
     return ws.read_json("workspace/tender.json")
 
 
+def _prefill_qualifications(ws: BidWorkspace, tender: dict) -> None:
+    """Seed corpus/qualifications.json from the parsed tender so the audit
+    checklist and {{qual:ID}} binding have data without manual JSON editing.
+    Never overwrites an existing file (user edits win). Company stays empty
+    until the stage-2 bidder-info card fills it."""
+    from app.services.bid import materials_service
+    from app.services.bid.tender_normalize import normalize_qualifications
+
+    if ws.path("corpus/qualifications.json").exists():
+        return
+    raw = normalize_qualifications(tender.get("qualifications"))
+    items = []
+    for i, q in enumerate(raw if isinstance(raw, list) else [], start=1):
+        if not isinstance(q, dict):
+            continue
+        name = str(q.get("name") or q.get("desc") or q.get("type") or "").strip()
+        if not name:
+            continue
+        items.append({"id": str(q.get("id") or f"Q{i}"), "name": name})
+    materials_service.write_qualifications(ws, {"company": "", "items": items})
+
+
 async def _run_parse(
     project_id: int, user_id: int, model: str, model_config: dict | None
 ) -> None:
@@ -173,6 +195,15 @@ async def _run_parse(
         ws = BidWorkspace(project.workspace_ref)
         try:
             tender = await parse_tender(ws, model=model, model_config=model_config)
+            try:
+                _prefill_qualifications(ws, tender)
+            except Exception:
+                # Prefill is best-effort seeding; it must never fail the parse.
+                logger.warning(
+                    "qualifications prefill failed for project %s",
+                    project_id,
+                    exc_info=True,
+                )
             derived = ((tender.get("project") or {}).get("name") or "").strip()
             # Preserve a user-chosen title; only fall back to the tender-derived
             # name when the project still carries the smart-naming placeholder.

@@ -13,28 +13,45 @@ _PROMPT = (Path(__file__).parent / "vendor" / "prompts" / "tender_sleuth.md").re
     encoding="utf-8"
 )
 
-# top-level block -> routing hints. route_tag names calibrated against vendor
-# segment_tender.py output (references/segment_keywords.json route_keywords).
+# top-level block -> routing hints. Tags MUST come from the segmenter's real
+# vocabulary: segment_tender.py emits route_tags from references/
+# segment_keywords.json route_keywords (scoring / mandatory_clauses /
+# required_outline / submission_rules) plus the literal "unrouted" for
+# everything else. Body-like blocks route to "unrouted" (the document bulk);
+# structured blocks get their focused segments. cfg["veto"]=True additionally
+# includes unrouted segments (see _route_segments) and injects veto candidates.
 ROUTE_MAP: dict[str, dict] = {
-    "project": {"tags": ["project", "notice"], "veto": False, "regions": False},
-    "qualifications": {"tags": ["qualification"], "veto": True, "regions": False},
-    "target_package": {"tags": ["scoring", "price"], "veto": False, "regions": True},
+    "project": {"tags": ["unrouted"], "veto": False, "regions": False},
+    "qualifications": {
+        "tags": ["mandatory_clauses", "submission_rules"],
+        "veto": True,
+        "regions": False,
+    },
+    "target_package": {
+        "tags": ["scoring", "submission_rules"],
+        "veto": False,
+        "regions": True,
+    },
     "scoring": {"tags": ["scoring"], "veto": False, "regions": True},
-    "mandatory_clauses": {"tags": ["clause", "veto"], "veto": True, "regions": False},
-    "submission_rules": {
-        "tags": ["submission", "format"],
+    "mandatory_clauses": {
+        "tags": ["mandatory_clauses"],
+        "veto": True,
+        "regions": False,
+    },
+    "submission_rules": {"tags": ["submission_rules"], "veto": False, "regions": False},
+    "required_outline": {"tags": ["required_outline"], "veto": False, "regions": True},
+    "requirements": {
+        "tags": ["required_outline", "unrouted"],
         "veto": False,
         "regions": False,
     },
-    "required_outline": {"tags": ["outline", "toc"], "veto": False, "regions": True},
-    "requirements": {"tags": ["requirement", "spec"], "veto": False, "regions": False},
     "commitment_terms": {
-        "tags": ["commitment", "contract"],
+        "tags": ["mandatory_clauses", "submission_rules", "unrouted"],
         "veto": False,
         "regions": False,
     },
     "derived_outline": {
-        "tags": ["spec", "requirement"],
+        "tags": ["required_outline", "unrouted"],
         "veto": False,
         "regions": True,
     },
@@ -48,6 +65,85 @@ def _strip_fence(t: str) -> str:
         if t.rstrip().endswith("```"):
             t = t.rstrip()[:-3]
     return t.strip()
+
+
+# Prompt-size guard: chat_shell is a stateless gateway (history_limit=0), so
+# per-call context size is entirely what we assemble here. Trim to a character
+# budget before sending instead of letting the provider reject the call.
+_MAX_PROMPT_CHARS = 200_000  # ~50k tokens at ~4 chars/token, conservative
+
+_CTX_ERR_MARKERS = (
+    "context_length",
+    "context window",
+    "maximum context",
+    "too many tokens",
+    "prompt is too long",
+)
+
+
+def _fit_budget(ctx: dict, order: list[str], budget: int = _MAX_PROMPT_CHARS) -> dict:
+    """Trim ``ctx`` to ``budget`` serialized chars. Keys in ``order`` are
+    truncated (head kept) or dropped, first key first; other keys are never
+    touched."""
+
+    def size(c: dict) -> int:
+        return len(json.dumps(c, ensure_ascii=False))
+
+    if size(ctx) <= budget:
+        return ctx
+    ctx = dict(ctx)
+    for key in order:
+        if key not in ctx:
+            continue
+        overshoot = size(ctx) - budget
+        if overshoot <= 0:
+            break
+        blob = json.dumps(ctx[key], ensure_ascii=False)
+        keep = len(blob) - overshoot
+        if keep <= 0:
+            ctx.pop(key)
+        else:
+            ctx[key] = blob[:keep] + "…[truncated]"
+    return ctx
+
+
+async def _complete_ctx(
+    *,
+    model: str,
+    model_config: dict | None,
+    ctx: dict,
+    shrink_order: list[str],
+    instructions: str,
+    metadata: dict,
+) -> str:
+    """complete_text with pre-call budget trimming and one halved-budget retry
+    on provider context-length errors."""
+    fitted = _fit_budget(ctx, shrink_order)
+    try:
+        return await complete_text(
+            model=model,
+            model_config=model_config,
+            input_messages=[
+                {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)}
+            ],
+            instructions=instructions,
+            metadata=metadata,
+        )
+    except Exception as e:
+        msg = str(e).lower()
+        if not any(m in msg for m in _CTX_ERR_MARKERS):
+            raise
+        logger.warning("context overflow, retrying with halved budget: %s", e)
+        halved = _fit_budget(ctx, shrink_order, budget=_MAX_PROMPT_CHARS // 2)
+        return await complete_text(
+            model=model,
+            model_config=model_config,
+            input_messages=[
+                {"role": "user", "content": json.dumps(halved, ensure_ascii=False)}
+            ],
+            instructions=instructions,
+            metadata=metadata,
+        )
 
 
 def _route_segments(
@@ -95,12 +191,11 @@ async def call_tender_sleuth(
             f"本次只抽取块 `{block}`。不要写文件、不要 markdown 围栏。"
             f"只返回一个 JSON 对象，顶层键为 `{block}`，值为该块内容。"
         )
-        raw = await complete_text(
+        raw = await _complete_ctx(
             model=model,
             model_config=model_config,
-            input_messages=[
-                {"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}
-            ],
+            ctx=ctx,
+            shrink_order=["tender_regions", "tender_segments"],
             instructions=instructions,
             metadata={"block": block},
         )
@@ -143,6 +238,7 @@ async def call_ghostwriter(
     tender: dict,
     knowledge_base: dict,
     instruction: str | None = None,
+    brief: dict | None = None,
 ) -> str:
     covers = set(section.get("covers") or [])
     scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
@@ -161,20 +257,29 @@ async def call_ghostwriter(
         "mandatory_clauses": clauses,
         "bidder_knowledge_base": knowledge_base.get("bidder_knowledge_base", {}),
     }
+    if brief:
+        ctx["writing_brief"] = brief
     instructions = (
         _GW_PROMPT
         + "\n\n## 风格圣经（style-zhongda.md）\n"
         + _STYLE
         + "\n\n## 后端调用输出格式\n只返回本节正文 markdown，不要 JSON、不要代码围栏。"
     )
+    if brief:
+        instructions += (
+            "\n\n## 本节人工编写要求（writing_brief，必须遵守）\n"
+            "输入 JSON 中的 writing_brief 是用户在素材阶段为本节填写的编写要求"
+            "（风格 style、字数 wordMin-wordMax、深度 depth、模板 template、"
+            "重点 emphasis、是否配图 needFigure、具体要求 requirements、标签 tags）。"
+            "正文必须遵守这些要求；如与评分项覆盖冲突，以覆盖评分项为先。"
+        )
     if instruction:
         instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
-    raw = await complete_text(
+    raw = await _complete_ctx(
         model=model,
         model_config=model_config,
-        input_messages=[
-            {"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}
-        ],
+        ctx=ctx,
+        shrink_order=["bidder_knowledge_base"],
         instructions=instructions,
         metadata={"section": section.get("id")},
     )

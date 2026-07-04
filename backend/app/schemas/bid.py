@@ -65,6 +65,11 @@ class KnowledgeBaseSaveRequest(BaseModel):
     knowledge_base: dict
 
 
+class NodeBriefsPayload(BaseModel):
+    briefs: dict
+    materials: list = []
+
+
 class QualificationsResponse(BaseModel):
     qualifications: dict
 
@@ -87,6 +92,13 @@ class DraftStatusResponse(BaseModel):
     sections: dict
     finished: bool
     error: str | None = None
+    paused: bool = False
+
+
+class ExtractTextResponse(BaseModel):
+    name: str
+    size: int
+    text: str
 
 
 class SectionStatus(BaseModel):

@@ -203,3 +203,39 @@ async def test_run_parse_preserves_user_chosen_title():
     ):
         await pp._run_parse(1, 1, "m", None)
     cp.assert_called_once_with(db, project=proj, title=None)
+
+
+def test_prefill_qualifications_from_tender(tmp_path):
+    from app.services.bid import materials_service as ms
+
+    ws = BidWorkspace("q1", root=tmp_path)
+    tender = {
+        "qualifications": [
+            {"id": "Q1", "name": "营业执照"},
+            "ISO9001 质量管理体系认证",  # bare string form (qwen emits these)
+            {"type": "财务", "desc": "近三年审计报告"},
+        ]
+    }
+    pp._prefill_qualifications(ws, tender)
+    q = ms.read_qualifications(ws)
+    assert q["company"] == ""
+    names = [i["name"] for i in q["items"]]
+    assert "营业执照" in names and "ISO9001 质量管理体系认证" in names
+    assert all(i.get("id") for i in q["items"])
+
+
+def test_prefill_never_clobbers_existing(tmp_path):
+    from app.services.bid import materials_service as ms
+
+    ws = BidWorkspace("q2", root=tmp_path)
+    ms.write_qualifications(
+        ws, {"company": "华信", "items": [{"id": "K", "name": "已有"}]}
+    )
+    pp._prefill_qualifications(ws, {"qualifications": [{"id": "Q1", "name": "新的"}]})
+    assert ms.read_qualifications(ws)["company"] == "华信"
+
+
+def test_prefill_tolerates_garbage(tmp_path):
+    ws = BidWorkspace("q3", root=tmp_path)
+    pp._prefill_qualifications(ws, {"qualifications": None})  # no raise
+    pp._prefill_qualifications(ws, {})  # no raise

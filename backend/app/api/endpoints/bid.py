@@ -19,8 +19,10 @@ from app.schemas.bid import (
     BidProjectResponse,
     CoverageResponse,
     DraftStatusResponse,
+    ExtractTextResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
+    NodeBriefsPayload,
     OutlineResponse,
     OutlineSaveRequest,
     PackageRequest,
@@ -56,6 +58,7 @@ from app.services.bid.outline_service import (
 from app.services.bid.parse_pipeline import BidPipelineError, launch_parse
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_fact_checker
+from app.services.bid.tender_extract import TenderExtractError, extract_text
 from app.services.bid.workspace import BidWorkspace
 
 router = APIRouter()
@@ -66,6 +69,22 @@ def _require(db, user, pid):
     if p is None:
         raise HTTPException(status_code=404, detail="bid project not found")
     return p
+
+
+@router.post("/extract-text", response_model=ExtractTextResponse)
+async def extract_tender_text(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    # Pre-project text extraction for the upload screen (docx/pdf/txt/md).
+    content = await file.read()
+    try:
+        text = await anyio.to_thread.run_sync(
+            extract_text, file.filename or "", content
+        )
+    except TenderExtractError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return ExtractTextResponse(name=file.filename or "", size=len(content), text=text)
 
 
 @router.post("/projects", response_model=BidProjectResponse)
@@ -356,6 +375,31 @@ def get_attachments(
     )
 
 
+@router.get("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)
+def get_briefs(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    return NodeBriefsPayload(**materials.read_briefs(ws))
+
+
+@router.put("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)
+def put_briefs(
+    project_id: int,
+    body: NodeBriefsPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        materials.write_briefs(ws, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return NodeBriefsPayload(**materials.read_briefs(ws))
+
+
 @router.post(
     "/projects/{project_id}/materials/complete", response_model=SimpleStatusResponse
 )
@@ -401,6 +445,28 @@ def draft_status(
     return DraftStatusResponse(
         **drafting.read_status(BidWorkspace(project.workspace_ref))
     )
+
+
+@router.post("/projects/{project_id}/draft/pause", response_model=SimpleStatusResponse)
+def pause_draft(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    drafting.set_paused(BidWorkspace(project.workspace_ref), True)
+    return SimpleStatusResponse(status="paused")
+
+
+@router.post("/projects/{project_id}/draft/resume", response_model=SimpleStatusResponse)
+def resume_draft(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    drafting.set_paused(BidWorkspace(project.workspace_ref), False)
+    return SimpleStatusResponse(status="drafting")
 
 
 @router.get("/projects/{project_id}/sections", response_model=SectionListResponse)

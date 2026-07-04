@@ -2,8 +2,15 @@
 
 import { useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
+import { bidApis } from '@/apis/bid'
 
-type PickedFile = { name: string; size: number; text: string }
+type PickedFile = {
+  name: string
+  size: number
+  text: string
+  status: 'extracting' | 'ready' | 'error'
+  error?: string
+}
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -32,29 +39,50 @@ export function UploadScreen({
 
   const onFilesSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files || [])
-    if (picked.length === 0) return
-    const read = await Promise.all(
-      picked.map(async f => ({ name: f.name, size: f.size, text: await f.text() }))
-    )
-    setFiles(prev => [...prev, ...read])
     if (fileInputRef.current) fileInputRef.current.value = ''
+    for (const f of picked) {
+      const entry: PickedFile = { name: f.name, size: f.size, text: '', status: 'extracting' }
+      setFiles(prev => [...prev, entry])
+      try {
+        const out = await bidApis.extractTenderText(f)
+        setFiles(prev =>
+          prev.map(x => (x === entry ? { ...x, text: out.text, status: 'ready' } : x))
+        )
+      } catch (err) {
+        setFiles(prev =>
+          prev.map(x =>
+            x === entry
+              ? { ...x, status: 'error', error: err instanceof Error ? err.message : 'error' }
+              : x
+          )
+        )
+      }
+    }
   }
 
   const loadSample = () => {
     setFiles(prev => [
       ...prev,
-      { name: SAMPLE_NAME, size: new Blob([sampleText]).size, text: sampleText },
+      {
+        name: SAMPLE_NAME,
+        size: new Blob([sampleText]).size,
+        text: sampleText,
+        status: 'ready' as const,
+      },
     ])
   }
 
   const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx))
 
+  const readyFiles = files.filter(f => f.status === 'ready')
+  const hasPending = files.some(f => f.status === 'extracting')
   const hasFiles = files.length > 0
-  const canCreate = hasFiles && (nameMode === 'smart' || name.trim().length > 0)
+  const canCreate =
+    readyFiles.length > 0 && !hasPending && (nameMode === 'smart' || name.trim().length > 0)
 
   const submit = () => {
     if (!canCreate) return
-    const tenderText = files.map(f => f.text).join('\n\n')
+    const tenderText = readyFiles.map(f => f.text).join('\n\n')
     onCreate(tenderText, nameMode === 'manual' ? name.trim() : '')
   }
 
@@ -187,7 +215,7 @@ export function UploadScreen({
           <input
             type="file"
             multiple
-            accept=".txt,.md,.markdown,text/plain,text/markdown"
+            accept=".txt,.md,.markdown,.docx,.pdf"
             ref={fileInputRef}
             onChange={onFilesSelected}
             data-testid="bid-tender-file"
@@ -228,7 +256,21 @@ export function UploadScreen({
                     </div>
                     <div style={{ fontSize: 10.5, color: 'var(--bid-muted-2)', marginTop: 1 }}>
                       {fmtSize(f.size)} ·{' '}
-                      <span style={{ color: 'var(--bid-success)' }}>{t('upload.file_ready')}</span>
+                      {f.status === 'extracting' && (
+                        <span style={{ color: 'var(--bid-muted-2)' }}>
+                          {t('upload.file_extracting')}
+                        </span>
+                      )}
+                      {f.status === 'ready' && (
+                        <span style={{ color: 'var(--bid-success)' }}>
+                          {t('upload.file_ready')}
+                        </span>
+                      )}
+                      {f.status === 'error' && (
+                        <span style={{ color: '#B3453D' }}>
+                          {f.error || t('upload.file_error')}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span

@@ -12,6 +12,7 @@ def test_status_lifecycle(tmp_path):
         "sections": {},
         "finished": False,
         "error": None,
+        "paused": False,
     }
     ds.init_status(ws, ["a", "b"])
     st = ds.read_status(ws)
@@ -30,3 +31,28 @@ def test_section_read_and_list(tmp_path):
     assert ds.read_section(ws, "s1") == "正文"
     with pytest.raises(FileNotFoundError):
         ds.read_section(ws, "nope")
+
+
+def test_pause_flag_roundtrip(tmp_path):
+    ws = BidWorkspace("pz1", root=tmp_path)
+    ds.init_status(ws, ["s1"])
+    assert ds.is_paused(ws) is False
+    assert ds.read_status(ws)["paused"] is False
+    ds.set_paused(ws, True)
+    assert ds.is_paused(ws) is True
+    ds.set_paused(ws, False)
+    assert ds.is_paused(ws) is False
+
+
+def test_mark_finished_clears_paused(tmp_path):
+    ws = BidWorkspace("pz2", root=tmp_path)
+    ds.init_status(ws, ["s1"])
+    ds.set_paused(ws, True)
+    ds.mark_finished(ws)
+    st = ds.read_status(ws)
+    assert st["finished"] is True and st["paused"] is False
+
+
+def test_read_status_default_includes_paused(tmp_path):
+    st = ds.read_status(BidWorkspace("pz3", root=tmp_path))
+    assert st["paused"] is False

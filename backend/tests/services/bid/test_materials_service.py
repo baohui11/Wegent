@@ -52,3 +52,28 @@ def test_attachment_filename_is_basenamed(tmp_path):
 
 def test_list_attachments_empty_when_absent(tmp_path):
     assert ms.list_attachments(BidWorkspace("m6", root=tmp_path)) == []
+
+
+def test_briefs_default_empty_and_roundtrip(tmp_path):
+    ws = BidWorkspace("b1", root=tmp_path)
+    assert ms.read_briefs(ws) == {"briefs": {}, "materials": []}
+    doc = {
+        "briefs": {"s1": {"style": "专业", "wordMin": "800", "requirements": "写清楚"}},
+        "materials": [
+            {"id": "m1", "name": "a.pdf", "size": 3, "linkedNodeIds": ["s1"]}
+        ],
+    }
+    ms.write_briefs(ws, doc)
+    assert ms.read_briefs(ws) == doc
+
+
+def test_briefs_validation(tmp_path):
+    ws = BidWorkspace("b2", root=tmp_path)
+    with pytest.raises(ValueError):
+        ms.write_briefs(ws, {"briefs": []})  # briefs must be a dict
+    with pytest.raises(ValueError):
+        ms.write_briefs(ws, {"briefs": {"s1": "not-a-dict"}})
+    with pytest.raises(ValueError):
+        ms.write_briefs(ws, {"briefs": {}, "materials": {"m": 1}})  # list required
+    ms.write_briefs(ws, {"briefs": {}})  # materials optional -> []
+    assert ms.read_briefs(ws)["materials"] == []

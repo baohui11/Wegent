@@ -515,3 +515,72 @@ def test_audit_verify_folds_fidelity_verdicts(
         test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["current_phase"]
         == 1
     )
+
+
+def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "briefs项目"}, headers=h
+    ).json()["id"]
+
+    # empty default, no 4xx noise on first load
+    r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
+    assert r.status_code == 200 and r.json() == {"briefs": {}, "materials": []}
+
+    doc = {
+        "briefs": {"s1": {"style": "专业", "requirements": "写清楚", "tags": ["核心"]}},
+        "materials": [
+            {"id": "m1", "name": "a.pdf", "size": 3, "linkedNodeIds": ["s1"]}
+        ],
+    }
+    r = test_client.put(
+        f"/api/bid/projects/{pid}/materials/briefs", json=doc, headers=h
+    )
+    assert r.status_code == 200 and r.json() == doc
+    r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
+    assert r.json() == doc
+
+    # invalid shape -> 400
+    r = test_client.put(
+        f"/api/bid/projects/{pid}/materials/briefs",
+        json={"briefs": {"s1": "oops"}},
+        headers=h,
+    )
+    assert r.status_code == 400
+
+
+def test_draft_pause_resume_api(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "暂停"}, headers=h
+    ).json()["id"]
+    r = test_client.post(f"/api/bid/projects/{pid}/draft/pause", headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "paused"
+    st = test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()
+    assert st["paused"] is True
+    r = test_client.post(f"/api/bid/projects/{pid}/draft/resume", headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "drafting"
+    st = test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()
+    assert st["paused"] is False
+
+
+def test_extract_text_api(test_client, test_token):
+    h = {"Authorization": f"Bearer {test_token}"}
+    body = ("招标文件正文，第一章 项目概述。" * 10).encode("utf-8")
+    r = test_client.post(
+        "/api/bid/extract-text",
+        files={"file": ("标书.txt", body, "text/plain")},
+        headers=h,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["name"] == "标书.txt" and "项目概述" in data["text"]
+
+    r = test_client.post(
+        "/api/bid/extract-text",
+        files={"file": ("x.doc", b"binary", "application/msword")},
+        headers=h,
+    )
+    assert r.status_code == 422
