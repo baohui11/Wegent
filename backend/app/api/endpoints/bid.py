@@ -101,6 +101,7 @@ def create_project(
         user_id=current_user.id,
         title=body.title,
         workspace_ref=f"bid-{uuid.uuid4().hex[:12]}",
+        model_name=body.model_name,
     )
 
 

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class BidProjectCreate(BaseModel):
     title: str
+    model_name: str = ""
 
 
 class BidProjectResponse(BaseModel):
@@ -15,6 +16,7 @@ class BidProjectResponse(BaseModel):
     current_phase: int
     max_phase_reached: int
     status: str
+    model_name: str = ""
     created_at: datetime
 
     class Config:
