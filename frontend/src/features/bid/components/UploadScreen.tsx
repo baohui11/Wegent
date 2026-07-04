@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { bidThemeVars } from '@/features/bid/theme'
 import { bidApis } from '@/apis/bid'
 
 type PickedFile = {
@@ -361,34 +369,36 @@ export function UploadScreen({
             </div>
           )}
 
-          <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 10.5, color: 'var(--bid-muted-2)', marginBottom: 4 }}>
-              {t('upload.model_label')}
-            </div>
-            <select
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              data-testid="bid-model-select"
-              className="w-full"
-              style={{
-                boxSizing: 'border-box',
-                border: '1px solid var(--bid-border-2)',
-                borderRadius: 10,
-                padding: '10px 14px',
-                fontSize: 13,
-                outline: 'none',
-                background: '#fff',
-                color: 'var(--bid-ink)',
-              }}
-            >
-              <option value="">{t('upload.model_default')}</option>
-              {modelOptions.map(n => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 800,
+              color: 'var(--bid-ink-2)',
+              marginTop: 18,
+              marginBottom: 10,
+            }}
+          >
+            {t('upload.model_label')}
           </div>
+          <Select
+            value={model || 'default'}
+            onValueChange={v => setModel(v === 'default' ? '' : v)}
+          >
+            <SelectTrigger
+              data-testid="bid-model-select"
+              className="h-11 w-full gap-2 rounded-lg border-border bg-surface px-3.5 text-[13px] text-text-primary"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent style={bidThemeVars}>
+              <SelectItem value="default">{t('upload.model_default')}</SelectItem>
+              {modelOptions.map(n => (
+                <SelectItem key={n} value={n}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <button
             type="button"
