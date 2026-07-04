@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { CoverageReport, LlmCall, OutlineDoc, TenderScoring } from '@/apis/bid'
+import { ParsedCallView } from './ParsedCallView'
 import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
 import {
   chapterColor,
@@ -322,16 +323,9 @@ export function OutlineCanvas({
                       </span>
                     </div>
                     {expanded && (
-                      <pre
-                        data-testid="bid-llm-call-response"
-                        className="max-h-48 overflow-auto whitespace-pre-wrap break-all px-2.5 pb-2.5 text-[10.5px]"
-                        style={{
-                          color: 'var(--bid-ink-2)',
-                          fontFamily: 'var(--bid-mono, monospace)',
-                        }}
-                      >
-                        {call.response || t('outline.log_no_content')}
-                      </pre>
+                      <div className="px-2.5 pb-2.5">
+                        <ParsedCallView response={call.response} label={call.label} />
+                      </div>
                     )}
                   </div>
                 )
