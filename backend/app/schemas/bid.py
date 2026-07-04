@@ -65,6 +65,11 @@ class KnowledgeBaseSaveRequest(BaseModel):
     knowledge_base: dict
 
 
+class NodeBriefsPayload(BaseModel):
+    briefs: dict
+    materials: list = []
+
+
 class QualificationsResponse(BaseModel):
     qualifications: dict
 

@@ -21,6 +21,7 @@ from app.schemas.bid import (
     DraftStatusResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
+    NodeBriefsPayload,
     OutlineResponse,
     OutlineSaveRequest,
     PackageRequest,
@@ -354,6 +355,31 @@ def get_attachments(
     return AttachmentListResponse(
         items=[AttachmentInfo(**a) for a in materials.list_attachments(ws)]
     )
+
+
+@router.get("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)
+def get_briefs(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    return NodeBriefsPayload(**materials.read_briefs(ws))
+
+
+@router.put("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)
+def put_briefs(
+    project_id: int,
+    body: NodeBriefsPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    try:
+        materials.write_briefs(ws, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return NodeBriefsPayload(**materials.read_briefs(ws))
 
 
 @router.post(

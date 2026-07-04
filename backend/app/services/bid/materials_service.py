@@ -8,6 +8,7 @@ from app.services.bid.workspace import BidWorkspace
 
 _KB = "corpus/bidder_knowledge_base.json"
 _QUALS = "corpus/qualifications.json"
+_BRIEFS = "corpus/node_briefs.json"
 _ATTACH_DIR = "corpus/attachments"
 
 
@@ -60,3 +61,28 @@ def list_attachments(ws: BidWorkspace) -> list[dict]:
         for f in sorted(d.iterdir())
         if f.is_file()
     ]
+
+
+def read_briefs(ws: BidWorkspace) -> dict:
+    """Per-outline-node writing briefs + material links (stage-2 UI state).
+
+    Missing file means "nothing configured yet" -> empty doc, not an error.
+    """
+    p = ws.path(_BRIEFS)
+    if not p.exists():
+        return {"briefs": {}, "materials": []}
+    return ws.read_json(_BRIEFS)
+
+
+def write_briefs(ws: BidWorkspace, doc: dict) -> None:
+    briefs = doc.get("briefs")
+    materials = doc.get("materials", [])
+    if not isinstance(briefs, dict) or not all(
+        isinstance(v, dict) for v in briefs.values()
+    ):
+        raise ValueError("briefs must be an object mapping node id -> object")
+    if not isinstance(materials, list) or not all(
+        isinstance(m, dict) for m in materials
+    ):
+        raise ValueError("materials must be a list of objects")
+    ws.write_json(_BRIEFS, {"briefs": briefs, "materials": materials})
