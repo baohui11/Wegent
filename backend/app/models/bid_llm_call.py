@@ -27,6 +27,9 @@ class BidLlmCall(Base):
         String(64), nullable=False
     )  # tender_sleuth / ghostwriter / fact_checker
     model = Column(String(128), nullable=False, default="")
+    # Sub-target of the call: the tender block (scoring/…) for the sleuth, the
+    # section title for the ghostwriter. Powers the per-call parse-log feed.
+    label = Column(String(128), nullable=False, default="")
     request = Column(Text)  # full instructions + input
     response = Column(Text)  # full extracted text
     prompt_tokens = Column(Integer, nullable=False, default=0)

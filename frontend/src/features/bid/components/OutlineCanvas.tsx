@@ -64,6 +64,8 @@ export function OutlineCanvas({
   const { t } = useTranslation('bidWorkbench')
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  // Which real LLM call's full response is expanded in the parse-log feed.
+  const [expandedCall, setExpandedCall] = useState<number | null>(null)
 
   const c = useOutlineCanvas(outline, onSave, {
     chapter: t('outline.new_chapter'),
@@ -263,55 +265,80 @@ export function OutlineCanvas({
           </div>
         )}
 
-        {!parsing && (
-          <div>
-            <div className={`mb-2 ${sectionLabel}`} style={{ color: 'var(--bid-sub)' }}>
-              {t('outline.log')}
-            </div>
-            <div className="flex flex-col gap-2">
-              {(llmLog ?? []).length === 0 ? (
-                <div
-                  className="rounded-[10px] p-3 text-[11.5px]"
-                  style={{
-                    background: '#fff',
-                    border: '1px solid var(--bid-border)',
-                    color: 'var(--bid-muted-3)',
-                  }}
-                >
-                  {t('outline.log_empty')}
-                </div>
-              ) : (
-                (llmLog ?? []).map(call => {
-                  const labelKey =
-                    SPECIALIST_LABEL_KEY[call.specialist] ?? 'outline.specialist_other'
-                  return (
+        {/* Real specialist-call feed — shown while parsing (calls land live) and
+            after (as the record). Each row expands to the model's real output. */}
+        <div>
+          <div className={`mb-2 ${sectionLabel}`} style={{ color: 'var(--bid-sub)' }}>
+            {t('outline.log')}
+          </div>
+          <div className="flex flex-col gap-2">
+            {(llmLog ?? []).length === 0 ? (
+              <div
+                className="rounded-[10px] p-3 text-[11.5px]"
+                style={{
+                  background: '#fff',
+                  border: '1px solid var(--bid-border)',
+                  color: 'var(--bid-muted-3)',
+                }}
+              >
+                {parsing ? t('outline.log_running') : t('outline.log_empty')}
+              </div>
+            ) : (
+              (llmLog ?? []).map(call => {
+                const labelKey = SPECIALIST_LABEL_KEY[call.specialist] ?? 'outline.specialist_other'
+                const expanded = expandedCall === call.id
+                return (
+                  <div
+                    key={call.id}
+                    className="rounded-[9px]"
+                    style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
+                  >
                     <div
-                      key={call.id}
-                      className="flex items-center gap-2 text-[11.5px]"
+                      onClick={() => setExpandedCall(expanded ? null : call.id)}
+                      data-testid="bid-llm-call-row"
+                      className="flex cursor-pointer items-center gap-2 px-2.5 py-2 text-[11.5px]"
                       style={{ color: 'var(--bid-sub)' }}
                     >
                       <span
-                        style={{
-                          color: call.status === 'ok' ? 'var(--bid-success)' : '#B3453D',
-                        }}
+                        style={{ color: call.status === 'ok' ? 'var(--bid-success)' : '#B3453D' }}
                       >
                         {call.status === 'ok' ? '✓' : '✕'}
                       </span>
-                      <span className="flex-1">{t(labelKey)}</span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {t(labelKey)}
+                        {call.label && (
+                          <span style={{ color: 'var(--bid-muted-2)' }}> · {call.label}</span>
+                        )}
+                      </span>
                       <span
-                        className="font-mono text-[10.5px]"
+                        className="flex-shrink-0 font-mono text-[10.5px]"
                         style={{ color: 'var(--bid-muted-3)' }}
                       >
                         {(call.prompt_tokens + call.completion_tokens).toLocaleString()}t ·{' '}
                         {(call.duration_ms / 1000).toFixed(1)}s
                       </span>
+                      <span className="flex-shrink-0 text-[9px]" style={{ opacity: 0.5 }}>
+                        {expanded ? '▲' : '▼'}
+                      </span>
                     </div>
-                  )
-                })
-              )}
-            </div>
+                    {expanded && (
+                      <pre
+                        data-testid="bid-llm-call-response"
+                        className="max-h-48 overflow-auto whitespace-pre-wrap break-all px-2.5 pb-2.5 text-[10.5px]"
+                        style={{
+                          color: 'var(--bid-ink-2)',
+                          fontFamily: 'var(--bid-mono, monospace)',
+                        }}
+                      >
+                        {call.response || t('outline.log_no_content')}
+                      </pre>
+                    )}
+                  </div>
+                )
+              })
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Center: interactive mind-map canvas */}

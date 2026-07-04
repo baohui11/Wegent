@@ -102,6 +102,7 @@ export interface ExtractedFile {
 export interface LlmCall {
   id: number
   specialist: string
+  label: string
   model: string
   prompt_tokens: number
   completion_tokens: number

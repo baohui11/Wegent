@@ -110,7 +110,9 @@
     "delete_confirm": "删除",
     "minimap": "缩略图",
     "parse_failed": "拆解失败",
-    "parsing_now": "拆解中…"
+    "parsing_now": "拆解中…",
+    "log_running": "抽取中…每个专家调用完成后在此显示",
+    "log_no_content": "（暂无内容）"
   },
   "upload": {
     "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",

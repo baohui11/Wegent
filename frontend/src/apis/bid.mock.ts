@@ -460,19 +460,25 @@ export const bidMockApis = {
   getLlmLog: (_id: number): Promise<{ items: LlmCall[] }> =>
     delay({
       items: [
-        {
-          id: 1,
+        ['scoring', 4200, 820, '{"scoring": {"tech_items": [{"id": "T1", ...}]}}'],
+        ['mandatory_clauses', 3100, 540, '{"mandatory_clauses": [{"id": "M1", "veto": true}]}'],
+        ['project', 2600, 310, '{"project": {"name": "智慧园区智能化建设项目"}}'],
+      ].map((row, i) => {
+        const [label, pt, ct, response] = row as [string, number, number, string]
+        return {
+          id: i + 1,
           specialist: 'tender_sleuth',
+          label,
           model: 'mock',
-          prompt_tokens: 4200,
-          completion_tokens: 800,
-          duration_ms: 12000,
+          prompt_tokens: pt,
+          completion_tokens: ct,
+          duration_ms: 8000 + i * 1500,
           status: 'ok',
           created_at: iso(0),
-          request: '（拆标请求）',
-          response: '（拆标结果）',
-        },
-      ],
+          request: `（抽取 ${label} 块的请求）`,
+          response,
+        }
+      }),
     }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),

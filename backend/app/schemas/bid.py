@@ -128,6 +128,7 @@ class ReviewStatusResponse(BaseModel):
 class LlmCallInfo(BaseModel):
     id: int
     specialist: str
+    label: str
     model: str
     prompt_tokens: int
     completion_tokens: int

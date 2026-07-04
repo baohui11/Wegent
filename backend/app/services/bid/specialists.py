@@ -174,6 +174,7 @@ async def _complete_ctx(
     instructions: str,
     metadata: dict,
     specialist: str,
+    label: str = "",
     project_id: int | None,
     user_id: int | None,
 ) -> str:
@@ -223,6 +224,7 @@ async def _complete_ctx(
             project_id=project_id,
             user_id=user_id,
             specialist=specialist,
+            label=label,
             model=model,
             request=instructions + "\n\n" + payload,
             response=text if status == "ok" else "",
@@ -289,6 +291,7 @@ async def call_tender_sleuth(
             instructions=instructions,
             metadata={"block": block},
             specialist="tender_sleuth",
+            label=block,
             project_id=project_id,
             user_id=user_id,
         )
@@ -378,6 +381,7 @@ async def call_ghostwriter(
         instructions=instructions,
         metadata={"section": section.get("id")},
         specialist="ghostwriter",
+        label=str(section.get("title") or section.get("id") or ""),
         project_id=project_id,
         user_id=user_id,
     )

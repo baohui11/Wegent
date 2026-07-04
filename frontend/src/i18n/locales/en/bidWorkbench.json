@@ -110,7 +110,9 @@
     "delete_confirm": "Delete",
     "minimap": "Overview",
     "parse_failed": "Parse failed",
-    "parsing_now": "Parsing…"
+    "parsing_now": "Parsing…",
+    "log_running": "Extracting… specialist calls appear here as they finish",
+    "log_no_content": "(no content)"
   },
   "upload": {
     "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",
