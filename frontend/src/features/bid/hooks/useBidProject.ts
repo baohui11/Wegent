@@ -248,14 +248,6 @@ export function useBidProject() {
     setPhase('drafting')
   }, [projectId])
 
-  const pauseDrafting = useCallback(async () => {
-    if (projectId != null) await bidApis.pauseDraft(projectId)
-  }, [projectId])
-
-  const resumeDrafting = useCallback(async () => {
-    if (projectId != null) await bidApis.resumeDraft(projectId)
-  }, [projectId])
-
   const enterReview = useCallback(() => setPhase('review'), [])
 
   // Confirming the review advances straight to Stage 5 (check & export).
@@ -310,8 +302,6 @@ export function useBidProject() {
     enterMaterials,
     completeMaterials,
     startDrafting,
-    pauseDrafting,
-    resumeDrafting,
     enterReview,
     completeReview,
     enterAudit,

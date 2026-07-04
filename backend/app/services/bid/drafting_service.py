@@ -15,7 +15,6 @@ def init_status(ws: BidWorkspace, section_ids: list[str]) -> None:
             "sections": {sid: "pending" for sid in section_ids},
             "finished": False,
             "error": None,
-            "paused": False,
         },
     )
 
@@ -28,11 +27,8 @@ def read_status(ws: BidWorkspace) -> dict:
             "sections": {},
             "finished": False,
             "error": None,
-            "paused": False,
         }
-    st = ws.read_json(_STATUS)
-    st.setdefault("paused", False)  # files written before pause support
-    return st
+    return ws.read_json(_STATUS)
 
 
 def set_section_status(ws: BidWorkspace, section_id: str, status: str) -> None:
@@ -45,18 +41,7 @@ def mark_finished(ws: BidWorkspace, error: str | None = None) -> None:
     st = read_status(ws)
     st["finished"] = True
     st["error"] = error
-    st["paused"] = False
     ws.write_json(_STATUS, st)
-
-
-def set_paused(ws: BidWorkspace, paused: bool) -> None:
-    st = read_status(ws)
-    st["paused"] = paused
-    ws.write_json(_STATUS, st)
-
-
-def is_paused(ws: BidWorkspace) -> bool:
-    return bool(read_status(ws).get("paused"))
 
 
 def list_section_files(ws: BidWorkspace) -> list[str]:

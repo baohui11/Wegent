@@ -37,7 +37,7 @@ function parseBody(content: string): Block[] {
     })
 }
 
-export type DraftState = 'running' | 'paused' | 'done'
+export type DraftState = 'running' | 'done'
 
 export function DraftingScreen({
   projectId,
@@ -94,8 +94,8 @@ export function DraftingScreen({
   // Surface generation state to the shell header's unified action area.
   useEffect(() => {
     if (!status) return
-    onStateChange?.(status.finished ? 'done' : status.paused ? 'paused' : 'running')
-  }, [status?.finished, status?.paused, status, onStateChange])
+    onStateChange?.(status.finished ? 'done' : 'running')
+  }, [status?.finished, status, onStateChange])
 
   if (!status) return null
 

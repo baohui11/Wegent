@@ -564,22 +564,6 @@ def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
     assert r.status_code == 400
 
 
-def test_draft_pause_resume_api(test_client, test_token, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
-    h = {"Authorization": f"Bearer {test_token}"}
-    pid = test_client.post(
-        "/api/bid/projects", json={"title": "暂停"}, headers=h
-    ).json()["id"]
-    r = test_client.post(f"/api/bid/projects/{pid}/draft/pause", headers=h)
-    assert r.status_code == 200 and r.json()["status"] == "paused"
-    st = test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()
-    assert st["paused"] is True
-    r = test_client.post(f"/api/bid/projects/{pid}/draft/resume", headers=h)
-    assert r.status_code == 200 and r.json()["status"] == "drafting"
-    st = test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()
-    assert st["paused"] is False
-
-
 def test_extract_text_api(test_client, test_token):
     h = {"Authorization": f"Bearer {test_token}"}
     body = ("招标文件正文，第一章 项目概述。" * 10).encode("utf-8")

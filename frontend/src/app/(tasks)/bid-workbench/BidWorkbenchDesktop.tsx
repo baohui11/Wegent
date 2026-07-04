@@ -57,7 +57,7 @@ export function BidWorkbenchDesktop() {
   // Highest stage reached (drives clickable stepper), whether drafting finished
   // (drives the Stage-3 header action), and the "proceed to drafting" confirm.
   const [maxStage, setMaxStage] = useState(1)
-  const [draftState, setDraftState] = useState<'running' | 'paused' | 'done'>('running')
+  const [draftState, setDraftState] = useState<'running' | 'done'>('running')
   const [confirmDraft, setConfirmDraft] = useState(false)
   // Real LLM call log for the outline canvas' parse-log panel (B3 endpoint).
   const [llmLog, setLlmLog] = useState<LlmCall[]>([])
@@ -79,8 +79,6 @@ export function BidWorkbenchDesktop() {
     enterMaterials,
     completeMaterials,
     startDrafting,
-    pauseDrafting,
-    resumeDrafting,
     enterReview,
     completeReview,
     finalizeBid,
@@ -205,25 +203,10 @@ export function BidWorkbenchDesktop() {
         {t('phase2.header_action')}
       </HeaderButton>
     ) : phase === 'drafting' ? (
+      // Sandbox drafting runs a ClaudeCode SDK agent autonomously — it cannot be
+      // paused mid-run, so there is no stop/resume. Only the terminal "done" state
+      // exposes actions (regenerate / view result).
       <>
-        {draftState === 'running' && (
-          <HeaderGhostButton onClick={() => void pauseDrafting()} testid="bid-drafting-stop-button">
-            {t('drafting.stop')}
-          </HeaderGhostButton>
-        )}
-        {draftState === 'paused' && (
-          <HeaderGhostButton
-            onClick={() => void startDrafting()}
-            testid="bid-drafting-restart-button"
-          >
-            {t('drafting.restart_over')}
-          </HeaderGhostButton>
-        )}
-        {draftState === 'paused' && (
-          <HeaderButton onClick={() => void resumeDrafting()} testid="bid-drafting-resume-button">
-            {t('drafting.resume')}
-          </HeaderButton>
-        )}
         {draftState === 'done' && (
           <HeaderGhostButton
             onClick={() => void startDrafting()}

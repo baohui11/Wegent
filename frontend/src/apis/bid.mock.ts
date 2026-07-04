@@ -229,8 +229,8 @@ const buildAudit = (withFidelity: boolean): AuditReport => ({
 // --- mutable in-memory store ---
 interface MockProject extends BidProject {
   _parseAt?: number
-  // Draft clock: `_draftAt` is the start of the current running segment (null
-  // when paused); `_draftElapsed` accumulates time from prior segments.
+  // Draft clock: `_draftAt` is the start of the running segment; `_draftElapsed`
+  // carries elapsed time across a restart.
   _draftAt?: number | null
   _draftElapsed?: number
   _redraftAt?: Record<string, number>
@@ -366,7 +366,6 @@ function draftProgress(p: MockProject): DraftStatus {
     sections,
     finished,
     error: null,
-    paused: !running && !finished,
   }
 }
 
@@ -511,19 +510,6 @@ export const bidMockApis = {
     p._draftAt = Date.now()
     p._draftElapsed = 0
     p.current_phase = Math.max(p.current_phase, 4)
-    return delay({ status: 'drafting' })
-  },
-  pauseDraft: (id: number): Promise<{ status: string }> => {
-    const p = need(id)
-    if (p._draftAt != null) {
-      p._draftElapsed = (p._draftElapsed ?? 0) + (Date.now() - p._draftAt)
-      p._draftAt = null
-    }
-    return delay({ status: 'paused' })
-  },
-  resumeDraft: (id: number): Promise<{ status: string }> => {
-    const p = need(id)
-    if (p._draftAt == null) p._draftAt = Date.now()
     return delay({ status: 'drafting' })
   },
   getDraftStatus: (id: number): Promise<DraftStatus> => delay(draftProgress(need(id)), 120),

@@ -55,20 +55,6 @@ it('reports generation state to the shell (for the header action)', async () => 
   await waitFor(() => expect(onStateChange).toHaveBeenCalledWith('done'))
 })
 
-it('reports the paused state', async () => {
-  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
-    total: 2,
-    sections: { s1: 'done', s2: 'drafting' },
-    finished: false,
-    paused: true,
-    error: null,
-  })
-  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({ id: 's1', content: 'body' })
-  const onStateChange = jest.fn()
-  render(<DraftingScreen projectId={5} outline={OUTLINE} onStateChange={onStateChange} />)
-  await waitFor(() => expect(onStateChange).toHaveBeenCalledWith('paused'))
-})
-
 it('renders the sandbox-flow sequential completion (sections done one-by-one then finished)', async () => {
   // Sandbox drafting (Task 6) writes each section to the status file as the
   // agent produces it, then flips finished:true once all are collected. The
@@ -79,21 +65,18 @@ it('renders the sandbox-flow sequential completion (sections done one-by-one the
       total: 2,
       sections: { s1: 'drafting', s2: 'pending' },
       finished: false,
-      paused: false,
       error: null,
     },
     {
       total: 2,
       sections: { s1: 'done', s2: 'drafting' },
       finished: false,
-      paused: false,
       error: null,
     },
     {
       total: 2,
       sections: { s1: 'done', s2: 'done' },
       finished: true,
-      paused: false,
       error: null,
     },
   ]
