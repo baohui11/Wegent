@@ -143,7 +143,26 @@ describe('resolveDrop (live preview matches applyDrop commit)', () => {
       moved: true,
     }
     const hint = resolveDrop(f, layout, drag)
-    expect(hint).toEqual({ kind: 'reparent', targetId: 'c1' })
+    expect(hint).toMatchObject({ kind: 'reparent', targetId: 'c1' })
+    if (hint?.kind === 'reparent') expect(hint.edge).toContain('M ') // snap-edge path
+  })
+
+  it('snaps to the nearest node without exact overlap (forgiving drop)', () => {
+    const f = flat()
+    const layout = computeLayout(f, new Set(), 1)
+    const c2a = layout.pos.c2a
+    const c1 = layout.pos.c1
+    // Aim roughly toward c1 but stop ~half a node short — should still snap to c1.
+    const drag = {
+      id: 'c2a',
+      startX: 0,
+      startY: 0,
+      dx: c1.x - c2a.x + 30,
+      dy: c1.y - c2a.y + 20,
+      moved: true,
+    }
+    const hint = resolveDrop(f, layout, drag)
+    expect(hint).toMatchObject({ kind: 'reparent', targetId: 'c1' })
   })
 
   it('previews a reorder with an insertion line', () => {

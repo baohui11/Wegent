@@ -475,6 +475,17 @@ export function OutlineCanvas({
                     fill="none"
                   />
                 ))}
+                {/* Snap-preview edge: the connection that forms on drop. */}
+                {c.dropHint?.kind === 'reparent' && (
+                  <path
+                    data-testid="bid-outline-snap-edge"
+                    d={c.dropHint.edge}
+                    stroke="var(--bid-primary)"
+                    strokeWidth={2.5}
+                    strokeDasharray="6 4"
+                    fill="none"
+                  />
+                )}
               </svg>
 
               {c.flat.map(n => (

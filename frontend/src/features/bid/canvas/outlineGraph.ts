@@ -233,13 +233,14 @@ export function chapterColor(flat: FlatNode[], id: string): string {
 
 /**
  * A resolved drop decision, computed live during a drag so the UI can preview it.
- * - `reparent`: dropping onto `targetId` makes the node its child.
- * - `reorder`: dropping into a gap inserts at `insertIndex` among `parentId`'s
- *   children; `lineX`/`lineY`/`lineW` describe the insertion indicator.
- * - `null`: no structural change (the node snaps back).
+ * - `reparent`: dropping snaps the node under `targetId` (nearest node within
+ *   range); `edge` is an SVG path for the snap-preview connection.
+ * - `reorder`: dropping between siblings inserts at `insertIndex`; the
+ *   `lineX/Y/W` describe the insertion indicator.
+ * - `null`: no target in range (the node snaps back).
  */
 export type DropHint =
-  | { kind: 'reparent'; targetId: string }
+  | { kind: 'reparent'; targetId: string; edge: string }
   | {
       kind: 'reorder'
       parentId: string | null
@@ -250,54 +251,69 @@ export type DropHint =
     }
   | null
 
-/** Resolve the current drag into a drop decision without mutating anything. */
+/**
+ * Resolve the current drag into a drop decision without mutating anything.
+ *
+ * Forgiving, proximity-based: the node need not land exactly on a target.
+ * - Small horizontal travel (staying in its own column) -> reorder among
+ *   siblings, previewed by an insertion line.
+ * - Otherwise -> snap under the NEAREST node within a generous radius,
+ *   previewed by a connection edge. Beyond the radius -> null (snap back).
+ */
 export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): DropHint {
   const { pos, NW, NH, COLW } = layout
   const node = flat.find(n => n.id === drag.id)
   const p = pos[drag.id]
   if (!node || !p) return null
-  const dropCenterX = p.x + NW / 2 + drag.dx
-  const dropCenterY = p.y + NH / 2 + drag.dy
+  const cx = p.x + NW / 2 + drag.dx
+  const cy = p.y + NH / 2 + drag.dy
 
-  for (const n of flat) {
-    if (n.id === drag.id) continue
-    if (isDescendantOf(flat, drag.id, n.id)) continue
-    const np = pos[n.id]
-    if (!np) continue
-    if (
-      dropCenterX >= np.x &&
-      dropCenterX <= np.x + NW &&
-      dropCenterY >= np.y &&
-      dropCenterY <= np.y + NH
-    ) {
-      return { kind: 'reparent', targetId: n.id }
-    }
-  }
-
-  if (Math.abs(drag.dx) < COLW * 0.6) {
+  // Reorder intent: barely moved horizontally -> reposition among siblings.
+  if (Math.abs(drag.dx) < COLW * 0.4) {
     const parentId = node.parentId
     const siblings = childrenOf(flat, parentId).filter(s => s.id !== drag.id)
     let insertIndex = siblings.length
     for (let i = 0; i < siblings.length; i++) {
       const sp = pos[siblings[i].id]
-      if (sp && dropCenterY < sp.y + NH / 2) {
+      if (sp && cy < sp.y + NH / 2) {
         insertIndex = i
         break
       }
     }
-    // Insertion line: midway above the sibling at insertIndex (or below the last).
     const depth = pos[node.id]?.depth ?? 0
-    const lineX = depth * COLW
     const above = siblings[insertIndex]
     const below = siblings[insertIndex - 1]
     const lineY = above
       ? (pos[above.id]?.y ?? 0) - 6
       : below
         ? (pos[below.id]?.y ?? 0) + NH + 6
-        : dropCenterY
-    return { kind: 'reorder', parentId, insertIndex, lineX, lineY, lineW: NW }
+        : cy - NH / 2
+    return { kind: 'reorder', parentId, insertIndex, lineX: depth * COLW, lineY, lineW: NW }
   }
-  return null
+
+  // Reparent intent: snap under the nearest eligible node within range.
+  let best: FlatNode | null = null
+  let bestDist = Infinity
+  for (const n of flat) {
+    if (n.id === drag.id) continue
+    if (isDescendantOf(flat, drag.id, n.id)) continue
+    const np = pos[n.id]
+    if (!np) continue
+    const d = Math.hypot(cx - (np.x + NW / 2), cy - (np.y + NH / 2))
+    if (d < bestDist) {
+      bestDist = d
+      best = n
+    }
+  }
+  const SNAP_RADIUS = COLW * 1.4
+  if (!best || bestDist > SNAP_RADIUS) return null
+  // Snap-preview edge: from the target's right-center to the dragged node.
+  const tp = pos[best.id]
+  const sx = tp.x + NW
+  const sy = tp.y + NH / 2
+  const midx = (sx + cx) / 2
+  const edge = `M ${sx} ${sy} C ${midx} ${sy} ${midx} ${cy} ${cx} ${cy}`
+  return { kind: 'reparent', targetId: best.id, edge }
 }
 
 /**
@@ -358,6 +374,10 @@ export function buildEdges(
     if (!pos[n.id] || collapsedSet.has(n.id)) return
     ;(byParent[n.id] ?? []).forEach(c => {
       if (!pos[c.id]) return
+      // Hide edges touching the dragged node: it has moved away from its layout
+      // slot, so drawing to the old slot leaves a detached stub. The live drop
+      // preview (snap edge) shows the pending connection instead.
+      if (opts.dragId && (n.id === opts.dragId || c.id === opts.dragId)) return
       const p = pos[n.id]
       const q = pos[c.id]
       const px = p.x + NW
@@ -365,13 +385,11 @@ export function buildEdges(
       const cx = q.x
       const cy = q.y + NH / 2
       const midx = (px + cx) / 2
-      const dim = opts.dragId === n.id
       const highlighted =
         !!opts.selectedId && (n.id === opts.selectedId || c.id === opts.selectedId)
       let stroke = '#C9C2BC'
       let strokeWidth = 2
-      if (dim) stroke = '#E5DFDA'
-      else if (highlighted) {
+      if (highlighted) {
         stroke = 'var(--bid-primary)'
         strokeWidth = 2.5
       }
