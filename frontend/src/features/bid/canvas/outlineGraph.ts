@@ -234,13 +234,15 @@ export function chapterColor(flat: FlatNode[], id: string): string {
 /**
  * A resolved drop decision, computed live during a drag so the UI can preview it.
  * - `reparent`: dropping snaps the node under `targetId` (nearest node within
- *   range); `edge` is an SVG path for the snap-preview connection.
+ *   range). `ghostX/Y` is the projected landing slot (a placeholder is drawn
+ *   there); `edge` connects the target's right to that slot's left. The preview
+ *   points at where the node WILL land, not at the cursor, so it stays clean.
  * - `reorder`: dropping between siblings inserts at `insertIndex`; the
  *   `lineX/Y/W` describe the insertion indicator.
  * - `null`: no target in range (the node snaps back).
  */
 export type DropHint =
-  | { kind: 'reparent'; targetId: string; edge: string }
+  | { kind: 'reparent'; targetId: string; edge: string; ghostX: number; ghostY: number }
   | {
       kind: 'reorder'
       parentId: string | null
@@ -261,7 +263,7 @@ export type DropHint =
  *   previewed by a connection edge. Beyond the radius -> null (snap back).
  */
 export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): DropHint {
-  const { pos, NW, NH, COLW } = layout
+  const { pos, byParent, NW, NH, COLW, ROWH } = layout
   const node = flat.find(n => n.id === drag.id)
   const p = pos[drag.id]
   if (!node || !p) return null
@@ -307,16 +309,19 @@ export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): 
   }
   const SNAP_RADIUS = COLW * 1.4
   if (!best || bestDist > SNAP_RADIUS) return null
-  // Snap-preview edge mirrors a real parent→child link: from the TARGET's
-  // right-center to the DRAGGED node's left-center (its live, translated slot).
+  // Landing slot: where the node WILL sit as best's child — one column right of
+  // the target, below its existing (laid-out) children. The preview points here,
+  // NOT at the cursor, so the connector is always a clean left→right curve.
   const tp = pos[best.id]
+  const kids = (byParent[best.id] ?? []).filter(k => k.id !== drag.id && pos[k.id])
+  const ghostX = tp.x + COLW
+  const ghostY = kids.length ? Math.max(...kids.map(k => pos[k.id].y)) + ROWH : tp.y
   const sx = tp.x + NW
   const sy = tp.y + NH / 2
-  const ex = p.x + drag.dx // dragged node's left edge
-  const ey = p.y + NH / 2 + drag.dy // dragged node's vertical center
-  const midx = (sx + ex) / 2
-  const edge = `M ${sx} ${sy} C ${midx} ${sy} ${midx} ${ey} ${ex} ${ey}`
-  return { kind: 'reparent', targetId: best.id, edge }
+  const ey = ghostY + NH / 2
+  const midx = (sx + ghostX) / 2
+  const edge = `M ${sx} ${sy} C ${midx} ${sy} ${midx} ${ey} ${ghostX} ${ey}`
+  return { kind: 'reparent', targetId: best.id, edge, ghostX, ghostY }
 }
 
 /**

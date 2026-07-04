@@ -488,6 +488,25 @@ export function OutlineCanvas({
                 )}
               </svg>
 
+              {/* Landing-slot placeholder: where the dragged node will sit. */}
+              {c.dropHint?.kind === 'reparent' && (
+                <div
+                  data-testid="bid-outline-drop-ghost"
+                  style={{
+                    position: 'absolute',
+                    left: c.dropHint.ghostX,
+                    top: c.dropHint.ghostY,
+                    width: c.layout.NW,
+                    height: c.layout.NH,
+                    borderRadius: 10,
+                    border: '2px dashed var(--bid-primary)',
+                    background: 'rgba(199,16,42,.06)',
+                    pointerEvents: 'none',
+                    zIndex: 44,
+                  }}
+                />
+              )}
+
               {c.flat.map(n => (
                 <CanvasNode key={n.id} node={n} canvas={c} searchLower={searchLower} />
               ))}
