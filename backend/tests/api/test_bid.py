@@ -564,3 +564,23 @@ def test_draft_pause_resume_api(test_client, test_token, tmp_path, monkeypatch):
     assert r.status_code == 200 and r.json()["status"] == "drafting"
     st = test_client.get(f"/api/bid/projects/{pid}/draft/status", headers=h).json()
     assert st["paused"] is False
+
+
+def test_extract_text_api(test_client, test_token):
+    h = {"Authorization": f"Bearer {test_token}"}
+    body = ("招标文件正文，第一章 项目概述。" * 10).encode("utf-8")
+    r = test_client.post(
+        "/api/bid/extract-text",
+        files={"file": ("标书.txt", body, "text/plain")},
+        headers=h,
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["name"] == "标书.txt" and "项目概述" in data["text"]
+
+    r = test_client.post(
+        "/api/bid/extract-text",
+        files={"file": ("x.doc", b"binary", "application/msword")},
+        headers=h,
+    )
+    assert r.status_code == 422

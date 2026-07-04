@@ -19,6 +19,7 @@ from app.schemas.bid import (
     BidProjectResponse,
     CoverageResponse,
     DraftStatusResponse,
+    ExtractTextResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
     NodeBriefsPayload,
@@ -57,6 +58,7 @@ from app.services.bid.outline_service import (
 from app.services.bid.parse_pipeline import BidPipelineError, launch_parse
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_fact_checker
+from app.services.bid.tender_extract import TenderExtractError, extract_text
 from app.services.bid.workspace import BidWorkspace
 
 router = APIRouter()
@@ -67,6 +69,22 @@ def _require(db, user, pid):
     if p is None:
         raise HTTPException(status_code=404, detail="bid project not found")
     return p
+
+
+@router.post("/extract-text", response_model=ExtractTextResponse)
+async def extract_tender_text(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    # Pre-project text extraction for the upload screen (docx/pdf/txt/md).
+    content = await file.read()
+    try:
+        text = await anyio.to_thread.run_sync(
+            extract_text, file.filename or "", content
+        )
+    except TenderExtractError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return ExtractTextResponse(name=file.filename or "", size=len(content), text=text)
 
 
 @router.post("/projects", response_model=BidProjectResponse)

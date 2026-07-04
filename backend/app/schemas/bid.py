@@ -95,6 +95,12 @@ class DraftStatusResponse(BaseModel):
     paused: bool = False
 
 
+class ExtractTextResponse(BaseModel):
+    name: str
+    size: int
+    text: str
+
+
 class SectionStatus(BaseModel):
     id: str
     status: str
