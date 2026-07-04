@@ -14,6 +14,19 @@ from app.services.chat_shell_model_service import (
 
 logger = logging.getLogger(__name__)
 
+# OTel span per specialist call. shared.telemetry may be unavailable in some
+# test environments; fall back to a no-op decorator so the pipeline never breaks.
+try:
+    from shared.telemetry.decorators import trace_async
+except Exception:  # pragma: no cover - import guard for stripped-down envs
+
+    def trace_async(*_a, **_kw):  # type: ignore[misc]
+        def deco(func):
+            return func
+
+        return deco
+
+
 _PROMPT = (Path(__file__).parent / "vendor" / "prompts" / "tender_sleuth.md").read_text(
     encoding="utf-8"
 )
@@ -143,6 +156,15 @@ def _fit_budget(ctx: dict, order: list[str], budget: int = _MAX_PROMPT_CHARS) ->
     return ctx
 
 
+@trace_async(
+    span_name="bid.specialist_call",
+    tracer_name="bid.specialists",
+    extract_attributes=lambda *a, **kw: {
+        "bid.specialist": kw.get("specialist", ""),
+        "bid.project_id": str(kw.get("project_id") or ""),
+        "bid.model": str(kw.get("model") or ""),
+    },
+)
 async def _complete_ctx(
     *,
     model: str,
