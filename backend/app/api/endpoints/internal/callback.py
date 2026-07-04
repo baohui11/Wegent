@@ -152,25 +152,6 @@ async def handle_callback(
             logger.debug(f"[Callback] Skipping lifecycle event: {request.event_type}")
             return CallbackResponse(status="ok", message="Lifecycle event skipped")
 
-        # Bid drafting runs as a ClaudeCode sandbox keyed by a synthetic task_id
-        # (>= SYNTHETIC_BASE). Those calls bypass the chat_shell chokepoint that
-        # feeds bid_llm_calls, so tee terminal events here for observability (D8).
-        # Best-effort: never let logging break the callback flow.
-        try:
-            from app.services.bid.llm_log import record_from_callback
-            from app.services.bid.sandbox_config import SYNTHETIC_BASE
-
-            if request.task_id >= SYNTHETIC_BASE:
-                record_from_callback(
-                    db,
-                    task_id=request.task_id,
-                    subtask_id=request.subtask_id,
-                    event_type=request.event_type,
-                    event=request.data or {},
-                )
-        except Exception:
-            logger.warning("[Callback] bid llm_log tee failed", exc_info=True)
-
         # Get user_id from task for task:status notification
         task = task_store.get_task_by_states(
             db,

@@ -4,7 +4,6 @@ from unittest.mock import patch
 from app.models.bid_llm_call import BidLlmCall
 from app.models.bid_project import BidProject
 from app.services.bid import llm_log
-from app.services.bid.sandbox_config import SYNTHETIC_BASE, synthetic_task_id
 
 
 def test_record_writes_row(test_db):
@@ -72,70 +71,42 @@ def _seed_project(test_db, project_id=30, user_id=2):
     return proj
 
 
-def test_record_from_callback_writes_usage_for_synthetic_task_id(test_db):
+def test_record_sandbox_draft_writes_marker_row(test_db):
+    # The ClaudeCode executor stream carries no usage, so bid records a
+    # token-less turn marker from its own flow (D8 degrade).
     _seed_project(test_db, project_id=30, user_id=2)
-    tid = synthetic_task_id(30)
-    event = {
-        "type": "response.completed",
-        "response": {
-            "usage": {"input_tokens": 110, "output_tokens": 220, "total_tokens": 330}
-        },
-    }
-    llm_log.record_from_callback(
-        test_db,
-        task_id=tid,
-        subtask_id=tid,
-        event_type="response.completed",
-        event=event,
-    )
+    with patch("app.db.session.SessionLocal", return_value=test_db):
+        with patch.object(test_db, "close", lambda: None):
+            llm_log.record_sandbox_draft(
+                project_id=30,
+                user_id=2,
+                model="mimo-v2.5",
+                section_count=7,
+                duration_ms=1234,
+                status="ok",
+            )
     row = test_db.query(BidLlmCall).filter_by(project_id=30).first()
     assert row is not None
     assert row.specialist == "ghostwriter-sandbox"
-    assert row.prompt_tokens == 110
-    assert row.completion_tokens == 220
-    assert row.model == ""  # sandbox agent; no single specialist model
+    assert row.label == "7 sections"
+    assert row.model == "mimo-v2.5"
+    assert row.prompt_tokens == 0 and row.completion_tokens == 0
+    assert row.duration_ms == 1234 and row.status == "ok"
 
 
-def test_record_from_callback_skips_real_task_ids(test_db):
-    # Real Task ids (< SYNTHETIC_BASE) belong to the Task system, not bid; the
-    # tee must not write a bid_llm_calls row for them.
-    event = {"type": "response.completed", "response": {"usage": {"input_tokens": 1}}}
-    llm_log.record_from_callback(
-        test_db,
-        task_id=12345,
-        subtask_id=12345,
-        event_type="response.completed",
-        event=event,
-    )
-    assert test_db.query(BidLlmCall).count() == 0
-
-
-def test_record_from_callback_ignores_non_completed_events(test_db):
+def test_record_sandbox_draft_error_row(test_db):
     _seed_project(test_db, project_id=31, user_id=2)
-    tid = synthetic_task_id(31)
-    # Non-terminal events carry no usage; skip them silently.
-    llm_log.record_from_callback(
-        test_db,
-        task_id=tid,
-        subtask_id=tid,
-        event_type="response.output_text.delta",
-        event={"type": "response.output_text.delta"},
-    )
-    assert test_db.query(BidLlmCall).count() == 0
-
-
-def test_record_from_callback_marks_error_on_error_event(test_db):
-    _seed_project(test_db, project_id=32, user_id=2)
-    tid = synthetic_task_id(32)
-    event = {"type": "response.failed", "error": {"message": "boom"}}
-    llm_log.record_from_callback(
-        test_db,
-        task_id=tid,
-        subtask_id=tid,
-        event_type="response.failed",
-        event=event,
-    )
-    row = test_db.query(BidLlmCall).filter_by(project_id=32).first()
+    with patch("app.db.session.SessionLocal", return_value=test_db):
+        with patch.object(test_db, "close", lambda: None):
+            llm_log.record_sandbox_draft(
+                project_id=31,
+                user_id=2,
+                model="m",
+                section_count=0,
+                duration_ms=5,
+                status="error",
+                error="boom",
+            )
+    row = test_db.query(BidLlmCall).filter_by(project_id=31).first()
     assert row is not None
-    assert row.status == "error"
-    assert "boom" in (row.error or "")
+    assert row.status == "error" and "boom" in (row.error or "")

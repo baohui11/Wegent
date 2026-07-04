@@ -124,6 +124,7 @@ async def test_run_drafting_sandbox_seeds_runs_collects(tmp_path):
             "app.services.bid.draft_pipeline.ensure_bid_skill_registered",
             return_value="bid-section-writer",
         ) as reg,
+        patch("app.services.bid.draft_pipeline.llm_log.record_sandbox_draft") as marker,
     ):
         await dp.run_drafting_sandbox(
             db=None,
@@ -138,6 +139,11 @@ async def test_run_drafting_sandbox_seeds_runs_collects(tmp_path):
 
     # Skill registered first (executor must be able to pull it).
     reg.assert_called_once()
+
+    # Token-less turn marker recorded on success (D8: executor stream has no usage).
+    marker.assert_called_once()
+    assert marker.call_args.kwargs["status"] == "ok"
+    assert marker.call_args.kwargs["section_count"] == 2
 
     # Sandbox lifecycle order: create -> wait_running -> seed -> run_agent -> delete.
     rt.create.assert_awaited_once()

@@ -11,10 +11,11 @@ redraft (deferred from the sandbox migration)."""
 
 import asyncio
 import logging
+import time
 
 from app.core.config import settings
 from app.services.bid import drafting_service as ds
-from app.services.bid import materials_service
+from app.services.bid import llm_log, materials_service
 from app.services.bid import sandbox_config as sc
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
@@ -181,6 +182,7 @@ async def run_drafting_sandbox(
         user_name=user_name,
         bot_config=bot_env,
     )
+    start = time.monotonic()
     try:
         envd = await rt.wait_running(sid)
         await _seed_corpus(rt, envd, workspace)
@@ -199,10 +201,30 @@ async def run_drafting_sandbox(
         )
         await _collect_sections(rt, envd, workspace, outline)
         ds.mark_finished(workspace)
+        # The ClaudeCode executor stream carries no usage; record a token-less
+        # turn marker from bid's own flow so bid_llm_calls still reflects the
+        # draft (D8 degrade).
+        llm_log.record_sandbox_draft(
+            project_id=project_id,
+            user_id=user_id,
+            model=model,
+            section_count=len(sections),
+            duration_ms=int((time.monotonic() - start) * 1000),
+            status="ok",
+        )
     except Exception as e:
         # Surface agent/infra failures on the status file so the frontend can
         # show them; the sandbox is still torn down below.
         ds.mark_finished(workspace, error=str(e))
+        llm_log.record_sandbox_draft(
+            project_id=project_id,
+            user_id=user_id,
+            model=model,
+            section_count=len(sections),
+            duration_ms=int((time.monotonic() - start) * 1000),
+            status="error",
+            error=str(e),
+        )
         raise
     finally:
         await rt.delete(sid)
