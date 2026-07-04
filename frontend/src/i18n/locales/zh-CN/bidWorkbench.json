@@ -114,7 +114,19 @@
     "log_running": "抽取中…每个专家调用完成后在此显示",
     "log_no_content": "（暂无内容）",
     "view_raw": "查看原始 JSON",
-    "view_parsed": "查看解析结果"
+    "view_parsed": "查看解析结果",
+    "block": {
+      "project": "项目信息",
+      "qualifications": "资质要求",
+      "scoring": "评分办法",
+      "mandatory_clauses": "废标红线",
+      "target_package": "分包信息",
+      "submission_rules": "投标须知",
+      "required_outline": "技术文件目录",
+      "requirements": "要求矩阵",
+      "commitment_terms": "承诺条款",
+      "derived_outline": "派生大纲"
+    }
   },
   "upload": {
     "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",

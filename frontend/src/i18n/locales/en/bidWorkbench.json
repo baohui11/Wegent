@@ -114,7 +114,19 @@
     "log_running": "Extracting… specialist calls appear here as they finish",
     "log_no_content": "(no content)",
     "view_raw": "View raw JSON",
-    "view_parsed": "View parsed"
+    "view_parsed": "View parsed",
+    "block": {
+      "project": "Project info",
+      "qualifications": "Qualifications",
+      "scoring": "Scoring rules",
+      "mandatory_clauses": "Veto clauses",
+      "target_package": "Package",
+      "submission_rules": "Submission rules",
+      "required_outline": "Required outline",
+      "requirements": "Requirements",
+      "commitment_terms": "Commitment terms",
+      "derived_outline": "Derived outline"
+    }
   },
   "upload": {
     "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",

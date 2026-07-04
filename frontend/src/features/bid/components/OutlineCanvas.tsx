@@ -31,6 +31,22 @@ const SPECIALIST_LABEL_KEY: Record<string, string> = {
   fact_checker: 'outline.specialist_factchecker',
 }
 
+// Tender blocks the sleuth extracts (call.label). Each has a friendly i18n name
+// under outline.block.* so parse-log rows read "评分办法" instead of a repeated
+// specialist name with the block truncated off.
+const BLOCK_KEYS = new Set([
+  'project',
+  'qualifications',
+  'scoring',
+  'mandatory_clauses',
+  'target_package',
+  'submission_rules',
+  'required_outline',
+  'requirements',
+  'commitment_terms',
+  'derived_outline',
+])
+
 export function OutlineCanvas({
   outline,
   coverage,
@@ -287,6 +303,12 @@ export function OutlineCanvas({
             ) : (
               (llmLog ?? []).map(call => {
                 const labelKey = SPECIALIST_LABEL_KEY[call.specialist] ?? 'outline.specialist_other'
+                // Lead with the differentiating info: the friendly block name
+                // (sleuth) or the section title (ghostwriter); the specialist is
+                // the same for every row, so keep it as a small trailing tag.
+                const displayName = BLOCK_KEYS.has(call.label)
+                  ? t(`outline.block.${call.label}`)
+                  : call.label || t(labelKey)
                 const expanded = expandedCall === call.id
                 return (
                   <div
@@ -305,11 +327,11 @@ export function OutlineCanvas({
                       >
                         {call.status === 'ok' ? '✓' : '✕'}
                       </span>
-                      <span className="min-w-0 flex-1 truncate">
-                        {t(labelKey)}
-                        {call.label && (
-                          <span style={{ color: 'var(--bid-muted-2)' }}> · {call.label}</span>
-                        )}
+                      <span
+                        className="min-w-0 flex-1 truncate font-semibold"
+                        style={{ color: 'var(--bid-ink-2)' }}
+                      >
+                        {displayName}
                       </span>
                       <span
                         className="flex-shrink-0 font-mono text-[10.5px]"
