@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidThemeVars } from '@/features/bid/theme'
 import { useBidProject, phaseToStage } from '@/features/bid/hooks/useBidProject'
-import type { BidProject } from '@/apis/bid'
+import { bidApis, type BidProject, type LlmCall } from '@/apis/bid'
 import { ProjectListScreen } from '@/features/bid/components/ProjectListScreen'
 import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
@@ -59,6 +59,8 @@ export function BidWorkbenchDesktop() {
   const [maxStage, setMaxStage] = useState(1)
   const [draftState, setDraftState] = useState<'running' | 'paused' | 'done'>('running')
   const [confirmDraft, setConfirmDraft] = useState(false)
+  // Real LLM call log for the outline canvas' parse-log panel (B3 endpoint).
+  const [llmLog, setLlmLog] = useState<LlmCall[]>([])
   const {
     phase,
     projectId,
@@ -80,7 +82,23 @@ export function BidWorkbenchDesktop() {
     completeReview,
     finalizeBid,
     goStage,
+    tender,
   } = useBidProject()
+
+  // Refresh the LLM call log whenever the project or phase changes (the parse
+  // panel shows real usage once parsing settles).
+  useEffect(() => {
+    if (projectId == null) {
+      setLlmLog([])
+      return
+    }
+    bidApis
+      .getLlmLog(projectId)
+      .then(res => setLlmLog(res.items ?? []))
+      .catch(() => {
+        /* not all backends have llm-log yet; leave empty */
+      })
+  }, [projectId, phase])
 
   // Track the furthest stage reached so the stepper can jump back to it.
   useEffect(() => {
@@ -140,8 +158,10 @@ export function BidWorkbenchDesktop() {
         <UploadScreen
           sampleText={SAMPLE_TENDER}
           onBack={backToList}
-          onCreate={(text, name) =>
-            projectId != null ? parseExisting(projectId, text) : startFromText(text, name)
+          onCreate={(text, name, model) =>
+            projectId != null
+              ? parseExisting(projectId, text)
+              : startFromText(text, name, undefined, model)
           }
         />
       </div>
@@ -209,10 +229,17 @@ export function BidWorkbenchDesktop() {
         headerAction={headerAction}
       >
         {(phase === 'creating' || phase === 'parsing' || phase === 'outline_building') && (
-          <OutlineCanvas title={title} parsing />
+          <OutlineCanvas title={title} parsing llmLog={llmLog} />
         )}
         {phase === 'outline_ready' && outline && coverage && (
-          <OutlineCanvas outline={outline} coverage={coverage} title={title} onSave={saveOutline} />
+          <OutlineCanvas
+            outline={outline}
+            coverage={coverage}
+            title={title}
+            onSave={saveOutline}
+            llmLog={llmLog}
+            scoring={tender?.scoring}
+          />
         )}
         {phase === 'materials' && (
           <MaterialsScreen

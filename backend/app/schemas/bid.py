@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class BidProjectCreate(BaseModel):
     title: str
+    model_name: str = ""
 
 
 class BidProjectResponse(BaseModel):
@@ -15,6 +16,7 @@ class BidProjectResponse(BaseModel):
     current_phase: int
     max_phase_reached: int
     status: str
+    model_name: str = ""
     created_at: datetime
 
     class Config:
@@ -121,3 +123,27 @@ class RedraftRequest(BaseModel):
 
 class ReviewStatusResponse(BaseModel):
     accepted: dict
+
+
+class LlmCallInfo(BaseModel):
+    id: int
+    specialist: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    duration_ms: int
+    status: str
+    created_at: datetime
+    request: str
+    response: str
+
+    class Config:
+        from_attributes = True
+
+
+class LlmLogResponse(BaseModel):
+    items: list[LlmCallInfo]
+
+
+class ParseStageResponse(BaseModel):
+    stage: str

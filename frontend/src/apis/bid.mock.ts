@@ -14,6 +14,7 @@ import type {
   DraftSection,
   DraftStatus,
   ExtractedFile,
+  LlmCall,
   OutlineDoc,
   OutlineResponse,
   TenderDoc,
@@ -333,6 +334,7 @@ const snapshot = (p: MockProject): BidProject => ({
   current_phase: p.current_phase,
   max_phase_reached: p.max_phase_reached,
   status: p.status,
+  model_name: p.model_name ?? '',
   created_at: p.created_at,
 })
 
@@ -375,12 +377,15 @@ const need = (id: number): MockProject => {
 }
 
 export const bidMockApis = {
-  createProject: (title: string): Promise<BidProject> => {
+  listModels: (): Promise<{ items: { name: string }[] }> =>
+    delay({ items: [{ name: 'mock-model' }] }),
+  createProject: (title: string, model_name?: string): Promise<BidProject> => {
     const p = seed({
       id: nextId++,
       title: title || '标书项目',
       current_phase: 1,
       status: 'created',
+      model_name: model_name ?? '',
       created_at: new Date('2026-07-03T09:00:00Z').toISOString(),
     })
     store.set(p.id, p)
@@ -441,6 +446,23 @@ export const bidMockApis = {
     need(id).quals = q
     return delay({ qualifications: q })
   },
+  getLlmLog: (_id: number): Promise<{ items: LlmCall[] }> =>
+    delay({
+      items: [
+        {
+          id: 1,
+          specialist: 'tender_sleuth',
+          model: 'mock',
+          prompt_tokens: 4200,
+          completion_tokens: 800,
+          duration_ms: 12000,
+          status: 'ok',
+          created_at: iso(0),
+          request: '（拆标请求）',
+          response: '（拆标结果）',
+        },
+      ],
+    }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {

@@ -11,7 +11,10 @@ describe('bidApis', () => {
   it('createProject posts to /bid/projects', async () => {
     ;(apiClient.post as jest.Mock).mockResolvedValue({ id: 1, title: 'A' })
     const p = await bidApis.createProject('A')
-    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects', { title: 'A' })
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects', {
+      title: 'A',
+      model_name: '',
+    })
     expect(p.id).toBe(1)
   })
 

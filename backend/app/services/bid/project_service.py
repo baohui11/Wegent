@@ -14,7 +14,12 @@ DEFAULT_PROJECT_TITLE = "标书项目"
 class BidProjectService:
     @staticmethod
     def create(
-        db: Session, *, user_id: int, title: str, workspace_ref: str
+        db: Session,
+        *,
+        user_id: int,
+        title: str,
+        workspace_ref: str,
+        model_name: str = "",
     ) -> BidProject:
         row = BidProject(
             user_id=user_id,
@@ -24,6 +29,7 @@ class BidProjectService:
             current_phase=1,
             max_phase_reached=1,
             status="created",
+            model_name=model_name,
         )
         db.add(row)
         db.commit()

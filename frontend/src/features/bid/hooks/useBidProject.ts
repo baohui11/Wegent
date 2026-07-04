@@ -165,14 +165,17 @@ export function useBidProject() {
   )
 
   const startFromText = useCallback(
-    async (text: string, name?: string, pkg?: string) => {
+    async (text: string, name?: string, pkg?: string, model?: string) => {
       setError(null)
       let id: number
       try {
         setPhase('creating')
         // Manual name when provided; the default placeholder lets the backend
         // derive the title from the parsed tender (smart naming).
-        const project = await bidApis.createProject(name?.trim() || '标书项目')
+        const project = await bidApis.createProject(
+          name?.trim() || '标书项目',
+          model?.trim() || undefined
+        )
         setProjectId(project.id)
         id = project.id
       } catch (e) {

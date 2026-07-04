@@ -18,11 +18,16 @@ jest.mock('@/features/common/UserContext', () => ({
   useUser: () => ({ user: { user_name: 'tester', real_name: '测试用户', department_name: null } }),
 }))
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  ;(bidApis.getLlmLog as jest.Mock).mockResolvedValue({ items: [] })
+})
 
 // Helper: land on the list, click "new", reach the standalone new-project screen.
 async function enterNewImport() {
   ;(bidApis.listProjects as jest.Mock).mockResolvedValue([])
+  ;(bidApis.listModels as jest.Mock).mockResolvedValue({ items: [] })
+  ;(bidApis.getLlmLog as jest.Mock).mockResolvedValue({ items: [] })
   render(<BidWorkbenchDesktop />)
   await screen.findByTestId('bid-project-list')
   fireEvent.click(screen.getByTestId('bid-new-project-button'))

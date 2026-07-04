@@ -12,6 +12,7 @@ The legacy SharedTask, SharedTeam, and TaskMember models have been removed.
 Use ResourceMember for all resource sharing functionality.
 """
 from app.models.api_key import APIKey
+from app.models.bid_llm_call import BidLlmCall  # noqa: F401
 from app.models.bid_project import BidProject  # noqa: F401
 from app.models.dingtalk_doc import DingtalkSyncedNode
 from app.models.kind import Kind

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user
+from app.models.bid_llm_call import BidLlmCall
 from app.models.user import User
 from app.schemas.bid import (
     AttachmentInfo,
@@ -22,10 +23,13 @@ from app.schemas.bid import (
     ExtractTextResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
+    LlmCallInfo,
+    LlmLogResponse,
     NodeBriefsPayload,
     OutlineResponse,
     OutlineSaveRequest,
     PackageRequest,
+    ParseStageResponse,
     ParseTriggerRequest,
     ParseTriggerResponse,
     QualificationsResponse,
@@ -48,14 +52,21 @@ from app.services.bid.draft_pipeline import (
     launch_drafting,
     launch_redraft,
 )
-from app.services.bid.model_resolver import resolve_tender_model
+from app.services.bid.model_resolver import (
+    resolve_project_model,
+    validate_model_config,
+)
 from app.services.bid.outline_pipeline import build_outline_for_project
 from app.services.bid.outline_service import (
     read_outline,
     write_bid_config,
     write_outline,
 )
-from app.services.bid.parse_pipeline import BidPipelineError, launch_parse
+from app.services.bid.parse_pipeline import (
+    BidPipelineError,
+    launch_parse,
+    read_parse_stage,
+)
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_fact_checker
 from app.services.bid.tender_extract import TenderExtractError, extract_text
@@ -69,6 +80,22 @@ def _require(db, user, pid):
     if p is None:
         raise HTTPException(status_code=404, detail="bid project not found")
     return p
+
+
+def _resolve_and_validate_model(db, user, project):
+    """Resolve the project's model (or global fallback) and preflight-check it.
+
+    An empty model name means "let chat_shell use its default" — that path is
+    not validated. A named model with no resolvable credentials fails fast with
+    a 422 instead of letting chat_shell silently emit lifecycle-only SSE.
+    """
+    model, model_config = resolve_project_model(db, user, project)
+    if model:
+        try:
+            validate_model_config(model, model_config)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    return model, model_config
 
 
 @router.post("/extract-text", response_model=ExtractTextResponse)
@@ -98,6 +125,7 @@ def create_project(
         user_id=current_user.id,
         title=body.title,
         workspace_ref=f"bid-{uuid.uuid4().hex[:12]}",
+        model_name=body.model_name,
     )
 
 
@@ -146,9 +174,12 @@ async def parse_project(
         db, project_id=project.id, user_id=current_user.id
     ):
         raise HTTPException(status_code=409, detail="parse already running")
+    # begin_parse uses a bulk UPDATE that bypasses the identity map; refresh so
+    # the ORM object reflects the new status (and downstream GETs stay consistent).
+    db.refresh(project)
     ws = BidWorkspace(project.workspace_ref)
     ws.write_tender_text(body.tender_text)
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     # 拆标 is a minutes-long LLM pipeline; run it in the background and let the
     # client poll project status ('parsing' -> 'parsed'/'parse_failed').
     launch_parse(project.id, current_user.id, model, model_config)
@@ -194,10 +225,53 @@ def get_file(
     return {"path": path, "content": target.read_text(encoding="utf-8")}
 
 
+def _read_tender_for_coverage(ws: BidWorkspace) -> dict:
+    # Prefer the normalized projection (scoring flattened, clauses veto-aligned);
+    # fall back to normalizing the raw tender on the fly for pre-existing projects
+    # whose parse predates the canonical write.
+    if ws.path("workspace/tender_normalized.json").exists():
+        return ws.read_json("workspace/tender_normalized.json")
+    from app.services.bid.tender_normalize import normalized_tender
+
+    return normalized_tender(ws.read_json("workspace/tender.json"))
+
+
 def _coverage(ws) -> CoverageResponse:
     outline = read_outline(ws)
-    tender = ws.read_json("workspace/tender.json")
+    tender = _read_tender_for_coverage(ws)
     return CoverageResponse(**compute_coverage(outline, tender))
+
+
+@router.get("/projects/{project_id}/llm-log", response_model=LlmLogResponse)
+def get_llm_log(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require(db, current_user, project_id)  # ownership
+    rows = (
+        db.query(BidLlmCall)
+        .filter(
+            BidLlmCall.project_id == project_id,
+            BidLlmCall.user_id == current_user.id,
+        )
+        .order_by(BidLlmCall.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return LlmLogResponse(items=[LlmCallInfo.model_validate(r) for r in rows])
+
+
+@router.get("/projects/{project_id}/parse-stage", response_model=ParseStageResponse)
+def get_parse_stage(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    return ParseStageResponse(
+        stage=read_parse_stage(BidWorkspace(project.workspace_ref))
+    )
 
 
 @router.post("/projects/{project_id}/package", response_model=SimpleStatusResponse)
@@ -430,7 +504,7 @@ async def start_draft(
     ):
         raise HTTPException(status_code=409, detail="drafting already running")
     drafting.init_status(ws, [])  # placeholder; draft_all re-inits with real ids
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_drafting(project.id, current_user.id, model, model_config)
     return SimpleStatusResponse(status="drafting")
 
@@ -529,7 +603,7 @@ async def redraft_section(
     if find_section(outline, section_id) is None:
         raise HTTPException(status_code=404, detail="section not in outline")
     drafting.set_section_status(ws, section_id, "drafting")
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_redraft(
         project.id, current_user.id, section_id, body.instruction, model, model_config
     )
@@ -654,9 +728,13 @@ async def verify_audit(
         if report is None:
             raise HTTPException(status_code=409, detail="run audit first")
         return report
-    model, model_config = resolve_tender_model(db, current_user)
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
     verdicts = await call_fact_checker(
-        model=model, model_config=model_config, tasks=tasks
+        model=model,
+        model_config=model_config,
+        tasks=tasks,
+        project_id=project_id,
+        user_id=current_user.id,
     )
     audit_service.write_verdicts(ws, verdicts)
     try:

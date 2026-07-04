@@ -11,6 +11,7 @@ export interface BidProject {
   current_phase: number
   max_phase_reached: number
   status: string
+  model_name?: string
   created_at: string
 }
 
@@ -98,6 +99,19 @@ export interface ExtractedFile {
   text: string
 }
 
+export interface LlmCall {
+  id: number
+  specialist: string
+  model: string
+  prompt_tokens: number
+  completion_tokens: number
+  duration_ms: number
+  status: string
+  created_at: string
+  request: string
+  response: string
+}
+
 export interface DraftStatus {
   total: number
   sections: Record<string, string>
@@ -137,8 +151,10 @@ export interface AuditReport {
 }
 
 const realBidApis = {
-  createProject: (title: string): Promise<BidProject> =>
-    apiClient.post<BidProject>('/bid/projects', { title }),
+  listModels: (): Promise<{ items: { name: string }[] }> =>
+    apiClient.get<{ items: { name: string }[] }>('/models?page=1&limit=100'),
+  createProject: (title: string, model_name?: string): Promise<BidProject> =>
+    apiClient.post<BidProject>('/bid/projects', { title, model_name: model_name ?? '' }),
   listProjects: (): Promise<BidProject[]> => apiClient.get<BidProject[]>('/bid/projects'),
   getProject: (id: number): Promise<BidProject> => apiClient.get<BidProject>(`/bid/projects/${id}`),
   deleteProject: (id: number): Promise<{ status: string }> =>
@@ -173,6 +189,8 @@ const realBidApis = {
     q: Record<string, unknown>
   ): Promise<{ qualifications: Record<string, unknown> }> =>
     apiClient.put(`/bid/projects/${id}/materials/qualifications`, { qualifications: q }),
+  getLlmLog: (id: number): Promise<{ items: LlmCall[] }> =>
+    apiClient.get<{ items: LlmCall[] }>(`/bid/projects/${id}/llm-log`),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     apiClient.get<BriefsDoc>(`/bid/projects/${id}/materials/briefs`),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> =>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidApis } from '@/apis/bid'
 
@@ -26,8 +26,9 @@ export function UploadScreen({
   sampleText,
 }: {
   // tenderText: concatenated content of the picked files; name: '' means the
-  // backend derives it from the tender during parsing (smart naming).
-  onCreate: (tenderText: string, name: string) => void
+  // backend derives it from the tender during parsing (smart naming); model:
+  // '' means use the global default (BID_TENDER_MODEL_NAME).
+  onCreate: (tenderText: string, name: string, model: string) => void
   onBack: () => void
   sampleText: string
 }) {
@@ -36,6 +37,19 @@ export function UploadScreen({
   const [files, setFiles] = useState<PickedFile[]>([])
   const [nameMode, setNameMode] = useState<'manual' | 'smart'>('manual')
   const [name, setName] = useState('')
+  const [modelOptions, setModelOptions] = useState<string[]>([])
+  const [model, setModel] = useState('')
+
+  // Load available models once (best-effort; a fetch failure just leaves the
+  // dropdown empty, which means "use global default").
+  useEffect(() => {
+    bidApis
+      .listModels()
+      .then(res => setModelOptions((res.items ?? []).map(m => m.name)))
+      .catch(() => {
+        /* leave empty -> use global default */
+      })
+  }, [])
 
   const onFilesSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files || [])
@@ -83,7 +97,7 @@ export function UploadScreen({
   const submit = () => {
     if (!canCreate) return
     const tenderText = readyFiles.map(f => f.text).join('\n\n')
-    onCreate(tenderText, nameMode === 'manual' ? name.trim() : '')
+    onCreate(tenderText, nameMode === 'manual' ? name.trim() : '', model.trim())
   }
 
   const tab = (active: boolean): React.CSSProperties => ({
@@ -346,6 +360,35 @@ export function UploadScreen({
               {t('upload.name_smart_desc')}
             </div>
           )}
+
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--bid-muted-2)', marginBottom: 4 }}>
+              {t('upload.model_label')}
+            </div>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              data-testid="bid-model-select"
+              className="w-full"
+              style={{
+                boxSizing: 'border-box',
+                border: '1px solid var(--bid-border-2)',
+                borderRadius: 10,
+                padding: '10px 14px',
+                fontSize: 13,
+                outline: 'none',
+                background: '#fff',
+                color: 'var(--bid-ink)',
+              }}
+            >
+              <option value="">{t('upload.model_default')}</option>
+              {modelOptions.map(n => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button
             type="button"

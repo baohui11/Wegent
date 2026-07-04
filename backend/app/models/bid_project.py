@@ -28,6 +28,9 @@ class BidProject(Base):
     current_phase = Column(Integer, nullable=False, default=1)
     max_phase_reached = Column(Integer, nullable=False, default=1)
     status = Column(String(32), nullable=False, default="created")
+    # User-selected Model CRD name for this project's LLM calls; empty -> fall
+    # back to the global BID_TENDER_MODEL_NAME.
+    model_name = Column(String(128), nullable=False, default="")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -21,7 +21,7 @@ it('declares package before parse when provided', async () => {
     await result.current.startFromText('正文', '智慧园区投标书', '包件二')
   })
   // Manual name flows through to createProject; package is declared before parse.
-  expect(bidApis.createProject).toHaveBeenCalledWith('智慧园区投标书')
+  expect(bidApis.createProject).toHaveBeenCalledWith('智慧园区投标书', undefined)
   expect(bidApis.declarePackage).toHaveBeenCalledWith(9, '包件二')
   await waitFor(() => expect(result.current.phase).toBe('outline_ready'))
 })

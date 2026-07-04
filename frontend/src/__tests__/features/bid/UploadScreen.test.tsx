@@ -11,6 +11,7 @@ jest.mock('@/apis/bid', () => ({
     extractTenderText: jest.fn((file: File) =>
       Promise.resolve({ name: file.name, size: file.size, text: `TEXT(${file.name})` })
     ),
+    listModels: jest.fn(() => Promise.resolve({ items: [{ name: 'qwen-test' }] })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -34,7 +35,7 @@ it('manual mode: loads sample file, requires a name, then creates with text + na
   const create = screen.getByTestId('bid-start-parse-button')
   expect(create).not.toBeDisabled()
   fireEvent.click(create)
-  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '智慧园区建设项目投标书')
+  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '智慧园区建设项目投标书', '')
 })
 
 it('smart mode: creates with an empty name so the backend derives it', () => {
@@ -47,7 +48,7 @@ it('smart mode: creates with an empty name so the backend derives it', () => {
   const create = screen.getByTestId('bid-start-parse-button')
   expect(create).not.toBeDisabled()
   fireEvent.click(create)
-  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '')
+  expect(onCreate).toHaveBeenCalledWith('SAMPLE-TENDER', '', '')
 })
 
 it('back button invokes onBack', () => {
@@ -69,7 +70,7 @@ it('extracts picked files via the backend and submits their text', async () => {
     target: { value: '我的项目' },
   })
   fireEvent.click(screen.getByTestId('bid-start-parse-button'))
-  await waitFor(() => expect(onCreate).toHaveBeenCalledWith('TEXT(标书.docx)', '我的项目'))
+  await waitFor(() => expect(onCreate).toHaveBeenCalledWith('TEXT(标书.docx)', '我的项目', ''))
 })
 
 it('shows an error state when extraction fails and blocks submit', async () => {

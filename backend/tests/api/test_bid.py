@@ -42,7 +42,10 @@ def test_bid_crud_and_parse(test_client, test_token, tmp_path, monkeypatch):
     # background task does not actually run in the test.
     with (
         patch("app.api.endpoints.bid.launch_parse") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(
             f"/api/bid/projects/{pid}/parse",
@@ -249,7 +252,10 @@ def test_draft_trigger_and_status(test_client, test_token, tmp_path, monkeypatch
 
     with (
         patch("app.api.endpoints.bid.launch_drafting") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(f"/api/bid/projects/{pid}/draft", headers=h)
     assert r.status_code == 200 and r.json()["status"] == "drafting"
@@ -299,7 +305,10 @@ def test_review_redraft_accept_complete(test_client, test_token, tmp_path, monke
 
     with (
         patch("app.api.endpoints.bid.launch_redraft") as launch,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(
             f"/api/bid/projects/{pid}/sections/s1/redraft",
@@ -500,7 +509,10 @@ def test_audit_verify_folds_fidelity_verdicts(
                 ]
             ),
         ) as fc,
-        patch("app.api.endpoints.bid.resolve_tender_model", return_value=("m", None)),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
     ):
         r = test_client.post(f"/api/bid/projects/{pid}/audit/verify", headers=h)
     assert r.status_code == 200 and r.json()["verdict"] in (
@@ -584,3 +596,55 @@ def test_extract_text_api(test_client, test_token):
         headers=h,
     )
     assert r.status_code == 422
+
+
+def test_coverage_endpoint_uses_normalized(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "cov"}, headers=h
+    ).json()["id"]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [{"id": "M1", "is_veto": True}],
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json", {"sections": [{"id": "s1", "covers": ["T1"]}]}
+    )
+    r = test_client.get(f"/api/bid/projects/{pid}/coverage", headers=h)
+    assert r.status_code == 200 and r.json()["total"] == 2 and r.json()["covered"] == 1
+
+
+def test_llm_log_endpoint_empty(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "log"}, headers=h
+    ).json()["id"]
+    # empty first (no calls recorded yet)
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/llm-log", headers=h).json()["items"]
+        == []
+    )
+
+
+def test_parse_stage_endpoint(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "ps"}, headers=h).json()[
+        "id"
+    ]
+    # idle before any parse runs
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/parse-stage", headers=h).json()[
+            "stage"
+        ]
+        == "idle"
+    )
