@@ -623,12 +623,22 @@ export function OutlineCanvas({
               </div>
               <div className="flex flex-col gap-2">
                 {suggestions.length === 0 ? (
-                  <div
-                    className="rounded-[10px] p-3 text-[11.5px]"
-                    style={{ background: 'var(--bid-success-soft)', color: 'var(--bid-success)' }}
-                  >
-                    {t('outline.coverage_ok')} · {cov.covered}/{cov.total}
-                  </div>
+                  cov.covered >= cov.total ? (
+                    <div
+                      className="rounded-[10px] p-3 text-[11.5px]"
+                      style={{ background: 'var(--bid-success-soft)', color: 'var(--bid-success)' }}
+                    >
+                      {t('outline.coverage_ok')} · {cov.covered}/{cov.total}
+                    </div>
+                  ) : (
+                    // Suggestions were dismissed, not covered — don't claim "all covered".
+                    <div
+                      className="rounded-[10px] p-3 text-[11.5px]"
+                      style={{ background: 'var(--bid-surface)', color: 'var(--bid-muted-2)' }}
+                    >
+                      {t('outline.coverage_partial', { covered: cov.covered, total: cov.total })}
+                    </div>
+                  )
                 ) : (
                   suggestions.map(s => (
                     <div

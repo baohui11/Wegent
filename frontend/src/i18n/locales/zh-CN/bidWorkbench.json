@@ -129,7 +129,8 @@
     },
     "coverage_badge": "覆盖检查",
     "suggestions_hint": "以下评分点/废标红线尚未被任何章节覆盖，采纳将自动补一个章节。",
-    "uncovered_no_text": "（未提取到文本）"
+    "uncovered_no_text": "（未提取到文本）",
+    "coverage_partial": "已覆盖 {{covered}}/{{total}} · 其余已忽略"
   },
   "upload": {
     "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",

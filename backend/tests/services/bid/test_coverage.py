@@ -10,6 +10,23 @@ def test_coverage_basic():
     assert cov["total"] == 1 and cov["covered"] == 1
 
 
+def test_coverage_counts_covers_on_child_nodes():
+    # A `covers` on a nested leaf (e.g. an accepted suggestion) must count, not
+    # only top-level sections — else coverage stays 0 while items are covered.
+    outline = {
+        "sections": [
+            {"id": "s1", "children": [{"id": "s1.1", "covers": ["T1", "MC-1"]}]}
+        ]
+    }
+    tender = {
+        "scoring": [{"id": "T1", "weight": 10}],
+        "mandatory_clauses": [{"id": "MC-1", "veto": True}],
+    }
+    cov = compute_coverage(outline, tender)
+    assert cov["total"] == 2 and cov["covered"] == 2
+    assert cov["uncovered_scoring"] == [] and cov["uncovered_clauses"] == []
+
+
 def test_coverage_reads_bucketed_scoring_and_is_veto():
     tender = normalized_tender(
         {

@@ -5,10 +5,16 @@ must be covered by some outline section/volume `covers` list."""
 
 def _covered_ids(outline: dict) -> set[str]:
     ids: set[str] = set()
+
+    def walk(node: dict) -> None:
+        for cid in node.get("covers", []) or []:
+            ids.add(str(cid))
+        for child in node.get("children", []) or []:
+            walk(child)
+
     for group in ("sections", "volumes"):
         for node in outline.get(group, []) or []:
-            for cid in node.get("covers", []) or []:
-                ids.add(str(cid))
+            walk(node)  # recurse: covers may live on any node, incl. leaves
     return ids
 
 
