@@ -57,8 +57,9 @@ export interface MarqueeState {
   y1: number
 }
 
-// Base node/column dimensions at zoom = 1 (from the design's computeLayout).
-export const CANVAS_BASE = { NW: 200, NH: 56, COLW: 256, ROWH: 70 }
+// Base node/column dimensions at zoom = 1. Nodes are tall enough for a 2-line
+// wrapped title (readability) instead of a single truncated line.
+export const CANVAS_BASE = { NW: 216, NH: 64, COLW: 288, ROWH: 84 }
 export const ZOOM_MIN = 0.6
 export const ZOOM_MAX = 1.4
 export const ZOOM_STEP = 0.1
@@ -231,12 +232,26 @@ export function chapterColor(flat: FlatNode[], id: string): string {
 // ---- drag / marquee reducers (pure) -------------------------------------------
 
 /**
- * Resolve a drag drop into a new flat list.
- * - Dropped onto another node (not self / descendant) -> reparent as its child.
- * - Otherwise, if horizontal travel is small -> reorder within the same parent.
- * - Otherwise -> no structural change (returns null so the node snaps back).
+ * A resolved drop decision, computed live during a drag so the UI can preview it.
+ * - `reparent`: dropping onto `targetId` makes the node its child.
+ * - `reorder`: dropping into a gap inserts at `insertIndex` among `parentId`'s
+ *   children; `lineX`/`lineY`/`lineW` describe the insertion indicator.
+ * - `null`: no structural change (the node snaps back).
  */
-export function applyDrop(flat: FlatNode[], layout: Layout, drag: DragState): FlatNode[] | null {
+export type DropHint =
+  | { kind: 'reparent'; targetId: string }
+  | {
+      kind: 'reorder'
+      parentId: string | null
+      insertIndex: number
+      lineX: number
+      lineY: number
+      lineW: number
+    }
+  | null
+
+/** Resolve the current drag into a drop decision without mutating anything. */
+export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): DropHint {
   const { pos, NW, NH, COLW } = layout
   const node = flat.find(n => n.id === drag.id)
   const p = pos[drag.id]
@@ -244,7 +259,6 @@ export function applyDrop(flat: FlatNode[], layout: Layout, drag: DragState): Fl
   const dropCenterX = p.x + NW / 2 + drag.dx
   const dropCenterY = p.y + NH / 2 + drag.dy
 
-  let target: FlatNode | null = null
   for (const n of flat) {
     if (n.id === drag.id) continue
     if (isDescendantOf(flat, drag.id, n.id)) continue
@@ -256,23 +270,13 @@ export function applyDrop(flat: FlatNode[], layout: Layout, drag: DragState): Fl
       dropCenterY >= np.y &&
       dropCenterY <= np.y + NH
     ) {
-      target = n
-      break
+      return { kind: 'reparent', targetId: n.id }
     }
   }
 
-  let nodes = flat.slice()
-  if (target) {
-    const siblings = childrenOf(nodes, target.id)
-    const maxOrder = siblings.reduce((m, s) => Math.max(m, s.order), -1)
-    nodes = nodes.map(n =>
-      n.id === drag.id ? { ...n, parentId: target!.id, order: maxOrder + 1 } : n
-    )
-    return nodes
-  }
   if (Math.abs(drag.dx) < COLW * 0.6) {
     const parentId = node.parentId
-    const siblings = childrenOf(nodes, parentId).filter(s => s.id !== drag.id)
+    const siblings = childrenOf(flat, parentId).filter(s => s.id !== drag.id)
     let insertIndex = siblings.length
     for (let i = 0; i < siblings.length; i++) {
       const sp = pos[siblings[i].id]
@@ -281,12 +285,42 @@ export function applyDrop(flat: FlatNode[], layout: Layout, drag: DragState): Fl
         break
       }
     }
-    siblings.splice(insertIndex, 0, node)
-    const reordered = new Map(siblings.map((s, i) => [s.id, i]))
-    nodes = nodes.map(n => (reordered.has(n.id) ? { ...n, order: reordered.get(n.id)! } : n))
-    return nodes
+    // Insertion line: midway above the sibling at insertIndex (or below the last).
+    const depth = pos[node.id]?.depth ?? 0
+    const lineX = depth * COLW
+    const above = siblings[insertIndex]
+    const below = siblings[insertIndex - 1]
+    const lineY = above
+      ? (pos[above.id]?.y ?? 0) - 6
+      : below
+        ? (pos[below.id]?.y ?? 0) + NH + 6
+        : dropCenterY
+    return { kind: 'reorder', parentId, insertIndex, lineX, lineY, lineW: NW }
   }
   return null
+}
+
+/**
+ * Apply a drag drop into a new flat list (or null to snap back), reusing the
+ * live `resolveDrop` decision so preview and commit never diverge.
+ */
+export function applyDrop(flat: FlatNode[], layout: Layout, drag: DragState): FlatNode[] | null {
+  const hint = resolveDrop(flat, layout, drag)
+  if (!hint) return null
+  const node = flat.find(n => n.id === drag.id)
+  if (!node) return null
+
+  if (hint.kind === 'reparent') {
+    const siblings = childrenOf(flat, hint.targetId)
+    const maxOrder = siblings.reduce((m, s) => Math.max(m, s.order), -1)
+    return flat.map(n =>
+      n.id === drag.id ? { ...n, parentId: hint.targetId, order: maxOrder + 1 } : n
+    )
+  }
+  const siblings = childrenOf(flat, hint.parentId).filter(s => s.id !== drag.id)
+  siblings.splice(hint.insertIndex, 0, node)
+  const reordered = new Map(siblings.map((s, i) => [s.id, i]))
+  return flat.map(n => (reordered.has(n.id) ? { ...n, order: reordered.get(n.id)! } : n))
 }
 
 export function marqueeSelect(flat: FlatNode[], layout: Layout, m: MarqueeState): string[] {

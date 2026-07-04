@@ -20,10 +20,12 @@ import {
   genNodeId,
   marqueeSelect,
   outlineFromFlat,
+  resolveDrop,
   ZOOM_MAX,
   ZOOM_MIN,
   ZOOM_STEP,
   type DragState,
+  type DropHint,
   type FlatNode,
   type MarqueeState,
 } from './outlineGraph'
@@ -63,6 +65,13 @@ export function useOutlineCanvas(
   const edges = useMemo(
     () => buildEdges(flat, layout, { selectedId, dragId: drag?.id ?? null }),
     [flat, layout, selectedId, drag]
+  )
+
+  // Live drop decision (reparent target / reorder insertion) previewed while
+  // dragging, so the UI can highlight the target and show an insertion line.
+  const dropHint: DropHint = useMemo(
+    () => (drag && drag.moved ? resolveDrop(flat, layout, drag) : null),
+    [drag, flat, layout]
   )
 
   // Structural commit: push the mutated flat list back up as a nested outline.
@@ -191,12 +200,31 @@ export function useOutlineCanvas(
   // Window-level move/up so a drag/marquee keeps tracking outside the node box.
   useEffect(() => {
     if (!drag && !marquee) return
+    // Edge auto-pan: scroll the canvas when dragging near a viewport edge.
+    const autoPan = (e: MouseEvent) => {
+      const el = scrollRef.current
+      if (!el || !drag) return
+      const r = el.getBoundingClientRect()
+      const EDGE = 48
+      const SPEED = 14
+      let sx = 0
+      let sy = 0
+      if (e.clientX < r.left + EDGE) sx = -SPEED
+      else if (e.clientX > r.right - EDGE) sx = SPEED
+      if (e.clientY < r.top + EDGE) sy = -SPEED
+      else if (e.clientY > r.bottom - EDGE) sy = SPEED
+      if (sx || sy) {
+        el.scrollLeft += sx
+        el.scrollTop += sy
+      }
+    }
     const onMove = (e: MouseEvent) => {
       if (drag) {
         const dx = e.clientX - drag.startX
         const dy = e.clientY - drag.startY
         const moved = Math.abs(dx) > 4 || Math.abs(dy) > 4
         setDrag({ ...drag, dx, dy, moved })
+        autoPan(e)
       } else if (marquee && canvasRef.current) {
         const rect = canvasRef.current.getBoundingClientRect()
         setMarquee({ ...marquee, x1: e.clientX - rect.left, y1: e.clientY - rect.top })
@@ -218,11 +246,20 @@ export function useOutlineCanvas(
         setMarquee(null)
       }
     }
+    // Esc cancels an in-flight drag (snap back, no structural change).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrag(null)
+        setMarquee(null)
+      }
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('keydown', onKey)
     }
   }, [drag, marquee, flat, layout, commit])
 
@@ -289,6 +326,7 @@ export function useOutlineCanvas(
     zoom,
     search,
     drag,
+    dropHint,
     marquee,
     confirmDeleteId,
     confirmDeleteName,

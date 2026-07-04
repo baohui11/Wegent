@@ -2,12 +2,14 @@
 
 import {
   applyDrop,
+  CANVAS_BASE,
   chapterColor,
   computeLayout,
   flattenOutline,
   isDescendantOf,
   marqueeSelect,
   outlineFromFlat,
+  resolveDrop,
 } from '@/features/bid/canvas/outlineGraph'
 import type { OutlineDoc } from '@/apis/bid'
 
@@ -48,9 +50,9 @@ describe('computeLayout', () => {
     expect(layout.pos.c1.depth).toBe(0)
     expect(layout.pos.c1a.depth).toBe(1)
     expect(layout.pos.c1.x).toBe(0)
-    expect(layout.pos.c1a.x).toBe(256)
+    expect(layout.pos.c1a.x).toBe(CANVAS_BASE.COLW)
     const zoomed = computeLayout(flat(), new Set(), 1.4)
-    expect(zoomed.pos.c1a.x).toBe(Math.round(256 * 1.4))
+    expect(zoomed.pos.c1a.x).toBe(Math.round(CANVAS_BASE.COLW * 1.4))
   })
 
   it('treats collapsed nodes as leaves (children not laid out below)', () => {
@@ -123,6 +125,48 @@ describe('applyDrop', () => {
     const next = applyDrop(f, layout, drag)
     // c1a stays a child of c1; c1 does not become a child of c1a.
     if (next) expect(next.find(n => n.id === 'c1')!.parentId).not.toBe('c1a')
+  })
+})
+
+describe('resolveDrop (live preview matches applyDrop commit)', () => {
+  it('previews a reparent target', () => {
+    const f = flat()
+    const layout = computeLayout(f, new Set(), 1)
+    const c2a = layout.pos.c2a
+    const c1 = layout.pos.c1
+    const drag = {
+      id: 'c2a',
+      startX: 0,
+      startY: 0,
+      dx: c1.x - c2a.x,
+      dy: c1.y - c2a.y,
+      moved: true,
+    }
+    const hint = resolveDrop(f, layout, drag)
+    expect(hint).toEqual({ kind: 'reparent', targetId: 'c1' })
+  })
+
+  it('previews a reorder with an insertion line', () => {
+    const f = flat()
+    const layout = computeLayout(f, new Set(), 1)
+    const drag = {
+      id: 'c1b',
+      startX: 0,
+      startY: 0,
+      dx: 0,
+      dy: -(layout.ROWH + layout.NH),
+      moved: true,
+    }
+    const hint = resolveDrop(f, layout, drag)
+    expect(hint?.kind).toBe('reorder')
+    if (hint?.kind === 'reorder') expect(hint.insertIndex).toBe(0)
+  })
+
+  it('returns null far from any target', () => {
+    const f = flat()
+    const layout = computeLayout(f, new Set(), 1)
+    const drag = { id: 'c1a', startX: 0, startY: 0, dx: 4000, dy: 4000, moved: true }
+    expect(resolveDrop(f, layout, drag)).toBeNull()
   })
 })
 

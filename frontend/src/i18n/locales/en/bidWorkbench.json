@@ -130,7 +130,8 @@
     "coverage_badge": "Coverage check",
     "suggestions_hint": "These scoring points / red-line clauses are not covered by any chapter yet. Accept adds a section for it.",
     "uncovered_no_text": "(no text extracted)",
-    "coverage_partial": "{{covered}}/{{total}} covered · remaining dismissed"
+    "coverage_partial": "{{covered}}/{{total}} covered · remaining dismissed",
+    "covers_indicator": "Covers {{count}} scoring/clause point(s)"
   },
   "upload": {
     "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",

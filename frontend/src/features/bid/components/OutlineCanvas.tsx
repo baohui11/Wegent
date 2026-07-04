@@ -481,6 +481,25 @@ export function OutlineCanvas({
                 <CanvasNode key={n.id} node={n} canvas={c} searchLower={searchLower} />
               ))}
 
+              {/* Insertion indicator: where a reorder-drop will land the node. */}
+              {c.dropHint?.kind === 'reorder' && (
+                <div
+                  data-testid="bid-outline-insert-line"
+                  style={{
+                    position: 'absolute',
+                    left: c.dropHint.lineX,
+                    top: c.dropHint.lineY,
+                    width: c.dropHint.lineW,
+                    height: 3,
+                    borderRadius: 2,
+                    background: 'var(--bid-primary)',
+                    boxShadow: '0 0 0 4px rgba(199,16,42,.14)',
+                    pointerEvents: 'none',
+                    zIndex: 45,
+                  }}
+                />
+              )}
+
               {c.marquee && (
                 <div
                   style={{
@@ -794,14 +813,19 @@ function CanvasNode({
   const isDragging = c.drag?.id === node.id
   const isEditing = c.editingId === node.id
   const isMatch = searchLower.length > 0 && node.name.toLowerCase().includes(searchLower)
+  const isDropTarget = c.dropHint?.kind === 'reparent' && c.dropHint.targetId === node.id
   const accent = chapterColor(c.flat, node.id)
   const { NW, NH, zoom } = c.layout
 
-  const boxShadow = isSelected
-    ? `0 0 0 3px ${accent}44, 0 4px 12px rgba(20,16,14,.1)`
-    : isMatch
-      ? '0 0 0 2px #E8A93C'
-      : '0 1px 2px rgba(20,16,14,0.06)'
+  const boxShadow = isDropTarget
+    ? `0 0 0 3px var(--bid-primary), 0 6px 18px rgba(199,16,42,.22)`
+    : isDragging
+      ? `0 8px 24px rgba(20,16,14,.22)`
+      : isSelected
+        ? `0 0 0 3px ${accent}44, 0 4px 12px rgba(20,16,14,.1)`
+        : isMatch
+          ? '0 0 0 2px #E8A93C'
+          : '0 1px 2px rgba(20,16,14,0.06)'
 
   return (
     <div
@@ -825,8 +849,13 @@ function CanvasNode({
         fontWeight: isChapter ? 700 : 500,
         cursor: isDragging ? 'grabbing' : 'grab',
         boxShadow,
-        transition: isDragging ? 'none' : 'box-shadow .15s, border-color .15s',
-        zIndex: isDragging ? 50 : isChapter ? 2 : 1,
+        opacity: isDragging ? 0.92 : 1,
+        // Settle animation: non-dragging nodes ease to their new layout slot so
+        // the tree reflows smoothly after a drop instead of snapping.
+        transition: isDragging
+          ? 'none'
+          : 'left .18s ease, top .18s ease, box-shadow .15s, border-color .15s',
+        zIndex: isDragging ? 50 : isDropTarget ? 40 : isChapter ? 2 : 1,
         userSelect: 'none',
         overflow: 'hidden',
       }}
@@ -877,7 +906,10 @@ function CanvasNode({
           }}
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate" style={{ fontSize: Math.round(13 * zoom) }}>
+        <span
+          className="line-clamp-2 min-w-0 flex-1 leading-tight"
+          style={{ fontSize: Math.round(13 * zoom) }}
+        >
           {node.name}
         </span>
       )}
@@ -890,11 +922,13 @@ function CanvasNode({
         </span>
       )}
       {node.covers.length > 0 && (
+        // A covered node gets a small dot, not the raw internal id (MC-001…).
         <span
-          className="ml-1.5 flex-shrink-0 rounded-lg px-1.5 text-[10px] font-semibold"
+          title={t('outline.covers_indicator', { count: node.covers.length })}
+          className="ml-1.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full text-[8px] font-bold"
           style={{ background: 'var(--bid-primary-soft)', color: 'var(--bid-primary)' }}
         >
-          {node.covers.join('/')}
+          ✓
         </span>
       )}
       {!isEditing && (
