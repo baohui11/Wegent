@@ -256,11 +256,13 @@ export type DropHint =
 /**
  * Resolve the current drag into a drop decision without mutating anything.
  *
- * Forgiving, proximity-based: the node need not land exactly on a target.
- * - Small horizontal travel (staying in its own column) -> reorder among
- *   siblings, previewed by an insertion line.
- * - Otherwise -> snap under the NEAREST node within a generous radius,
- *   previewed by a connection edge. Beyond the radius -> null (snap back).
+ * Forgiving and POSITION-based (not travel-based): decisions come from where the
+ * cursor is relative to the nearest node, so a node that starts on the right and
+ * barely moves still snaps onto a neighbour.
+ * - Nearest node measured to its BOX (0 inside, gap size outside), within a
+ *   generous radius. Beyond it -> null (snap back).
+ * - Cursor over a SIBLING's own column (not its right child-zone) -> reorder.
+ * - Otherwise -> reparent under the nearest node (its child).
  */
 export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): DropHint {
   const { pos, byParent, NW, NH, COLW, ROWH } = layout
@@ -270,8 +272,33 @@ export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): 
   const cx = p.x + NW / 2 + drag.dx
   const cy = p.y + NH / 2 + drag.dy
 
-  // Reorder intent: barely moved horizontally -> reposition among siblings.
-  if (Math.abs(drag.dx) < COLW * 0.4) {
+  // Nearest eligible node by distance to its BOX (0 when the cursor is inside,
+  // the gap size when outside) — so dragging just beside/behind a node reads as
+  // near, unlike a center-to-center metric.
+  let best: FlatNode | null = null
+  let bestDist = Infinity
+  for (const n of flat) {
+    if (n.id === drag.id) continue
+    if (isDescendantOf(flat, drag.id, n.id)) continue
+    const np = pos[n.id]
+    if (!np) continue
+    const gapX = Math.max(np.x - cx, 0, cx - (np.x + NW))
+    const gapY = Math.max(np.y - cy, 0, cy - (np.y + NH))
+    const d = Math.hypot(gapX, gapY)
+    if (d < bestDist) {
+      bestDist = d
+      best = n
+    }
+  }
+  const SNAP_RADIUS = COLW // generous empty-space gap counts as "on it"
+  if (!best || bestDist > SNAP_RADIUS) return null
+
+  // Reorder vs reparent by POSITION relative to the nearest node: if it is a
+  // sibling and the cursor sits over its own column (left of its child-zone),
+  // the user is repositioning within the column -> reorder. Otherwise reparent.
+  const bp = pos[best.id]
+  const inChildZone = cx > bp.x + NW * 0.6
+  if (best.parentId === node.parentId && !inChildZone) {
     const parentId = node.parentId
     const siblings = childrenOf(flat, parentId).filter(s => s.id !== drag.id)
     let insertIndex = siblings.length
@@ -292,23 +319,6 @@ export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): 
         : cy - NH / 2
     return { kind: 'reorder', parentId, insertIndex, lineX: depth * COLW, lineY, lineW: NW }
   }
-
-  // Reparent intent: snap under the nearest eligible node within range.
-  let best: FlatNode | null = null
-  let bestDist = Infinity
-  for (const n of flat) {
-    if (n.id === drag.id) continue
-    if (isDescendantOf(flat, drag.id, n.id)) continue
-    const np = pos[n.id]
-    if (!np) continue
-    const d = Math.hypot(cx - (np.x + NW / 2), cy - (np.y + NH / 2))
-    if (d < bestDist) {
-      bestDist = d
-      best = n
-    }
-  }
-  const SNAP_RADIUS = COLW * 1.4
-  if (!best || bestDist > SNAP_RADIUS) return null
   // Landing slot: where the node WILL sit as best's child — one column right of
   // the target, below its existing (laid-out) children. The preview points here,
   // NOT at the cursor, so the connector is always a clean left→right curve.
