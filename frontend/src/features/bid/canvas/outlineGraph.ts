@@ -307,12 +307,15 @@ export function resolveDrop(flat: FlatNode[], layout: Layout, drag: DragState): 
   }
   const SNAP_RADIUS = COLW * 1.4
   if (!best || bestDist > SNAP_RADIUS) return null
-  // Snap-preview edge: from the target's right-center to the dragged node.
+  // Snap-preview edge mirrors a real parent→child link: from the TARGET's
+  // right-center to the DRAGGED node's left-center (its live, translated slot).
   const tp = pos[best.id]
   const sx = tp.x + NW
   const sy = tp.y + NH / 2
-  const midx = (sx + cx) / 2
-  const edge = `M ${sx} ${sy} C ${midx} ${sy} ${midx} ${cy} ${cx} ${cy}`
+  const ex = p.x + drag.dx // dragged node's left edge
+  const ey = p.y + NH / 2 + drag.dy // dragged node's vertical center
+  const midx = (sx + ex) / 2
+  const edge = `M ${sx} ${sy} C ${midx} ${sy} ${midx} ${ey} ${ex} ${ey}`
   return { kind: 'reparent', targetId: best.id, edge }
 }
 
