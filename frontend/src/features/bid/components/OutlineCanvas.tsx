@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import type { CoverageReport, LlmCall, OutlineDoc } from '@/apis/bid'
+import type { CoverageReport, LlmCall, OutlineDoc, TenderScoring } from '@/apis/bid'
 import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
 import {
   chapterColor,
@@ -36,6 +36,7 @@ export function OutlineCanvas({
   parsing = false,
   llmLog,
   fileSize,
+  scoring,
 }: {
   outline?: OutlineDoc
   coverage?: CoverageReport
@@ -49,6 +50,9 @@ export function OutlineCanvas({
   llmLog?: LlmCall[]
   // Real tender file size in bytes; falls back to '—' when unknown.
   fileSize?: number
+  // Scoring items (with target_section) so acceptSuggestion can route an
+  // accepted uncovered item to its matching chapter instead of always the first.
+  scoring?: TenderScoring[]
 }) {
   const { t } = useTranslation('bidWorkbench')
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
@@ -84,15 +88,26 @@ export function OutlineCanvas({
   }, [c, cov.total, t])
 
   const acceptSuggestion = (id: string) => {
-    const first = childrenOf(c.flat, null)[0]
-    if (first) {
-      const siblings = childrenOf(c.flat, first.id)
+    // Route the new leaf under the chapter whose title matches the scoring
+    // item's target_section; fall back to the first chapter when no match.
+    const chapters = childrenOf(c.flat, null)
+    const target = (scoring ?? []).find(s => s.id === id)?.target_section
+    const lower = (target ?? '').trim().toLowerCase()
+    const match = lower
+      ? chapters.find(ch => {
+          const name = (ch.name ?? '').trim().toLowerCase()
+          return name === lower || (name && lower.includes(name)) || name.includes(lower)
+        })
+      : undefined
+    const parent = match ?? chapters[0]
+    if (parent) {
+      const siblings = childrenOf(c.flat, parent.id)
       const maxOrder = siblings.reduce((m, s) => Math.max(m, s.order), -1)
       c.commit([
         ...c.flat,
         {
           id: genNodeId(),
-          parentId: first.id,
+          parentId: parent.id,
           order: maxOrder + 1,
           name: t('outline.new_leaf', { id }),
           covers: [id],
@@ -162,34 +177,6 @@ export function OutlineCanvas({
               </div>
             </div>
           </div>
-          {!parsing && (
-            <div className="mt-2.5 flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-lg py-2 text-[11.5px]"
-                style={{
-                  background: '#fff',
-                  border: '1px solid var(--bid-border-2)',
-                  color: 'var(--bid-sub)',
-                  cursor: 'pointer',
-                }}
-              >
-                ↺ {t('outline.reupload')}
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-lg py-2 text-[11.5px]"
-                style={{
-                  background: '#fff',
-                  border: '1px solid var(--bid-border-2)',
-                  color: 'var(--bid-sub)',
-                  cursor: 'pointer',
-                }}
-              >
-                ✦ {t('outline.reparse')}
-              </button>
-            </div>
-          )}
         </div>
 
         {parsing && (

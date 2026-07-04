@@ -83,8 +83,6 @@
     "collapse_all": "折叠全部",
     "reset_view": "重置视图",
     "add_node": "添加节点",
-    "reupload": "重新上传",
-    "reparse": "自动拆解",
     "scoring_points": "评分点",
     "detail_words": "建议字数",
     "detail_priority": "生成优先级",

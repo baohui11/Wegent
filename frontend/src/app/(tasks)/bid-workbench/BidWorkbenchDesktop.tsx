@@ -82,6 +82,7 @@ export function BidWorkbenchDesktop() {
     completeReview,
     finalizeBid,
     goStage,
+    tender,
   } = useBidProject()
 
   // Refresh the LLM call log whenever the project or phase changes (the parse
@@ -237,6 +238,7 @@ export function BidWorkbenchDesktop() {
             title={title}
             onSave={saveOutline}
             llmLog={llmLog}
+            scoring={tender?.scoring}
           />
         )}
         {phase === 'materials' && (

@@ -83,8 +83,6 @@
     "collapse_all": "Collapse all",
     "reset_view": "Reset view",
     "add_node": "Add node",
-    "reupload": "Re-upload",
-    "reparse": "Auto-parse",
     "scoring_points": "Scoring pts",
     "detail_words": "Suggested length",
     "detail_priority": "Priority",
