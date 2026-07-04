@@ -123,6 +123,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./logs/backend:/app/logs
+      - bid_workspaces:/data/bid-workspaces
     environment:
       BACKEND_UVICORN_WORKERS: ${BACKEND_UVICORN_WORKERS:-8}
       GRACEFUL_SHUTDOWN_TIMEOUT: ${GRACEFUL_SHUTDOWN_TIMEOUT:-600}
@@ -219,6 +220,9 @@ services:
       KNOWLEDGE_CONVERSION_FILE_TYPES: ${KNOWLEDGE_CONVERSION_FILE_TYPES:-}
       # Persist chunk content to knowledge_documents.chunks for frontend viewing (default false)
       CHUNK_STORAGE_ENABLED: "${BACKEND_CHUNK_STORAGE_ENABLED:-False}"
+      # Bid workbench: blackboard file root (persisted volume) + tender model name
+      BID_WORKSPACE_ROOT: /data/bid-workspaces
+      BID_TENDER_MODEL_NAME: ${BID_TENDER_MODEL_NAME:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -495,6 +499,7 @@ volumes:
     driver: local
   minio_data:
     driver: local
+  bid_workspaces:
 
 networks:
   wegent-network:
