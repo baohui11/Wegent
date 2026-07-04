@@ -38,8 +38,13 @@ function sampleThenCreate() {
 }
 
 // Parsing now flows straight into the Stage 1 canvas (outline auto-built).
+// A minimal chapter+leaf lets Stage 1's canvas and Stage 2's per-node editor
+// render a selectable node.
 const OUTLINE_RES = {
-  outline: { sections: [], volumes: [] },
+  outline: {
+    sections: [{ id: 'c1', title: 'Chapter 1', children: [{ id: 'c1a', title: 'Leaf A' }] }],
+    volumes: [],
+  },
   coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
 }
 
@@ -167,13 +172,7 @@ it('runs the full chain new -> ... -> export download', async () => {
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
   ;(bidApis.getTender as jest.Mock).mockResolvedValue({ tender: { scoring: [] } })
-  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue({
-    outline: { sections: [], volumes: [] },
-    coverage: { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] },
-  })
-  ;(bidApis.getKnowledgeBase as jest.Mock).mockResolvedValue({
-    knowledge_base: { bidder_knowledge_base: {} },
-  })
+  ;(bidApis.buildOutline as jest.Mock).mockResolvedValue(OUTLINE_RES)
   ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
     qualifications: { company: '', items: {} },
   })
@@ -206,19 +205,17 @@ it('runs the full chain new -> ... -> export download', async () => {
   await screen.findByTestId('outline-next-button')
   fireEvent.click(screen.getByTestId('outline-next-button'))
   await screen.findByTestId('bid-materials-screen')
-  fireEvent.click(screen.getByTestId('bid-materials-complete-button'))
-  await screen.findByTestId('bid-materials-done')
-  fireEvent.click(screen.getByTestId('bid-start-drafting-button'))
+  // Confirm dialog gates the jump to Stage 3 (no intermediate interstitial).
+  fireEvent.click(await screen.findByTestId('bid-materials-complete-button'))
+  fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await screen.findByTestId('bid-drafting-screen')
-  await screen.findByTestId('bid-drafting-next-button')
-  fireEvent.click(screen.getByTestId('bid-drafting-next-button'))
+  // Advance action lives in the shell header once generation finished.
+  fireEvent.click(await screen.findByTestId('bid-drafting-next-button'))
   await screen.findByTestId('bid-review-screen')
-  fireEvent.click(screen.getByTestId('bid-review-complete-button'))
-  await screen.findByTestId('bid-review-done')
-  fireEvent.click(screen.getByTestId('bid-enter-audit-button'))
+  // Review advances straight to Stage 5 via the header action.
+  fireEvent.click(await screen.findByTestId('review-next-button'))
   await screen.findByTestId('bid-audit-screen')
-  fireEvent.click(screen.getByTestId('bid-audit-finalize-button'))
-  await screen.findByTestId('bid-export-screen')
-  fireEvent.click(screen.getByTestId('bid-download-button'))
+  // Stage 5 merges audit + export: the Word download lives in the same screen.
+  fireEvent.click(await screen.findByTestId('bid-download-button'))
   await waitFor(() => expect(bidApis.downloadBid).toHaveBeenCalledWith(3))
 })

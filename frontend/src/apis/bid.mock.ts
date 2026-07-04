@@ -226,7 +226,10 @@ const buildAudit = (withFidelity: boolean): AuditReport => ({
 // --- mutable in-memory store ---
 interface MockProject extends BidProject {
   _parseAt?: number
-  _draftAt?: number
+  // Draft clock: `_draftAt` is the start of the current running segment (null
+  // when paused); `_draftElapsed` accumulates time from prior segments.
+  _draftAt?: number | null
+  _draftElapsed?: number
   _redraftAt?: Record<string, number>
   outline?: OutlineDoc
   coverage?: CoverageReport
@@ -309,6 +312,16 @@ let nextId = 200
     status: 'parse_failed',
     created_at: iso(5),
   }),
+  // Stage 4 (review) seed: drafting is complete, ready for read/refine.
+  seed({
+    id: 106,
+    title: '区域医疗云平台建设项目',
+    current_phase: 5,
+    max_phase_reached: 5,
+    status: 'review',
+    created_at: iso(6),
+    _draftAt: 0,
+  }),
 ].forEach(p => store.set(p.id, p))
 
 const snapshot = (p: MockProject): BidProject => ({
@@ -331,15 +344,25 @@ function tickParse(p: MockProject) {
 }
 
 function draftProgress(p: MockProject): DraftStatus {
-  const started = p._draftAt ?? Date.now()
-  const elapsed = Date.now() - started
+  // Stamp the start on first observation so a directly-opened drafting project
+  // streams from 0 rather than re-basing to "now" on every poll.
+  if (p._draftAt === undefined) p._draftAt = Date.now()
+  if (p._draftElapsed == null) p._draftElapsed = 0
+  const running = p._draftAt != null
+  const elapsed = p._draftElapsed + (running ? Date.now() - (p._draftAt as number) : 0)
   const doneCount = Math.min(SECTION_IDS.length, Math.floor(elapsed / DRAFT_PER_SECTION_MS))
   const sections: Record<string, string> = {}
   SECTION_IDS.forEach((id, i) => {
     sections[id] = i < doneCount ? 'done' : i === doneCount ? 'drafting' : 'pending'
   })
   const finished = doneCount >= SECTION_IDS.length
-  return { total: SECTION_IDS.length, sections, finished, error: null }
+  return {
+    total: SECTION_IDS.length,
+    sections,
+    finished,
+    error: null,
+    paused: !running && !finished,
+  }
 }
 
 const need = (id: number): MockProject => {
@@ -433,7 +456,21 @@ export const bidMockApis = {
     const p = need(id)
     p.status = 'drafting'
     p._draftAt = Date.now()
+    p._draftElapsed = 0
     p.current_phase = Math.max(p.current_phase, 4)
+    return delay({ status: 'drafting' })
+  },
+  pauseDraft: (id: number): Promise<{ status: string }> => {
+    const p = need(id)
+    if (p._draftAt != null) {
+      p._draftElapsed = (p._draftElapsed ?? 0) + (Date.now() - p._draftAt)
+      p._draftAt = null
+    }
+    return delay({ status: 'paused' })
+  },
+  resumeDraft: (id: number): Promise<{ status: string }> => {
+    const p = need(id)
+    if (p._draftAt == null) p._draftAt = Date.now()
     return delay({ status: 'drafting' })
   },
   getDraftStatus: (id: number): Promise<DraftStatus> => delay(draftProgress(need(id)), 120),

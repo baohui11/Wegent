@@ -81,6 +81,7 @@ export interface DraftStatus {
   sections: Record<string, string>
   finished: boolean
   error: string | null
+  paused?: boolean
 }
 
 export interface DraftSection {
@@ -168,6 +169,10 @@ const realBidApis = {
     apiClient.post(`/bid/projects/${id}/materials/complete`),
   startDraft: (id: number): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/draft`),
+  pauseDraft: (id: number): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/draft/pause`),
+  resumeDraft: (id: number): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/draft/resume`),
   getDraftStatus: (id: number): Promise<DraftStatus> =>
     apiClient.get(`/bid/projects/${id}/draft/status`),
   getDraftSections: (id: number): Promise<{ items: DraftSection[] }> =>

@@ -23,6 +23,7 @@ it('enterReview then completeReview', async () => {
   await act(async () => {
     await result.current.completeReview()
   })
-  await waitFor(() => expect(result.current.phase).toBe('review_done'))
+  // Confirming the review advances straight to Stage 5 (audit).
+  await waitFor(() => expect(result.current.phase).toBe('audit'))
   expect(bidApis.completeReview).toHaveBeenCalledWith(9)
 })

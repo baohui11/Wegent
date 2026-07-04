@@ -9,7 +9,7 @@ import {
   type TenderDoc,
 } from '@/apis/bid'
 
-type Phase =
+export type Phase =
   | 'idle'
   | 'import'
   | 'creating'
@@ -18,14 +18,30 @@ type Phase =
   | 'outline_building'
   | 'outline_ready'
   | 'materials'
-  | 'materials_done'
   | 'drafting'
   | 'review'
-  | 'review_done'
   | 'audit'
   | 'finalizing'
   | 'done'
   | 'error'
+
+// Maps a workbench phase to the mockup's five-stage stepper index.
+export function phaseToStage(phase: Phase | string): number {
+  switch (phase) {
+    case 'materials':
+      return 2
+    case 'drafting':
+      return 3
+    case 'review':
+      return 4
+    case 'audit':
+    case 'finalizing':
+    case 'done':
+      return 5
+    default:
+      return 1
+  }
+}
 
 export function useBidProject() {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -112,12 +128,23 @@ export function useBidProject() {
           }
           return
         }
+        // Stages 2-5 render the outline tree (materials/drafting/review) or need
+        // it for cross-stage "locate", so load it before entering those phases.
+        if (cp >= 3 && cp <= 6) {
+          try {
+            const o = await bidApis.getOutline(project.id)
+            setOutline(o.outline)
+            setCoverage(o.coverage)
+          } catch {
+            // No stored outline yet — the screens degrade to an empty tree.
+          }
+        }
         if (cp === 3) {
           setPhase('materials')
           return
         }
         if (cp === 4) {
-          setPhase(st === 'drafting' ? 'drafting' : 'materials_done')
+          setPhase(st === 'drafting' ? 'drafting' : 'materials')
           return
         }
         if (cp === 5) {
@@ -203,10 +230,13 @@ export function useBidProject() {
 
   const enterMaterials = useCallback(() => setPhase('materials'), [])
 
+  // Confirming materials completes it and kicks off drafting in one step,
+  // landing straight on Stage 3 (no intermediate interstitial screen).
   const completeMaterials = useCallback(async () => {
     if (projectId == null) return
     await bidApis.completeMaterials(projectId)
-    setPhase('materials_done')
+    await bidApis.startDraft(projectId)
+    setPhase('drafting')
   }, [projectId])
 
   const startDrafting = useCallback(async () => {
@@ -215,15 +245,37 @@ export function useBidProject() {
     setPhase('drafting')
   }, [projectId])
 
+  const pauseDrafting = useCallback(async () => {
+    if (projectId != null) await bidApis.pauseDraft(projectId)
+  }, [projectId])
+
+  const resumeDrafting = useCallback(async () => {
+    if (projectId != null) await bidApis.resumeDraft(projectId)
+  }, [projectId])
+
   const enterReview = useCallback(() => setPhase('review'), [])
 
+  // Confirming the review advances straight to Stage 5 (check & export).
   const completeReview = useCallback(async () => {
     if (projectId == null) return
     await bidApis.completeReview(projectId)
-    setPhase('review_done')
+    setPhase('audit')
   }, [projectId])
 
   const enterAudit = useCallback(() => setPhase('audit'), [])
+
+  // Backward navigation to an already-reached stage via the stepper.
+  const goStage = useCallback((stage: number) => {
+    const target: Record<number, Phase> = {
+      1: 'outline_ready',
+      2: 'materials',
+      3: 'drafting',
+      4: 'review',
+      5: 'audit',
+    }
+    const next = target[stage]
+    if (next) setPhase(next)
+  }, [])
 
   const finalizeBid = useCallback(async () => {
     if (projectId == null) return
@@ -255,9 +307,12 @@ export function useBidProject() {
     enterMaterials,
     completeMaterials,
     startDrafting,
+    pauseDrafting,
+    resumeDrafting,
     enterReview,
     completeReview,
     enterAudit,
     finalizeBid,
+    goStage,
   }
 }

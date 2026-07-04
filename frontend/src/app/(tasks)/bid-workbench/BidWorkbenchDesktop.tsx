@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidThemeVars } from '@/features/bid/theme'
-import { useBidProject } from '@/features/bid/hooks/useBidProject'
+import { useBidProject, phaseToStage } from '@/features/bid/hooks/useBidProject'
 import type { BidProject } from '@/apis/bid'
 import { ProjectListScreen } from '@/features/bid/components/ProjectListScreen'
 import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
@@ -15,7 +15,6 @@ import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
 import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
 import { AuditScreen } from '@/features/bid/components/AuditScreen'
-import { ExportScreen } from '@/features/bid/components/ExportScreen'
 
 const SAMPLE_TENDER = `XX市政务数据中心信息化系统采购项目 招标文件
 
@@ -55,6 +54,11 @@ export function BidWorkbenchDesktop() {
   const { t } = useTranslation('bidWorkbench')
   const [view, setView] = useState<'list' | 'workbench'>('list')
   const [title, setTitle] = useState('')
+  // Highest stage reached (drives clickable stepper), whether drafting finished
+  // (drives the Stage-3 header action), and the "proceed to drafting" confirm.
+  const [maxStage, setMaxStage] = useState(1)
+  const [draftState, setDraftState] = useState<'running' | 'paused' | 'done'>('running')
+  const [confirmDraft, setConfirmDraft] = useState(false)
   const {
     phase,
     projectId,
@@ -70,11 +74,22 @@ export function BidWorkbenchDesktop() {
     enterMaterials,
     completeMaterials,
     startDrafting,
+    pauseDrafting,
+    resumeDrafting,
     enterReview,
     completeReview,
-    enterAudit,
     finalizeBid,
+    goStage,
   } = useBidProject()
+
+  // Track the furthest stage reached so the stepper can jump back to it.
+  useEffect(() => {
+    setMaxStage(m => Math.max(m, phaseToStage(phase)))
+  }, [phase])
+  // Drafting state is scoped to the drafting phase.
+  useEffect(() => {
+    if (phase !== 'drafting') setDraftState('running')
+  }, [phase])
 
   // Best-effort load of the mockup's Noto fonts; falls back to the theme's
   // system stack if the network/CSP blocks it.
@@ -91,16 +106,19 @@ export function BidWorkbenchDesktop() {
 
   const openProject = async (p: BidProject) => {
     setTitle(p.title)
+    setMaxStage(1)
     setView('workbench')
     await open(p)
   }
   const newProject = () => {
     setTitle(t('projects.new'))
+    setMaxStage(1)
     startNew()
     setView('workbench')
   }
   const backToList = () => {
     reset()
+    setMaxStage(1)
     setView('list')
   }
 
@@ -130,25 +148,65 @@ export function BidWorkbenchDesktop() {
     )
   }
 
+  // Stage action shown in the shell header (unified action area).
+  const headerAction =
+    phase === 'outline_ready' && outline && coverage ? (
+      <HeaderButton onClick={enterMaterials} testid="outline-next-button">
+        {t('outline.confirm')}
+      </HeaderButton>
+    ) : phase === 'materials' ? (
+      <HeaderButton onClick={() => setConfirmDraft(true)} testid="materials-next-button">
+        {t('phase2.header_action')}
+      </HeaderButton>
+    ) : phase === 'drafting' ? (
+      <>
+        {draftState === 'running' && (
+          <HeaderGhostButton onClick={() => void pauseDrafting()} testid="bid-drafting-stop-button">
+            {t('drafting.stop')}
+          </HeaderGhostButton>
+        )}
+        {draftState === 'paused' && (
+          <HeaderGhostButton
+            onClick={() => void startDrafting()}
+            testid="bid-drafting-restart-button"
+          >
+            {t('drafting.restart_over')}
+          </HeaderGhostButton>
+        )}
+        {draftState === 'paused' && (
+          <HeaderButton onClick={() => void resumeDrafting()} testid="bid-drafting-resume-button">
+            {t('drafting.resume')}
+          </HeaderButton>
+        )}
+        {draftState === 'done' && (
+          <HeaderGhostButton
+            onClick={() => void startDrafting()}
+            testid="bid-drafting-restart-button"
+          >
+            {t('drafting.restart')}
+          </HeaderGhostButton>
+        )}
+        {draftState === 'done' && (
+          <HeaderButton onClick={enterReview} testid="bid-drafting-next-button">
+            {t('drafting.view_result')}
+          </HeaderButton>
+        )}
+      </>
+    ) : phase === 'review' ? (
+      <HeaderButton onClick={completeReview} testid="review-next-button">
+        {t('review.header_action')}
+      </HeaderButton>
+    ) : undefined
+
   return (
-    <div style={bidThemeVars} className="h-full bg-base" data-testid="bid-workbench-desktop">
+    <div style={bidThemeVars} className="h-screen bg-base" data-testid="bid-workbench-desktop">
       <WorkbenchShell
         phase={phase}
         title={title}
+        maxStage={maxStage}
+        onStageClick={goStage}
         onBack={backToList}
-        headerAction={
-          phase === 'outline_ready' && outline && coverage ? (
-            <button
-              type="button"
-              onClick={enterMaterials}
-              data-testid="outline-next-button"
-              className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold text-white"
-              style={{ background: 'var(--bid-primary)' }}
-            >
-              {t('outline.confirm')}
-            </button>
-          ) : undefined
-        }
+        headerAction={headerAction}
       >
         {(phase === 'creating' || phase === 'parsing' || phase === 'outline_building') && (
           <OutlineCanvas title={title} parsing />
@@ -156,60 +214,31 @@ export function BidWorkbenchDesktop() {
         {phase === 'outline_ready' && outline && coverage && (
           <OutlineCanvas outline={outline} coverage={coverage} title={title} onSave={saveOutline} />
         )}
-        {phase === 'materials' && projectId != null && (
-          <MaterialsScreen projectId={projectId} onComplete={completeMaterials} />
-        )}
-        {phase === 'materials_done' && (
-          <div
-            className="flex h-full flex-col items-center justify-center gap-4"
-            data-testid="bid-materials-done"
-          >
-            <div className="text-sm text-text-secondary">{t('phase3.complete')} ✓</div>
-            <button
-              type="button"
-              onClick={startDrafting}
-              data-testid="bid-start-drafting-button"
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
-            >
-              {t('phase4.start')}
-            </button>
-          </div>
+        {phase === 'materials' && (
+          <MaterialsScreen
+            outline={outline ?? undefined}
+            onComplete={() => setConfirmDraft(true)}
+          />
         )}
         {phase === 'drafting' && projectId != null && (
-          <DraftingScreen projectId={projectId} onNext={enterReview} />
+          <DraftingScreen
+            projectId={projectId}
+            outline={outline ?? undefined}
+            onStateChange={setDraftState}
+          />
         )}
         {phase === 'review' && projectId != null && (
-          <ReviewScreen projectId={projectId} onComplete={completeReview} />
+          <ReviewScreen projectId={projectId} outline={outline ?? undefined} />
         )}
-        {phase === 'review_done' && (
-          <div
-            className="flex h-full flex-col items-center justify-center gap-4"
-            data-testid="bid-review-done"
-          >
-            <div className="text-sm text-text-secondary">{t('phase5.complete')} ✓</div>
-            <button
-              type="button"
-              onClick={enterAudit}
-              data-testid="bid-enter-audit-button"
-              className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-white"
-            >
-              {t('phase6.enter')}
-            </button>
-          </div>
-        )}
-        {phase === 'audit' && projectId != null && (
-          <AuditScreen projectId={projectId} onRework={enterReview} onFinalize={finalizeBid} />
-        )}
-        {phase === 'finalizing' && (
-          <div
-            className="flex h-full items-center justify-center text-sm text-text-secondary"
-            data-testid="bid-finalizing"
-          >
-            {t('phase6.finalizing')}
-          </div>
-        )}
-        {phase === 'done' && projectId != null && (
-          <ExportScreen projectId={projectId} onReaudit={enterAudit} />
+        {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (
+          <AuditScreen
+            projectId={projectId}
+            finalized={phase === 'done'}
+            finalizing={phase === 'finalizing'}
+            onRework={enterReview}
+            onFinalize={finalizeBid}
+            onLocate={() => goStage(4)}
+          />
         )}
         {phase === 'error' && (
           <div
@@ -229,6 +258,121 @@ export function BidWorkbenchDesktop() {
           </div>
         )}
       </WorkbenchShell>
+
+      {confirmDraft && (
+        <ConfirmDialog
+          title={t('phase2.confirm_title')}
+          desc={t('phase2.confirm_desc')}
+          cancel={t('outline.delete_cancel')}
+          confirm={t('phase2.confirm_ok')}
+          onCancel={() => setConfirmDraft(false)}
+          onConfirm={() => {
+            setConfirmDraft(false)
+            void completeMaterials()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function HeaderButton({
+  onClick,
+  testid,
+  children,
+}: {
+  onClick: () => void
+  testid: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testid}
+      className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold text-white"
+      style={{ background: 'var(--bid-primary)' }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function HeaderGhostButton({
+  onClick,
+  testid,
+  children,
+}: {
+  onClick: () => void
+  testid: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testid}
+      className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold"
+      style={{ border: '1px solid var(--bid-border-2)', color: 'var(--bid-sub)' }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function ConfirmDialog({
+  title,
+  desc,
+  cancel,
+  confirm,
+  onCancel,
+  onConfirm,
+}: {
+  title: string
+  desc: string
+  cancel: string
+  confirm: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: 'rgba(30,26,24,.25)' }}
+      onClick={onCancel}
+      data-testid="bid-confirm-dialog"
+    >
+      <div
+        className="w-[340px] rounded-[14px] p-6"
+        style={{ background: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-2 text-[14.5px] font-bold" style={{ color: 'var(--bid-ink)' }}>
+          {title}
+        </div>
+        <div className="mb-[18px] text-[12.5px]" style={{ color: 'var(--bid-muted)' }}>
+          {desc}
+        </div>
+        <div className="flex justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2 text-[12.5px]"
+            style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
+          >
+            {cancel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            data-testid="bid-confirm-ok"
+            className="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white"
+            style={{ background: 'var(--bid-primary)' }}
+          >
+            {confirm}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

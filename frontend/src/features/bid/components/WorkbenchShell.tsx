@@ -2,47 +2,25 @@
 
 import type { ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
+import { phaseToStage } from '../hooks/useBidProject'
 
 const STAGES = [1, 2, 3, 4, 5] as const
-
-// Maps a workbench phase to the mockup's five-stage stepper index. Read-only
-// indicator; navigation is driven by the phase machine + backend, not clicks.
-function phaseToStage(phase: string): number {
-  switch (phase) {
-    case 'import':
-    case 'creating':
-    case 'parsing':
-    case 'ready':
-    case 'outline_building':
-    case 'outline_ready':
-      return 1
-    case 'materials':
-    case 'materials_done':
-      return 2
-    case 'drafting':
-      return 3
-    case 'review':
-    case 'review_done':
-      return 4
-    case 'audit':
-    case 'finalizing':
-    case 'done':
-      return 5
-    default:
-      return 1
-  }
-}
 
 export function WorkbenchShell({
   phase,
   title,
+  maxStage = 1,
   onBack,
+  onStageClick,
   headerAction,
   children,
 }: {
   phase: string
   title: string
+  // Highest stage reached — stages at or below this are clickable to revisit.
+  maxStage?: number
   onBack: () => void
+  onStageClick?: (stage: number) => void
   headerAction?: ReactNode
   children: ReactNode
 }) {
@@ -84,12 +62,15 @@ export function WorkbenchShell({
             : done
               ? 'var(--bid-ink-2)'
               : 'var(--bid-muted-2)'
+          const clickable = s <= maxStage && !active
           return (
             <div key={s} className="flex flex-shrink-0 items-center">
               <div
                 data-testid={`bid-stepper-stage-${s}`}
                 data-current={active ? 'true' : 'false'}
+                onClick={clickable ? () => onStageClick?.(s) : undefined}
                 className="flex items-center gap-2.5"
+                style={{ cursor: clickable ? 'pointer' : 'default' }}
               >
                 <div
                   className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
@@ -156,7 +137,9 @@ export function WorkbenchShell({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+      {/* Screens manage their own internal scrolling so side columns don't get
+          stretched by tall center content. */}
+      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
     </div>
   )
 }

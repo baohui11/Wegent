@@ -31,9 +31,8 @@ beforeEach(() => {
   ;(bidApis.acceptSection as jest.Mock).mockResolvedValue({ status: 'accepted' })
 })
 
-it('opens section, redrafts with instruction, accepts, completes', async () => {
-  const onComplete = jest.fn()
-  render(<ReviewScreen projectId={5} onComplete={onComplete} />)
+it('opens section, redrafts with instruction, accepts', async () => {
+  render(<ReviewScreen projectId={5} />)
   await screen.findByTestId('bid-review-screen')
   fireEvent.click(screen.getByTestId('bid-review-section-s1'))
   await waitFor(() => expect(screen.getByTestId('bid-review-content')).toHaveTextContent('正文'))
@@ -44,6 +43,4 @@ it('opens section, redrafts with instruction, accepts, completes', async () => {
   await waitFor(() => expect(bidApis.redraftSection).toHaveBeenCalledWith(5, 's1', '更简洁'))
   fireEvent.click(screen.getByTestId('bid-review-accept-button'))
   await waitFor(() => expect(bidApis.acceptSection).toHaveBeenCalledWith(5, 's1'))
-  fireEvent.click(screen.getByTestId('bid-review-complete-button'))
-  expect(onComplete).toHaveBeenCalled()
 })

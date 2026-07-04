@@ -23,8 +23,9 @@ async function toOutlineReady(result: { current: ReturnType<typeof useBidProject
   })
 }
 
-it('enterMaterials then completeMaterials', async () => {
+it('enterMaterials then completeMaterials advances straight to drafting', async () => {
   ;(bidApis.completeMaterials as jest.Mock).mockResolvedValue({ status: 'materials_done' })
+  ;(bidApis.startDraft as jest.Mock).mockResolvedValue({ status: 'drafting' })
   const { result } = renderHook(() => useBidProject())
   await toOutlineReady(result)
   act(() => {
@@ -34,6 +35,7 @@ it('enterMaterials then completeMaterials', async () => {
   await act(async () => {
     await result.current.completeMaterials()
   })
-  await waitFor(() => expect(result.current.phase).toBe('materials_done'))
+  await waitFor(() => expect(result.current.phase).toBe('drafting'))
   expect(bidApis.completeMaterials).toHaveBeenCalledWith(9)
+  expect(bidApis.startDraft).toHaveBeenCalledWith(9)
 })

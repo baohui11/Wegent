@@ -2,59 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import type { CoverageReport, OutlineDoc, OutlineNode } from '@/apis/bid'
+import type { CoverageReport, OutlineDoc } from '@/apis/bid'
+import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
+import {
+  chapterColor,
+  childrenOf,
+  genNodeId,
+  type FlatNode,
+  type Layout,
+} from '../canvas/outlineGraph'
+import type { Viewport } from '../canvas/useOutlineCanvas'
 
 const PARSE_STEPS = ['ocr', 'toc', 'classify', 'tree'] as const
-
-// Chapter accent colours cycled across top-level sections (mockup palette).
-const ACCENTS = ['#C7102A', '#C77700', '#1E8E5A', '#8E2140', '#2A6FDB', '#7A56C7']
-
-// Canvas layout constants.
-const CHAP_W = 210
-const CHAP_H = 46
-const LEAF_W = 248
-const LEAF_H = 40
-const LEAF_GAP = 52
-const BAND_GAP = 26
-const CHAP_X = 28
-const LEAF_X = 300
-const TOP = 24
-
-function countLeaves(nodes: OutlineNode[]): number {
-  return nodes.reduce(
-    (n, x) => n + (x.children && x.children.length ? countLeaves(x.children) : 1),
-    0
-  )
-}
-function mapTree(nodes: OutlineNode[], fn: (n: OutlineNode) => OutlineNode): OutlineNode[] {
-  return nodes.map(n => {
-    const next = fn(n)
-    return next.children ? { ...next, children: mapTree(next.children, fn) } : next
-  })
-}
-function removeNode(nodes: OutlineNode[], id: string): OutlineNode[] {
-  return nodes
-    .filter(n => n.id !== id)
-    .map(n => (n.children ? { ...n, children: removeNode(n.children, id) } : n))
-}
-
-interface LaidNode {
-  id: string
-  kind: 'chapter' | 'leaf'
-  x: number
-  y: number
-  w: number
-  h: number
-  title: string
-  accent: string
-  covers: string[]
-  hidden: number
-  hasChildren: boolean
-}
-interface Edge {
-  d: string
-  accent: string
-}
 
 export function OutlineCanvas({
   outline,
@@ -73,17 +32,14 @@ export function OutlineCanvas({
   parsing?: boolean
 }) {
   const { t } = useTranslation('bidWorkbench')
-  const sections = useMemo(() => outline?.sections ?? [], [outline])
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
-  const [search, setSearch] = useState('')
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [zoom, setZoom] = useState(1)
-  const [edits, setEdits] = useState(0)
   const [parseStep, setParseStep] = useState(0)
+
+  const c = useOutlineCanvas(outline, onSave, {
+    chapter: t('outline.new_chapter'),
+    node: t('phase2.new_node'),
+  })
 
   // Cycle the parse-progress steps while parsing (visual only).
   useEffect(() => {
@@ -93,153 +49,39 @@ export function OutlineCanvas({
     return () => clearInterval(id)
   }, [parsing])
 
-  const matches = (name?: string) =>
-    !search || (name || '').toLowerCase().includes(search.toLowerCase())
-
   const stats = useMemo(() => {
-    const l2 = sections.reduce((n, c) => n + (c.children?.length ?? 0), 0)
-    const l3 = sections.reduce(
-      (n, c) => n + (c.children?.reduce((m, x) => m + (x.children?.length ?? 0), 0) ?? 0),
-      0
-    )
+    const { flat, layout } = c
+    const depthOf = (id: string) => layout.pos[id]?.depth ?? 0
+    const l2 = flat.filter(n => depthOf(n.id) === 1).length
+    const l3 = flat.filter(n => depthOf(n.id) === 2).length
+    const leaves = flat.filter(n => !flat.some(x => x.parentId === n.id)).length
     return [
-      { value: sections.length, label: t('outline.chapters') },
+      { value: childrenOf(flat, null).length, label: t('outline.chapters') },
       { value: l2, label: t('outline.level2') },
       { value: l3, label: t('outline.level3') },
-      { value: countLeaves(sections), label: t('outline.leaves') },
+      { value: leaves, label: t('outline.leaves') },
       { value: cov.total, label: t('outline.scoring_points') },
     ]
-  }, [sections, cov.total, t])
+  }, [c, cov.total, t])
 
-  // Positioned mind-map layout (bands per chapter; leaves branch to the right).
-  const layout = useMemo(() => {
-    const nodes: LaidNode[] = []
-    const edges: Edge[] = []
-    let y = TOP
-    const visChapters = sections.filter(
-      c => matches(c.title) || (c.children || []).some(l => matches(l.title))
-    )
-    visChapters.forEach((ch, ci) => {
-      const accent = ACCENTS[ci % ACCENTS.length]
-      const isCollapsed = collapsed.has(ch.id ?? '') && !search
-      const allLeaves = ch.children ?? []
-      const leaves = isCollapsed ? [] : allLeaves.filter(l => matches(l.title) || matches(ch.title))
-      const bandH = Math.max(CHAP_H + 8, leaves.length * LEAF_GAP)
-      const chY = y + bandH / 2 - CHAP_H / 2
-      nodes.push({
-        id: ch.id ?? `c${ci}`,
-        kind: 'chapter',
-        x: CHAP_X,
-        y: chY,
-        w: CHAP_W,
-        h: CHAP_H,
-        title: ch.title || '',
-        accent,
-        covers: ch.covers ?? [],
-        hidden: isCollapsed ? allLeaves.length : 0,
-        hasChildren: allLeaves.length > 0,
-      })
-      const offset = (bandH - leaves.length * LEAF_GAP) / 2
-      leaves.forEach((lf, li) => {
-        const ly = y + li * LEAF_GAP + offset + (LEAF_GAP - LEAF_H) / 2
-        nodes.push({
-          id: lf.id ?? `${ci}-${li}`,
-          kind: 'leaf',
-          x: LEAF_X,
-          y: ly,
-          w: LEAF_W,
-          h: LEAF_H,
-          title: lf.title || '',
-          accent,
-          covers: lf.covers ?? [],
-          hidden: 0,
-          hasChildren: false,
-        })
-        const x1 = CHAP_X + CHAP_W
-        const y1 = chY + CHAP_H / 2
-        const x2 = LEAF_X
-        const y2 = ly + LEAF_H / 2
-        edges.push({ d: `M ${x1} ${y1} C ${x1 + 44} ${y1}, ${x2 - 44} ${y2}, ${x2} ${y2}`, accent })
-      })
-      y += bandH + BAND_GAP
-    })
-    return { nodes, edges, width: LEAF_X + LEAF_W + 48, height: Math.max(y, 240) }
-  }, [sections, collapsed, search]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const selected = useMemo(() => {
-    let found: OutlineNode | null = null
-    let parent: OutlineNode | null = null
-    const walk = (nodes: OutlineNode[], p: OutlineNode | null) => {
-      for (const n of nodes) {
-        if (n.id === selectedId) {
-          found = n
-          parent = p
-        }
-        if (n.children) walk(n.children, n)
-      }
-    }
-    walk(sections, null)
-    return { node: found as OutlineNode | null, parent: parent as OutlineNode | null }
-  }, [sections, selectedId])
-
-  const bump = () => setEdits(e => e + 1)
-  const commitRename = () => {
-    if (!editingId) return
-    const id = editingId
-    const value = draft.trim()
-    setEditingId(null)
-    if (value) {
-      onSave?.({
-        ...outline,
-        sections: mapTree(sections, n => (n.id === id ? { ...n, title: value } : n)),
-      })
-      bump()
-    }
-  }
-  const deleteNode = (id: string) => {
-    onSave?.({ ...outline, sections: removeNode(sections, id) })
-    bump()
-  }
-  const addChild = (chapterId: string) => {
-    const nid = `n${Date.now()}`
-    onSave?.({
-      ...outline,
-      sections: mapTree(sections, n =>
-        n.id === chapterId
-          ? { ...n, children: [...(n.children ?? []), { id: nid, title: t('phase2.new_node') }] }
-          : n
-      ),
-    })
-    bump()
-  }
   const acceptSuggestion = (id: string) => {
-    const first = sections[0]
-    if (first?.id) {
-      onSave?.({
-        ...outline,
-        sections: mapTree(sections, n =>
-          n.id === first.id
-            ? {
-                ...n,
-                children: [
-                  ...(n.children ?? []),
-                  { id: `s${Date.now()}`, title: t('outline.new_leaf', { id }), covers: [id] },
-                ],
-              }
-            : n
-        ),
-      })
-      bump()
+    const first = childrenOf(c.flat, null)[0]
+    if (first) {
+      const siblings = childrenOf(c.flat, first.id)
+      const maxOrder = siblings.reduce((m, s) => Math.max(m, s.order), -1)
+      c.commit([
+        ...c.flat,
+        {
+          id: genNodeId(),
+          parentId: first.id,
+          order: maxOrder + 1,
+          name: t('outline.new_leaf', { id }),
+          covers: [id],
+        },
+      ])
     }
     setDismissed(prev => new Set(prev).add(id))
   }
-  const toggleCollapse = (id: string) =>
-    setCollapsed(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
 
   const sectionLabel = 'text-xs font-extrabold'
   const sideCol = 'flex flex-shrink-0 flex-col gap-4 overflow-auto p-4'
@@ -254,6 +96,8 @@ export function OutlineCanvas({
       .filter(id => !dismissed.has(id))
       .map(id => ({ id, kind: 'clause' as const })),
   ]
+
+  const searchLower = c.search.trim().toLowerCase()
 
   return (
     <div className="flex h-full overflow-x-auto" data-testid="bid-outline-editor">
@@ -427,7 +271,7 @@ export function OutlineCanvas({
         )}
       </div>
 
-      {/* Center: mind-map canvas */}
+      {/* Center: interactive mind-map canvas */}
       <div className="relative flex min-w-[480px] flex-1 flex-col">
         <div
           className="flex flex-shrink-0 items-center gap-2 overflow-x-auto px-4 py-2.5"
@@ -440,8 +284,8 @@ export function OutlineCanvas({
             {t('outline.canvas')}
           </div>
           <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+            value={c.search}
+            onChange={e => c.setSearch(e.target.value)}
             placeholder={t('outline.search')}
             data-testid="bid-outline-search"
             className="w-[130px] flex-shrink-0 rounded-[7px] px-2.5 py-1.5 text-[11.5px] outline-none"
@@ -452,28 +296,28 @@ export function OutlineCanvas({
             <>
               <span
                 className={pill}
-                onClick={() => setCollapsed(new Set())}
+                onClick={c.expandAll}
                 style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
               >
                 {t('outline.expand_all')}
               </span>
               <span
                 className={pill}
-                onClick={() => setCollapsed(new Set(sections.map(s => s.id ?? '').filter(Boolean)))}
+                onClick={c.collapseAll}
                 style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
               >
                 {t('outline.collapse_all')}
               </span>
               <span
                 className={pill}
-                onClick={() => setZoom(1)}
+                onClick={c.resetView}
                 style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
               >
                 ⟲ {t('outline.reset_view')}
               </span>
               <span
                 className={pill}
-                onClick={() => sections[0]?.id && addChild(sections[0].id)}
+                onClick={c.addNodeSmart}
                 data-testid="bid-outline-add-node"
                 style={{ background: 'var(--bid-primary)', color: '#fff', fontWeight: 700 }}
               >
@@ -495,10 +339,12 @@ export function OutlineCanvas({
         </div>
 
         <div
-          className="min-h-0 flex-1 overflow-auto"
+          ref={c.scrollRef}
+          onScroll={c.syncViewport}
+          className="relative min-h-0 flex-1 overflow-auto"
           style={{
             background:
-              'radial-gradient(circle, rgba(20,16,14,.07) 1px, transparent 1.4px) 0 0/22px 22px, var(--bid-paper-2)',
+              'radial-gradient(circle, rgba(20,16,14,.08) 1px, transparent 1.4px) 0 0/22px 22px, var(--bid-paper-2)',
           }}
         >
           {parsing && (
@@ -513,9 +359,9 @@ export function OutlineCanvas({
                     style={{ background: '#EDE6E1' }}
                   />
                   <div className="flex flex-col gap-2.5">
-                    {[0, 1].map(c => (
+                    {[0, 1].map(col => (
                       <div
-                        key={c}
+                        key={col}
                         className="h-9 w-[240px] animate-pulse rounded-[10px]"
                         style={{ background: '#F3EEEA' }}
                       />
@@ -525,221 +371,101 @@ export function OutlineCanvas({
               ))}
             </div>
           )}
-          <div
-            style={{
-              width: layout.width * zoom,
-              height: layout.height * zoom,
-              position: 'relative',
-            }}
-          >
+          {!parsing && (
             <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: layout.width,
-                height: layout.height,
-                transform: `scale(${zoom})`,
-                transformOrigin: 'top left',
-              }}
+              ref={c.canvasRef}
+              onMouseDown={c.onCanvasMouseDown}
+              data-testid="bid-outline-canvas"
+              style={{ position: 'relative', width: c.layout.width, height: c.layout.height }}
             >
               <svg
                 style={{
                   position: 'absolute',
-                  inset: 0,
+                  left: 0,
+                  top: 0,
                   width: '100%',
                   height: '100%',
                   overflow: 'visible',
                   pointerEvents: 'none',
                 }}
               >
-                {layout.edges.map((e, i) => (
-                  <path key={i} d={e.d} stroke={`${e.accent}88`} strokeWidth={1.6} fill="none" />
+                {c.edges.map(e => (
+                  <path
+                    key={e.id}
+                    d={e.d}
+                    stroke={e.stroke}
+                    strokeWidth={e.strokeWidth}
+                    fill="none"
+                  />
                 ))}
               </svg>
-              {layout.nodes.map(n => {
-                const isChapter = n.kind === 'chapter'
-                const isSel = selectedId === n.id
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => setSelectedId(n.id)}
-                    onDoubleClick={() => {
-                      setEditingId(n.id)
-                      setDraft(n.title)
-                    }}
-                    className="group absolute flex items-center overflow-hidden"
-                    style={{
-                      left: n.x,
-                      top: n.y,
-                      width: n.w,
-                      height: n.h,
-                      padding: isChapter ? '0 10px 0 14px' : '0 10px',
-                      borderRadius: 10,
-                      cursor: 'pointer',
-                      background: isChapter ? `${n.accent}12` : '#fff',
-                      border: isSel
-                        ? `1.5px solid var(--bid-primary)`
-                        : `1px solid ${isChapter ? `${n.accent}55` : 'var(--bid-border)'}`,
-                      boxShadow: isSel ? '0 2px 8px rgba(199,16,42,.12)' : 'none',
-                    }}
-                  >
-                    {isChapter && (
-                      <span
-                        className="absolute left-0 top-0 h-full w-1"
-                        style={{ background: n.accent }}
-                      />
-                    )}
-                    {isChapter && n.hasChildren && (
-                      <span
-                        onClick={e => {
-                          e.stopPropagation()
-                          toggleCollapse(n.id)
-                        }}
-                        className="mr-1.5 flex-shrink-0 text-[10px]"
-                        style={{
-                          color: n.accent,
-                          transform: collapsed.has(n.id) ? 'none' : 'rotate(90deg)',
-                          transition: 'transform .15s',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        ▸
-                      </span>
-                    )}
-                    {editingId === n.id ? (
-                      <input
-                        autoFocus
-                        value={draft}
-                        onChange={e => setDraft(e.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={e => e.key === 'Enter' && commitRename()}
-                        onClick={e => e.stopPropagation()}
-                        className="min-w-0 flex-1 rounded-[5px] px-1.5 py-0.5 outline-none"
-                        style={{
-                          border: `1px solid var(--bid-primary)`,
-                          fontSize: 13,
-                          fontWeight: isChapter ? 700 : 400,
-                          boxShadow: '0 0 0 2px var(--bid-primary-soft)',
-                        }}
-                      />
-                    ) : (
-                      <span
-                        className="truncate"
-                        style={{
-                          fontSize: 13,
-                          fontWeight: isChapter ? 700 : 400,
-                          color: isChapter ? 'var(--bid-ink)' : 'var(--bid-ink-2)',
-                        }}
-                      >
-                        {n.title}
-                      </span>
-                    )}
-                    {n.hidden > 0 && (
-                      <span
-                        className="ml-1.5 flex-shrink-0 rounded-lg px-1.5 text-[10.5px]"
-                        style={{ background: '#EDE7E3', color: 'var(--bid-muted)' }}
-                      >
-                        +{n.hidden}
-                      </span>
-                    )}
-                    {n.covers.length > 0 && (
-                      <span
-                        className="ml-1.5 flex-shrink-0 rounded-lg px-1.5 text-[10px] font-semibold"
-                        style={{
-                          background: 'var(--bid-primary-soft)',
-                          color: 'var(--bid-primary)',
-                        }}
-                      >
-                        {n.covers.join('/')}
-                      </span>
-                    )}
-                    <span className="flex-1" />
-                    {isChapter ? (
-                      <span
-                        onClick={e => {
-                          e.stopPropagation()
-                          addChild(n.id)
-                        }}
-                        className="flex-shrink-0 rounded px-1.5 text-sm opacity-0 group-hover:opacity-100"
-                        style={{ color: n.accent, cursor: 'pointer' }}
-                        title={t('phase2.add_child')}
-                      >
-                        +
-                      </span>
-                    ) : (
-                      <span
-                        onClick={e => {
-                          e.stopPropagation()
-                          deleteNode(n.id)
-                        }}
-                        className="flex-shrink-0 rounded px-1.5 text-sm opacity-0 group-hover:opacity-100"
-                        style={{ color: 'var(--bid-muted-2)', cursor: 'pointer' }}
-                        title={t('phase2.delete')}
-                      >
-                        ×
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+
+              {c.flat.map(n => (
+                <CanvasNode key={n.id} node={n} canvas={c} searchLower={searchLower} />
+              ))}
+
+              {c.marquee && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: Math.min(c.marquee.x0, c.marquee.x1),
+                    top: Math.min(c.marquee.y0, c.marquee.y1),
+                    width: Math.abs(c.marquee.x1 - c.marquee.x0),
+                    height: Math.abs(c.marquee.y1 - c.marquee.y0),
+                    background: 'rgba(199,16,42,.08)',
+                    border: '1px solid rgba(199,16,42,.53)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Zoom control */}
-        <div
-          className="absolute bottom-4 left-4 flex items-center gap-0.5 rounded-full px-2 py-1"
-          style={{
-            background: '#fff',
-            border: '1px solid var(--bid-border)',
-            boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          }}
-        >
-          <span
-            onClick={() => setZoom(z => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
-            style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
+        {!parsing && (
+          <div
+            className="absolute bottom-4 left-4 flex items-center gap-0.5 rounded-full px-2 py-1"
+            style={{
+              background: '#fff',
+              border: '1px solid var(--bid-border)',
+              boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+            }}
           >
-            －
-          </span>
-          <span
-            onClick={() => setZoom(1)}
-            className="w-11 text-center text-[11.5px]"
-            style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
-          >
-            {Math.round(zoom * 100)}%
-          </span>
-          <span
-            onClick={() => setZoom(z => Math.min(1.5, +(z + 0.1).toFixed(2)))}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
-            style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
-          >
-            ＋
-          </span>
-        </div>
+            <span
+              onClick={c.zoomOut}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
+              style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
+            >
+              －
+            </span>
+            <span
+              onClick={c.zoomReset}
+              className="w-11 text-center text-[11.5px]"
+              style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
+            >
+              {Math.round(c.zoom * 100)}%
+            </span>
+            <span
+              onClick={c.zoomIn}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
+              style={{ color: 'var(--bid-sub)', cursor: 'pointer' }}
+            >
+              ＋
+            </span>
+          </div>
+        )}
 
-        {/* Minimap (static overview) */}
-        <div
-          className="absolute bottom-4 right-4 flex h-[100px] w-[150px] flex-col justify-center gap-1 rounded-[10px] p-2"
-          style={{
-            background: '#fffdfc',
-            border: '1px solid var(--bid-border)',
-            boxShadow: '0 6px 18px rgba(0,0,0,.08)',
-          }}
-        >
-          {sections.slice(0, 6).map((s, i) => (
-            <div
-              key={s.id ?? i}
-              className="h-1.5 rounded-full"
-              style={{
-                width: `${40 + (s.children?.length ?? 0) * 12}%`,
-                maxWidth: '100%',
-                background: `${ACCENTS[i % ACCENTS.length]}66`,
-              }}
-            />
-          ))}
-        </div>
+        {/* Live minimap */}
+        {!parsing && (
+          <Minimap
+            flat={c.flat}
+            layout={c.layout}
+            viewport={c.viewport}
+            panTo={c.panTo}
+            label={t('outline.minimap')}
+          />
+        )}
       </div>
 
       {/* Right: node detail / suggestions / change log */}
@@ -755,25 +481,24 @@ export function OutlineCanvas({
           <div className={`mb-2 ${sectionLabel}`} style={{ color: 'var(--bid-sub)' }}>
             {t('outline.node_detail')}
           </div>
-          {selected.node ? (
+          {c.selected.node ? (
             <div
               className="flex flex-col gap-2 rounded-[10px] p-3"
               style={{ background: '#fff', border: '1px solid var(--bid-border)' }}
             >
-              <Row k={t('outline.detail_name')} v={selected.node.title || '—'} />
+              <Row k={t('outline.detail_name')} v={c.selected.node.name || '—'} />
               <Row
                 k={t('outline.detail_type')}
-                v={
-                  selected.node.children?.length
-                    ? t('outline.type_chapter')
-                    : t('outline.type_leaf')
-                }
+                v={c.selected.hasChildren ? t('outline.type_chapter') : t('outline.type_leaf')}
               />
-              <Row k={t('outline.detail_parent')} v={selected.parent?.title || t('outline.root')} />
+              <Row
+                k={t('outline.detail_parent')}
+                v={c.selected.parent?.name || t('outline.root')}
+              />
               <Row
                 k={t('outline.detail_words')}
                 v={t('outline.words_hint', {
-                  n: selected.node.children?.length ? '1200–1800' : '600–1000',
+                  n: c.selected.hasChildren ? '1200–1800' : '600–1000',
                 })}
               />
               <div className="flex items-center justify-between gap-2">
@@ -781,9 +506,9 @@ export function OutlineCanvas({
                   {t('outline.detail_priority')}
                 </span>
                 <span className="text-[12px]" style={{ color: '#E8A93C' }}>
-                  {(selected.node.covers?.length ?? 0) > 0
+                  {(c.selected.node.covers?.length ?? 0) > 0
                     ? '★★★'
-                    : selected.node.children?.length
+                    : c.selected.hasChildren
                       ? '★★☆'
                       : '★☆☆'}
                 </span>
@@ -868,10 +593,10 @@ export function OutlineCanvas({
                 {t('outline.changelog')}
               </div>
               <div className="flex flex-col gap-2">
-                {edits > 0 && (
+                {c.edits > 0 && (
                   <ChangeItem
                     color="var(--bid-primary)"
-                    v={`v1.${edits}`}
+                    v={`v1.${c.edits}`}
                     label={t('phase2.title')}
                     who={t('projects.owner_role')}
                     time="刚刚"
@@ -888,6 +613,295 @@ export function OutlineCanvas({
             </div>
           </>
         )}
+      </div>
+
+      {/* Delete confirmation modal */}
+      {c.confirmDeleteId && (
+        <div
+          className="absolute inset-0 z-[200] flex items-center justify-center"
+          style={{ background: 'rgba(30,26,24,.25)' }}
+          onClick={c.cancelDelete}
+          data-testid="bid-outline-delete-confirm"
+        >
+          <div
+            className="w-[320px] rounded-[14px] p-6"
+            style={{ background: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-2 text-[14.5px] font-bold" style={{ color: 'var(--bid-ink)' }}>
+              {t('outline.delete_title')}
+            </div>
+            <div className="mb-[18px] text-[12.5px]" style={{ color: 'var(--bid-muted)' }}>
+              {t('outline.delete_desc', { name: c.confirmDeleteName })}
+            </div>
+            <div className="flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={c.cancelDelete}
+                className="rounded-lg px-4 py-2 text-[12.5px]"
+                style={{
+                  background: 'var(--bid-paper)',
+                  color: 'var(--bid-sub)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('outline.delete_cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={c.confirmDelete}
+                data-testid="bid-outline-delete-confirm-btn"
+                className="rounded-lg px-4 py-2 text-[12.5px] text-white"
+                style={{ background: '#B3453D', cursor: 'pointer' }}
+              >
+                {t('outline.delete_confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type CanvasApi = ReturnType<typeof useOutlineCanvas>
+
+function CanvasNode({
+  node,
+  canvas: c,
+  searchLower,
+}: {
+  node: FlatNode
+  canvas: CanvasApi
+  searchLower: string
+}) {
+  const { t } = useTranslation('bidWorkbench')
+  const p = c.layout.pos[node.id]
+  if (!p) return null
+
+  const isChapter = !node.parentId
+  const hasChildren = c.flat.some(x => x.parentId === node.id)
+  const isCollapsed = c.collapsed.has(node.id)
+  const hiddenCount = isCollapsed ? c.countDescendants(node.id) : 0
+  const isSelected = c.selectedId === node.id || c.selectedIds.includes(node.id)
+  const isDragging = c.drag?.id === node.id
+  const isEditing = c.editingId === node.id
+  const isMatch = searchLower.length > 0 && node.name.toLowerCase().includes(searchLower)
+  const accent = chapterColor(c.flat, node.id)
+  const { NW, NH, zoom } = c.layout
+
+  const boxShadow = isSelected
+    ? `0 0 0 3px ${accent}44, 0 4px 12px rgba(20,16,14,.1)`
+    : isMatch
+      ? '0 0 0 2px #E8A93C'
+      : '0 1px 2px rgba(20,16,14,0.06)'
+
+  return (
+    <div
+      data-testid="bid-outline-node"
+      onMouseDown={e => c.onNodeMouseDown(node.id, e)}
+      onDoubleClick={() => c.startEditing(node.id)}
+      title={node.name}
+      className="group flex items-center"
+      style={{
+        position: 'absolute',
+        left: p.x,
+        top: p.y,
+        width: NW,
+        height: NH,
+        transform: isDragging ? `translate(${c.drag!.dx}px,${c.drag!.dy}px)` : undefined,
+        background: isChapter ? `${accent}14` : '#fff',
+        border: `1.5px solid ${isChapter ? accent : `${accent}66`}`,
+        borderRadius: 10,
+        color: isChapter ? accent : 'var(--bid-ink-2)',
+        padding: `0 ${Math.round(10 * zoom)}px 0 ${Math.round((isChapter ? 14 : 10) * zoom)}px`,
+        fontWeight: isChapter ? 700 : 500,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        boxShadow,
+        transition: isDragging ? 'none' : 'box-shadow .15s, border-color .15s',
+        zIndex: isDragging ? 50 : isChapter ? 2 : 1,
+        userSelect: 'none',
+        overflow: 'hidden',
+      }}
+    >
+      {isChapter && (
+        <span
+          className="absolute left-0"
+          style={{ top: 8, bottom: 8, width: 3, borderRadius: 2, background: accent }}
+        />
+      )}
+      {hasChildren && (
+        <span
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => {
+            e.stopPropagation()
+            c.toggleCollapse(node.id)
+          }}
+          className="mr-1.5 flex-shrink-0 text-[10px]"
+          style={{
+            color: 'inherit',
+            opacity: 0.6,
+            transform: isCollapsed ? 'none' : 'rotate(90deg)',
+            transition: 'transform .15s',
+            cursor: 'pointer',
+          }}
+        >
+          ▸
+        </span>
+      )}
+      {isEditing ? (
+        <input
+          autoFocus
+          value={c.editingValue}
+          onChange={e => c.setEditingValue(e.target.value)}
+          onBlur={c.commitEditing}
+          onKeyDown={e => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
+          onMouseDown={e => e.stopPropagation()}
+          className="min-w-0 flex-1 rounded-[5px] px-1.5 py-0.5 outline-none"
+          style={{
+            border: '1px solid var(--bid-primary)',
+            fontSize: Math.round(13 * zoom),
+            fontWeight: 'inherit',
+            color: 'inherit',
+            background: '#fff',
+            boxShadow: '0 0 0 2px var(--bid-primary-soft)',
+          }}
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate" style={{ fontSize: Math.round(13 * zoom) }}>
+          {node.name}
+        </span>
+      )}
+      {isCollapsed && hiddenCount > 0 && (
+        <span
+          className="ml-1.5 flex-shrink-0 rounded-lg px-1.5 text-[10.5px]"
+          style={{ background: '#EDE7E3', color: 'var(--bid-muted)' }}
+        >
+          +{hiddenCount}
+        </span>
+      )}
+      {node.covers.length > 0 && (
+        <span
+          className="ml-1.5 flex-shrink-0 rounded-lg px-1.5 text-[10px] font-semibold"
+          style={{ background: 'var(--bid-primary-soft)', color: 'var(--bid-primary)' }}
+        >
+          {node.covers.join('/')}
+        </span>
+      )}
+      {!isEditing && (
+        <>
+          <span
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation()
+              c.addChild(node.id)
+            }}
+            title={t('phase2.add_child')}
+            className="ml-1.5 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[5px] text-xs opacity-0 group-hover:opacity-100"
+            style={{ background: '#F1EEEB', color: 'var(--bid-sub)', cursor: 'pointer' }}
+          >
+            +
+          </span>
+          <span
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => {
+              e.stopPropagation()
+              c.requestDelete(node.id)
+            }}
+            title={t('phase2.delete')}
+            className="ml-1 flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[5px] text-xs opacity-0 group-hover:opacity-100"
+            style={{ background: '#F1EEEB', color: '#B3453D', cursor: 'pointer' }}
+          >
+            ×
+          </span>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Minimap({
+  flat,
+  layout,
+  viewport,
+  panTo,
+  label,
+}: {
+  flat: FlatNode[]
+  layout: Layout
+  viewport: Viewport
+  panTo: (cx: number, cy: number) => void
+  label: string
+}) {
+  const PAD = 8
+  const boxW = 150
+  const boxH = 100
+  const innerW = boxW - PAD * 2
+  const innerH = boxH - PAD * 2
+  const scale = Math.min(innerW / Math.max(layout.width, 1), innerH / Math.max(layout.height, 1))
+
+  const handlePan = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - rect.left - PAD) / scale
+    const y = (e.clientY - rect.top - PAD) / scale
+    panTo(x, y)
+  }
+
+  return (
+    <div
+      data-testid="bid-outline-minimap"
+      title={label}
+      onMouseDown={handlePan}
+      className="absolute bottom-4 right-4"
+      style={{
+        width: boxW,
+        height: boxH,
+        background: '#fffdfc',
+        border: '1px solid var(--bid-border)',
+        borderRadius: 10,
+        boxShadow: '0 6px 18px rgba(0,0,0,.08)',
+        cursor: 'pointer',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ position: 'absolute', inset: PAD }}>
+        {flat.map(n => {
+          const p = layout.pos[n.id]
+          if (!p) return null
+          const isChapter = !n.parentId
+          const accent = chapterColor(flat, n.id)
+          return (
+            <div
+              key={n.id}
+              style={{
+                position: 'absolute',
+                left: p.x * scale,
+                top: p.y * scale,
+                width: Math.max(layout.NW * scale, 2),
+                height: Math.max(layout.NH * scale, 1.5),
+                borderRadius: 1.5,
+                background: accent,
+                opacity: isChapter ? 0.85 : 0.4,
+              }}
+            />
+          )
+        })}
+        {/* Viewport indicator */}
+        <div
+          style={{
+            position: 'absolute',
+            left: viewport.left * scale,
+            top: viewport.top * scale,
+            width: viewport.w * scale,
+            height: viewport.h * scale,
+            border: '1.5px solid var(--bid-primary)',
+            borderRadius: 2,
+            background: 'rgba(199,16,42,.06)',
+            pointerEvents: 'none',
+          }}
+        />
       </div>
     </div>
   )

@@ -72,7 +72,7 @@ it('phase3 -> materials', async () => {
   expect(result.current.phase).toBe('materials')
 })
 
-it('phase4 drafting -> drafting, else materials_done', async () => {
+it('phase4 drafting -> drafting, else materials', async () => {
   const { result: r1 } = renderHook(() => useBidProject())
   await act(async () => {
     await r1.current.open(proj({ current_phase: 4, status: 'drafting' }))
@@ -83,7 +83,7 @@ it('phase4 drafting -> drafting, else materials_done', async () => {
   await act(async () => {
     await r2.current.open(proj({ current_phase: 4, status: 'parsed' }))
   })
-  expect(r2.current.phase).toBe('materials_done')
+  expect(r2.current.phase).toBe('materials')
 })
 
 it('phase5 -> review, phase6 -> audit, phase7 -> done', async () => {

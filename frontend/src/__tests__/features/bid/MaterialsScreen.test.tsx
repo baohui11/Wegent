@@ -1,36 +1,52 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
-import { bidApis } from '@/apis/bid'
+import type { OutlineDoc } from '@/apis/bid'
 
-jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-beforeEach(() => {
-  ;(bidApis.getKnowledgeBase as jest.Mock).mockResolvedValue({
-    knowledge_base: { bidder_knowledge_base: {} },
-  })
-  ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
-    qualifications: { company: '', items: {} },
-  })
-  ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
-  ;(bidApis.saveKnowledgeBase as jest.Mock).mockResolvedValue({ knowledge_base: {} })
+const OUTLINE: OutlineDoc = {
+  sections: [
+    {
+      id: 'c1',
+      title: 'Chapter 1',
+      covers: ['T1'],
+      children: [
+        { id: 'c1a', title: 'Leaf A' },
+        { id: 'c1b', title: 'Leaf B' },
+      ],
+    },
+  ],
+}
+
+it('renders the outline tree and auto-selects the first leaf', () => {
+  render(<MaterialsScreen outline={OUTLINE} onComplete={jest.fn()} />)
+  expect(screen.getByTestId('bid-materials-tree')).toBeInTheDocument()
+  // First leaf selected -> its requirements editor is shown.
+  expect(screen.getByTestId('bid-materials-requirement')).toBeInTheDocument()
 })
 
-it('loads then saves knowledge base', async () => {
-  render(<MaterialsScreen projectId={5} onComplete={jest.fn()} />)
-  await screen.findByTestId('bid-materials-screen')
-  fireEvent.click(screen.getByTestId('bid-save-kb-button'))
-  await waitFor(() => expect(bidApis.saveKnowledgeBase).toHaveBeenCalled())
+it('edits the requirement and reflects completion for the selected node', () => {
+  render(<MaterialsScreen outline={OUTLINE} onComplete={jest.fn()} />)
+  const req = screen.getByTestId('bid-materials-requirement')
+  fireEvent.change(req, { target: { value: 'write something' } })
+  expect((req as HTMLTextAreaElement).value).toBe('write something')
 })
 
-it('calls onComplete on 进入起草', async () => {
+it('adds a tag on Enter', () => {
+  render(<MaterialsScreen outline={OUTLINE} onComplete={jest.fn()} />)
+  const tagInput = screen.getByTestId('bid-materials-tag-input')
+  fireEvent.change(tagInput, { target: { value: 'quality' } })
+  fireEvent.keyDown(tagInput, { key: 'Enter' })
+  expect(screen.getByText('quality')).toBeInTheDocument()
+})
+
+it('calls onComplete when entering content generation', () => {
   const onComplete = jest.fn()
-  render(<MaterialsScreen projectId={5} onComplete={onComplete} />)
-  await screen.findByTestId('bid-materials-screen')
+  render(<MaterialsScreen outline={OUTLINE} onComplete={onComplete} />)
   fireEvent.click(screen.getByTestId('bid-materials-complete-button'))
   expect(onComplete).toHaveBeenCalled()
 })
