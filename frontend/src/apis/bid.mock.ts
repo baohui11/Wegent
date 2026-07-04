@@ -411,6 +411,17 @@ export const bidMockApis = {
     p.current_phase = 1
     return delay({ status: 'parsing' })
   },
+  getParseStage: (id: number): Promise<{ stage: string }> => {
+    const p = need(id)
+    tickParse(p)
+    if (p.status === 'parsing' && p._parseAt) {
+      // Progress through the real backend stages over the mock parse window.
+      const stages = ['segmenting', 'extracting', 'merging', 'building_outline']
+      const frac = Math.min(0.999, (Date.now() - p._parseAt) / PARSE_MS)
+      return delay({ stage: stages[Math.floor(frac * stages.length)] }, 120)
+    }
+    return delay({ stage: p.status === 'parse_failed' ? 'failed' : 'done' }, 120)
+  },
   getTender: (id: number): Promise<{ tender: TenderDoc }> => {
     need(id)
     return delay({ tender: MOCK_TENDER })

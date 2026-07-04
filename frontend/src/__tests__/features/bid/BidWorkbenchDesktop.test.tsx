@@ -21,6 +21,7 @@ jest.mock('@/features/common/UserContext', () => ({
 beforeEach(() => {
   jest.clearAllMocks()
   ;(bidApis.getLlmLog as jest.Mock).mockResolvedValue({ items: [] })
+  ;(bidApis.getParseStage as jest.Mock).mockResolvedValue({ stage: 'extracting' })
 })
 
 // Helper: land on the list, click "new", reach the standalone new-project screen.

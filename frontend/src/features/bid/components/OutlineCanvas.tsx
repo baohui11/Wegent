@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { CoverageReport, LlmCall, OutlineDoc, TenderScoring } from '@/apis/bid'
 import { useOutlineCanvas } from '../canvas/useOutlineCanvas'
@@ -13,7 +13,9 @@ import {
 } from '../canvas/outlineGraph'
 import type { Viewport } from '../canvas/useOutlineCanvas'
 
-const PARSE_STEPS = ['segmenting', 'extracting', 'building_outline'] as const
+// Real backend parse stages (set_parse_stage): the canvas shows which one is
+// actually running, driven by GET /parse-stage — not a fake timer.
+const PARSE_STEPS = ['segmenting', 'extracting', 'merging', 'building_outline'] as const
 
 function fmtBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -34,6 +36,7 @@ export function OutlineCanvas({
   title,
   onSave,
   parsing = false,
+  parseStage,
   llmLog,
   fileSize,
   scoring,
@@ -46,6 +49,10 @@ export function OutlineCanvas({
   // parse-progress card and the canvas shows a skeleton (design's in-canvas
   // parsing state) instead of the populated outline.
   parsing?: boolean
+  // Current real backend parse stage from GET /parse-stage (segmenting /
+  // extracting / merging / building_outline / done / failed). Drives which
+  // step is active; absent -> assume the first step.
+  parseStage?: string
   // Real LLM call log from GET /llm-log (B3); drives the left "parse log" panel.
   llmLog?: LlmCall[]
   // Real tender file size in bytes; falls back to '—' when unknown.
@@ -57,20 +64,17 @@ export function OutlineCanvas({
   const { t } = useTranslation('bidWorkbench')
   const cov = coverage ?? { total: 0, covered: 0, uncovered_scoring: [], uncovered_clauses: [] }
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [parseStep, setParseStep] = useState(0)
 
   const c = useOutlineCanvas(outline, onSave, {
     chapter: t('outline.new_chapter'),
     node: t('phase2.new_node'),
   })
 
-  // Cycle the parse-progress steps while parsing (visual only).
-  useEffect(() => {
-    if (!parsing) return
-    setParseStep(0)
-    const id = setInterval(() => setParseStep(s => (s + 1) % PARSE_STEPS.length), 1100)
-    return () => clearInterval(id)
-  }, [parsing])
+  // Which step is active = index of the real backend stage. 'done'/absent map
+  // past the last step (all complete); 'failed' is surfaced separately below.
+  const parseFailed = parseStage === 'failed'
+  const stageIdx = PARSE_STEPS.indexOf(parseStage as (typeof PARSE_STEPS)[number])
+  const parseStep = parseStage === 'done' ? PARSE_STEPS.length : stageIdx < 0 ? 0 : stageIdx
 
   const stats = useMemo(() => {
     const { flat, layout } = c
@@ -173,7 +177,13 @@ export function OutlineCanvas({
               </div>
               <div className="mt-0.5 text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
                 {fileSize != null ? fmtBytes(fileSize) : '—'} ·{' '}
-                <span style={{ color: 'var(--bid-success)' }}>✓ {t('outline.parsed_ok')}</span>
+                {parseFailed ? (
+                  <span style={{ color: '#B3453D' }}>✕ {t('outline.parse_failed')}</span>
+                ) : parsing ? (
+                  <span style={{ color: 'var(--bid-primary)' }}>◐ {t('outline.parsing_now')}</span>
+                ) : (
+                  <span style={{ color: 'var(--bid-success)' }}>✓ {t('outline.parsed_ok')}</span>
+                )}
               </div>
             </div>
           </div>

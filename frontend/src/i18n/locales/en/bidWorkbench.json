@@ -48,7 +48,11 @@
     "ocr": "OCR recognition",
     "toc": "Outline extraction",
     "classify": "Chapter classification",
-    "tree": "Tree structure"
+    "tree": "Tree structure",
+    "segmenting": "Segmenting document",
+    "extracting": "Extracting structured blocks",
+    "merging": "Merging & validating",
+    "building_outline": "Building outline"
   },
   "outline": {
     "chapters": "Chapters",
@@ -104,7 +108,9 @@
     "delete_desc": "Node \"{{name}}\" and all of its children will be deleted. This cannot be undone.",
     "delete_cancel": "Cancel",
     "delete_confirm": "Delete",
-    "minimap": "Overview"
+    "minimap": "Overview",
+    "parse_failed": "Parse failed",
+    "parsing_now": "Parsing…"
   },
   "upload": {
     "subtitle": "Upload the tender documents and name the project — the system will parse the technical outline automatically",

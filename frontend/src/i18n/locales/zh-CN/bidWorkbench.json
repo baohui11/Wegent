@@ -48,7 +48,11 @@
     "ocr": "OCR 识别",
     "toc": "目录提取",
     "classify": "章节分类",
-    "tree": "树结构生成"
+    "tree": "树结构生成",
+    "segmenting": "文档分段",
+    "extracting": "结构化抽取",
+    "merging": "合并校验",
+    "building_outline": "生成大纲"
   },
   "outline": {
     "chapters": "章节数量",
@@ -104,7 +108,9 @@
     "delete_desc": "节点“{{name}}”及其所有子节点将被删除，此操作不可撤销。",
     "delete_cancel": "取消",
     "delete_confirm": "删除",
-    "minimap": "缩略图"
+    "minimap": "缩略图",
+    "parse_failed": "拆解失败",
+    "parsing_now": "拆解中…"
   },
   "upload": {
     "subtitle": "上传招标文件并命名项目，系统将自动拆解出技术文件目录框架",

@@ -61,6 +61,9 @@ export function BidWorkbenchDesktop() {
   const [confirmDraft, setConfirmDraft] = useState(false)
   // Real LLM call log for the outline canvas' parse-log panel (B3 endpoint).
   const [llmLog, setLlmLog] = useState<LlmCall[]>([])
+  // Current real backend parse stage (segmenting/extracting/merging/…) shown in
+  // the canvas' parsing panel instead of a fake timer.
+  const [parseStage, setParseStage] = useState('segmenting')
   const {
     phase,
     projectId,
@@ -98,6 +101,30 @@ export function BidWorkbenchDesktop() {
       .catch(() => {
         /* not all backends have llm-log yet; leave empty */
       })
+  }, [projectId, phase])
+
+  // While parsing, poll the real backend stage + refresh the call log so the
+  // canvas shows which step is actually running (not a fake timer).
+  useEffect(() => {
+    const parsingPhase = phase === 'creating' || phase === 'parsing' || phase === 'outline_building'
+    if (projectId == null || !parsingPhase) return
+    let alive = true
+    const tick = () => {
+      bidApis
+        .getParseStage(projectId)
+        .then(res => alive && setParseStage(res.stage))
+        .catch(() => {})
+      bidApis
+        .getLlmLog(projectId)
+        .then(res => alive && setLlmLog(res.items ?? []))
+        .catch(() => {})
+    }
+    tick()
+    const id = setInterval(tick, 1500)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
   }, [projectId, phase])
 
   // Track the furthest stage reached so the stepper can jump back to it.
@@ -229,7 +256,7 @@ export function BidWorkbenchDesktop() {
         headerAction={headerAction}
       >
         {(phase === 'creating' || phase === 'parsing' || phase === 'outline_building') && (
-          <OutlineCanvas title={title} parsing llmLog={llmLog} />
+          <OutlineCanvas title={title} parsing parseStage={parseStage} llmLog={llmLog} />
         )}
         {phase === 'outline_ready' && outline && coverage && (
           <OutlineCanvas

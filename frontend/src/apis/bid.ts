@@ -163,6 +163,8 @@ const realBidApis = {
     apiClient.post<{ status: string }>(`/bid/projects/${id}/parse`, {
       tender_text: tenderText,
     }),
+  getParseStage: (id: number): Promise<{ stage: string }> =>
+    apiClient.get<{ stage: string }>(`/bid/projects/${id}/parse-stage`),
   getTender: (id: number): Promise<{ tender: TenderDoc }> =>
     apiClient.get<{ tender: TenderDoc }>(`/bid/projects/${id}/tender`),
   buildOutline: (id: number): Promise<OutlineResponse> =>
