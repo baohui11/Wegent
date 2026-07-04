@@ -607,6 +607,10 @@ class Settings(BaseSettings):
     BID_WORKSPACE_ROOT: str = "/data/bid-workspaces"
     # Model CRD name used to drive the 拆标神探 specialist over Chat.
     BID_TENDER_MODEL_NAME: str = ""
+    # Rewrite envd base_url host.docker.internal -> localhost. Needed for
+    # host-side dev (sandbox returns a container-perspective URL); turn off when
+    # the backend itself runs inside Docker (it can reach host.docker.internal).
+    BID_SANDBOX_REWRITE_HOST: bool = True
     # Backend internal URL (for service-to-service communication)
     # Used by chat_shell to download skill binaries
     BACKEND_INTERNAL_URL: str = "http://localhost:8000"
