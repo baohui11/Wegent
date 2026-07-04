@@ -67,6 +67,85 @@ def _strip_fence(t: str) -> str:
     return t.strip()
 
 
+# Prompt-size guard: chat_shell is a stateless gateway (history_limit=0), so
+# per-call context size is entirely what we assemble here. Trim to a character
+# budget before sending instead of letting the provider reject the call.
+_MAX_PROMPT_CHARS = 200_000  # ~50k tokens at ~4 chars/token, conservative
+
+_CTX_ERR_MARKERS = (
+    "context_length",
+    "context window",
+    "maximum context",
+    "too many tokens",
+    "prompt is too long",
+)
+
+
+def _fit_budget(ctx: dict, order: list[str], budget: int = _MAX_PROMPT_CHARS) -> dict:
+    """Trim ``ctx`` to ``budget`` serialized chars. Keys in ``order`` are
+    truncated (head kept) or dropped, first key first; other keys are never
+    touched."""
+
+    def size(c: dict) -> int:
+        return len(json.dumps(c, ensure_ascii=False))
+
+    if size(ctx) <= budget:
+        return ctx
+    ctx = dict(ctx)
+    for key in order:
+        if key not in ctx:
+            continue
+        overshoot = size(ctx) - budget
+        if overshoot <= 0:
+            break
+        blob = json.dumps(ctx[key], ensure_ascii=False)
+        keep = len(blob) - overshoot
+        if keep <= 0:
+            ctx.pop(key)
+        else:
+            ctx[key] = blob[:keep] + "…[truncated]"
+    return ctx
+
+
+async def _complete_ctx(
+    *,
+    model: str,
+    model_config: dict | None,
+    ctx: dict,
+    shrink_order: list[str],
+    instructions: str,
+    metadata: dict,
+) -> str:
+    """complete_text with pre-call budget trimming and one halved-budget retry
+    on provider context-length errors."""
+    fitted = _fit_budget(ctx, shrink_order)
+    try:
+        return await complete_text(
+            model=model,
+            model_config=model_config,
+            input_messages=[
+                {"role": "user", "content": json.dumps(fitted, ensure_ascii=False)}
+            ],
+            instructions=instructions,
+            metadata=metadata,
+        )
+    except Exception as e:
+        msg = str(e).lower()
+        if not any(m in msg for m in _CTX_ERR_MARKERS):
+            raise
+        logger.warning("context overflow, retrying with halved budget: %s", e)
+        halved = _fit_budget(ctx, shrink_order, budget=_MAX_PROMPT_CHARS // 2)
+        return await complete_text(
+            model=model,
+            model_config=model_config,
+            input_messages=[
+                {"role": "user", "content": json.dumps(halved, ensure_ascii=False)}
+            ],
+            instructions=instructions,
+            metadata=metadata,
+        )
+
+
 def _route_segments(
     manifest: dict, segments: dict[str, str], tags: list[str], include_unrouted: bool
 ) -> dict[str, str]:
@@ -112,12 +191,11 @@ async def call_tender_sleuth(
             f"本次只抽取块 `{block}`。不要写文件、不要 markdown 围栏。"
             f"只返回一个 JSON 对象，顶层键为 `{block}`，值为该块内容。"
         )
-        raw = await complete_text(
+        raw = await _complete_ctx(
             model=model,
             model_config=model_config,
-            input_messages=[
-                {"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}
-            ],
+            ctx=ctx,
+            shrink_order=["tender_regions", "tender_segments"],
             instructions=instructions,
             metadata={"block": block},
         )
@@ -186,12 +264,11 @@ async def call_ghostwriter(
     )
     if instruction:
         instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
-    raw = await complete_text(
+    raw = await _complete_ctx(
         model=model,
         model_config=model_config,
-        input_messages=[
-            {"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}
-        ],
+        ctx=ctx,
+        shrink_order=["bidder_knowledge_base"],
         instructions=instructions,
         metadata={"section": section.get("id")},
     )

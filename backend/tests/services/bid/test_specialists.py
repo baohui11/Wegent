@@ -167,3 +167,74 @@ def test_route_segments_picks_tagged_subset():
         "a.md": "A",
         "b.md": "B",
     }
+
+
+def test_fit_budget_untouched_when_under():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"a": "x" * 10, "b": "y" * 10}
+    assert _fit_budget(ctx, ["a"], budget=10_000) == ctx
+
+
+def test_fit_budget_shrinks_in_priority_order():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"keep": "k" * 50, "first": "f" * 500, "second": "s" * 500}
+    out = _fit_budget(ctx, ["first", "second"], budget=700)
+    # "first" is truncated/dropped before "second" is touched; "keep" never.
+    assert out["keep"] == ctx["keep"]
+    assert len(json.dumps(out, ensure_ascii=False)) <= 700 + 20  # marker slack
+    assert out.get("second") == ctx["second"] or "…[truncated]" in str(
+        out.get("first", "")
+    )
+
+
+def test_fit_budget_drops_key_when_zero_room():
+    from app.services.bid.specialists import _fit_budget
+
+    ctx = {"keep": "k" * 100, "big": "b" * 1000}
+    out = _fit_budget(ctx, ["big"], budget=120)
+    assert "big" not in out or len(str(out["big"])) < 1000
+    assert out["keep"] == ctx["keep"]
+
+
+@pytest.mark.asyncio
+async def test_complete_ctx_retries_on_context_error():
+    from app.services.bid import specialists
+
+    calls = []
+
+    async def fake_complete(**kw):
+        calls.append(kw)
+        if len(calls) == 1:
+            raise RuntimeError("This model's maximum context length is exceeded")
+        return "ok"
+
+    with patch.object(specialists, "complete_text", new=fake_complete):
+        out = await specialists._complete_ctx(
+            model="m",
+            model_config=None,
+            ctx={"keep": "k", "big": "b" * 100},
+            shrink_order=["big"],
+            instructions="i",
+            metadata={},
+        )
+    assert out == "ok" and len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_complete_ctx_reraises_non_context_error():
+    from app.services.bid import specialists
+
+    with patch.object(
+        specialists, "complete_text", new=AsyncMock(side_effect=RuntimeError("boom"))
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            await specialists._complete_ctx(
+                model="m",
+                model_config=None,
+                ctx={"a": 1},
+                shrink_order=[],
+                instructions="i",
+                metadata={},
+            )
