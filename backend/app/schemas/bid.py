@@ -149,10 +149,20 @@ class SectionListResponse(BaseModel):
 class SectionContentResponse(BaseModel):
     id: str
     content: str
+    version: str = ""
 
 
 class RedraftRequest(BaseModel):
     instruction: str | None = None
+
+
+class SaveSectionRequest(BaseModel):
+    content: str
+    base_version: str
+
+
+class SaveSectionResponse(BaseModel):
+    version: str
 
 
 class ReviewStatusResponse(BaseModel):

@@ -311,6 +311,11 @@
     "complete": "进入起草",
     "json_error": "JSON 格式错误"
   },
+  "editor": {
+    "save_saving": "保存中…",
+    "save_saved": "已保存",
+    "save_error": "保存失败"
+  },
   "drafting": {
     "canvas": "生成画布",
     "log": "生成日志",

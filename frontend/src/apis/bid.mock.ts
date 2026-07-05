@@ -213,6 +213,28 @@ const SECTION_CONTENT: Record<string, string> = {
   s5: `## 第五章 类似项目业绩\n\n近三年我方承建并成功验收多个 500 万元以上政务信息化项目，具备丰富的智慧园区与数据中心建设经验，相关项目均获得客户高度评价。`,
 }
 
+// Mutable overlay so that human edits (saveSection) are reflected on the next
+// getSectionContent / download read — mirrors the backend where save persists
+// to disk. Seed values come from SECTION_CONTENT when no override exists.
+const sectionContentOverrides: Record<string, string> = {}
+
+const sectionBody = (sectionId: string): string =>
+  sectionContentOverrides[sectionId] ??
+  SECTION_CONTENT[sectionId] ??
+  `## ${SECTION_TITLE[sectionId] ?? sectionId}\n\n（示例正文）`
+
+// Stable pseudo-version derived from the body bytes so a save -> re-read shows
+// a changed version (clients use it as an optimistic-lock token). Matches the
+// backend semantics of "sha256 of content".
+const sectionVersion = (sectionId: string): string => {
+  const body = sectionBody(sectionId)
+  let h = 0
+  for (let i = 0; i < body.length; i++) {
+    h = (Math.imul(31, h) + body.charCodeAt(i)) | 0
+  }
+  return `v${(h >>> 0).toString(16)}`
+}
+
 const buildAudit = (withFidelity: boolean): AuditReport => ({
   verdict: withFidelity ? 'NEED_FIX' : 'NEED_FIX',
   summary: {
@@ -577,18 +599,26 @@ export const bidMockApis = {
     const st = draftProgress(need(id))
     return delay({ items: SECTION_IDS.map(sid => ({ id: sid, status: st.sections[sid] })) })
   },
-  getSectionContent: (id: number, sectionId: string): Promise<{ id: string; content: string }> => {
+  getSectionContent: (
+    id: number,
+    sectionId: string
+  ): Promise<{ id: string; content: string; version: string }> => {
     need(id)
     return delay({
       id: sectionId,
-      content:
-        SECTION_CONTENT[sectionId] ?? `## ${SECTION_TITLE[sectionId] ?? sectionId}\n\n（示例正文）`,
+      content: sectionBody(sectionId),
+      version: sectionVersion(sectionId),
     })
   },
   redraftSection: (id: number, sectionId: string): Promise<{ status: string }> => {
     const p = need(id)
     p._redraftAt = { ...(p._redraftAt ?? {}), [sectionId]: Date.now() }
-    return delay({ status: 'drafting' })
+    return delay({ status: 'drafting' }, 80)
+  },
+  saveSection: (_id: number, sectionId: string, content: string): Promise<{ version: string }> => {
+    // mock store: overwrite the section body and return its new version
+    sectionContentOverrides[sectionId] = content
+    return delay({ version: sectionVersion(sectionId) }, 80)
   },
   acceptSection: (id: number, sectionId: string): Promise<{ status: string }> => {
     const p = need(id)
@@ -624,7 +654,7 @@ export const bidMockApis = {
   downloadBid: async (id: number): Promise<void> => {
     need(id)
     const blob = new Blob(
-      [`投标文件（mock）— 项目 ${id}\n\n${Object.values(SECTION_CONTENT).join('\n\n')}`],
+      [`投标文件（mock）— 项目 ${id}\n\n${SECTION_IDS.map(sid => sectionBody(sid)).join('\n\n')}`],
       {
         type: 'text/plain;charset=utf-8',
       }
