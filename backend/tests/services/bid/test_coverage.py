@@ -81,3 +81,49 @@ def test_read_tender_for_coverage_generates_and_normalizes(tmp_path):
     assert t["mandatory_clauses"][0]["veto"] is True
     assert t["mandatory_clauses"][0]["text"] == "X"
     assert ws.path("workspace/tender_normalized.json").exists()
+
+
+def test_resolve_section_grounding_picks_covered_scoring_and_veto_clauses():
+    from app.services.bid.coverage import resolve_section_grounding
+
+    tender = {
+        "scoring": [
+            {"id": "T1", "item": "方案", "weight": 20},
+            {"id": "T2", "item": "工期", "weight": 10},
+        ],
+        "mandatory_clauses": [
+            {"id": "M1", "veto": True, "text": "有效期90天"},
+            {"id": "M2", "veto": False, "text": "非否决项"},
+        ],
+    }
+    node = {"id": "s1", "covers": ["T1", "M1", "M2"]}
+
+    g = resolve_section_grounding(node, tender)
+
+    # only the covered scoring item; only covered *veto* clauses (M2 excluded)
+    assert [s["id"] for s in g["scoring"]] == ["T1"]
+    assert [c["id"] for c in g["clauses"]] == ["M1"]
+
+
+def test_resolve_section_grounding_coerces_cover_ids_to_str():
+    from app.services.bid.coverage import resolve_section_grounding
+
+    tender = {"scoring": [{"id": "T1", "item": "方案"}], "mandatory_clauses": []}
+    node = {"id": "s1", "covers": [1, "T1"]}  # mixed int/str must still match "T1"
+
+    g = resolve_section_grounding(node, tender)
+
+    assert [s["id"] for s in g["scoring"]] == ["T1"]
+
+
+def test_resolve_section_grounding_empty_when_no_covers():
+    from app.services.bid.coverage import resolve_section_grounding
+
+    tender = {
+        "scoring": [{"id": "T1"}],
+        "mandatory_clauses": [{"id": "M1", "veto": True}],
+    }
+
+    g = resolve_section_grounding({"id": "s1"}, tender)
+
+    assert g == {"scoring": [], "clauses": []}

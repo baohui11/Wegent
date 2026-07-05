@@ -63,3 +63,19 @@ def compute_coverage(outline: dict, tender: dict) -> dict:
         "uncovered_scoring": uncovered_scoring,
         "uncovered_clauses": uncovered_clauses,
     }
+
+
+def resolve_section_grounding(node: dict, tender: dict) -> dict:
+    """Resolve, for ONE outline node, the scoring items and veto clauses its
+    ``covers`` list points at, from the normalized tender. Single source for
+    per-section grounding, shared by ``call_ghostwriter`` (redraft) and the
+    ``GET /grounding`` endpoint (which feeds the frontend materials panel).
+    Cover ids are string-coerced so int/str covers both match string ids."""
+    covers = {str(c) for c in (node.get("covers") or [])}
+    scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
+    clauses = [
+        c
+        for c in tender.get("mandatory_clauses", []) or []
+        if c.get("veto") and str(c.get("id")) in covers
+    ]
+    return {"scoring": scoring, "clauses": clauses}
