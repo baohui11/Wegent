@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from app.services.bid import drafting_service as ds
-from app.services.bid import materials_service
+from app.services.bid import materials_service, materials_store
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_ghostwriter
@@ -88,6 +88,7 @@ async def _draft_section(
                 knowledge_base=kb,
                 brief=brief,
                 style_card=_STYLE_CARD,
+                materials=materials_store.materials_for(ws, sid),
                 project_id=project_id,
                 user_id=user_id,
             )
@@ -219,6 +220,7 @@ async def redraft_one(
             instruction=instruction,
             brief=brief,
             style_card=_STYLE_CARD,
+            materials=materials_store.materials_for(ws, section_id),
             project_id=project_id,
             user_id=user_id,
         )
