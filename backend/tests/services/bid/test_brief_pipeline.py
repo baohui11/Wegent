@@ -36,3 +36,19 @@ async def test_generate_briefs_merges_llm_and_deterministic_fields(tmp_path):
     assert b["importance"] == "高"  # covers a veto clause
     assert b["wordMin"] and b["wordMax"]
     assert b["needFigure"] in ("是", "否")
+
+
+def test_brief_status_roundtrip(tmp_path):
+    from app.services.bid import brief_pipeline as bp
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("brief-status", root=tmp_path)
+    bp.init_brief_status(ws, ["s1", "s2"])
+    st = bp.read_brief_status(ws)
+    assert st["total"] == 2 and st["nodes"] == {"s1": "pending", "s2": "pending"}
+    assert st["finished"] is False
+
+    bp.set_brief_node_status(ws, "s1", "done")
+    bp.mark_brief_finished(ws)
+    st = bp.read_brief_status(ws)
+    assert st["nodes"]["s1"] == "done" and st["finished"] is True

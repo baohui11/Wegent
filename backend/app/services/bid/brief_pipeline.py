@@ -13,8 +13,43 @@ from app.services.bid.workspace import BidWorkspace
 
 _BRIEF_CONCURRENCY = 3
 
+# Per-node brief-generation status file (written under workspace/).
+_BRIEF_STATUS = "workspace/_briefs_status.json"
+
 # importance -> (wordMin, wordMax) floor tier (strings to match NodeBrief shape).
 _WORD_FLOOR = {"高": ("1500", "2500"), "中": ("800", "1500"), "低": ("500", "900")}
+
+
+def init_brief_status(ws: BidWorkspace, node_ids: list[str]) -> None:
+    ws.write_json(
+        _BRIEF_STATUS,
+        {
+            "total": len(node_ids),
+            "nodes": {nid: "pending" for nid in node_ids},
+            "finished": False,
+            "error": None,
+        },
+    )
+
+
+def read_brief_status(ws: BidWorkspace) -> dict:
+    p = ws.path(_BRIEF_STATUS)
+    if not p.exists():
+        return {"total": 0, "nodes": {}, "finished": False, "error": None}
+    return ws.read_json(_BRIEF_STATUS)
+
+
+def set_brief_node_status(ws: BidWorkspace, node_id: str, status: str) -> None:
+    st = read_brief_status(ws)
+    st["nodes"][str(node_id)] = status
+    ws.write_json(_BRIEF_STATUS, st)
+
+
+def mark_brief_finished(ws: BidWorkspace, error: str | None = None) -> None:
+    st = read_brief_status(ws)
+    st["finished"] = True
+    st["error"] = error
+    ws.write_json(_BRIEF_STATUS, st)
 
 
 def _importance(node: dict, tender: dict) -> str:
