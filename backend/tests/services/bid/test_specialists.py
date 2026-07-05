@@ -391,3 +391,10 @@ async def test_call_ghostwriter_appends_style_card():
     instructions = mock_ctx.await_args.kwargs["instructions"]
     assert "项目一致性（全局，必须遵守）" in instructions
     assert "全篇一致性：术语统一。" in instructions
+
+
+def test_node_brief_fields_use_importance_not_priority():
+    from app.services.bid.materials_service import NODE_BRIEF_FIELDS_ZH
+
+    assert "重要性 importance" in NODE_BRIEF_FIELDS_ZH
+    assert "优先级 priority" not in NODE_BRIEF_FIELDS_ZH

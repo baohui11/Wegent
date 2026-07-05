@@ -12,12 +12,12 @@ _BRIEFS = "corpus/node_briefs.json"
 _ATTACH_DIR = "corpus/attachments"
 
 # Canonical enumeration of NodeBrief fields — MUST mirror the frontend NodeBrief
-# type (requirements/emphasis/wordMin-wordMax/needFigure/priority). Both drafting
-# prompts (sandbox full draft + single-section redraft) reference this so the two
+# type (requirements/emphasis/wordMin-wordMax/needFigure/importance). Both drafting
+# prompts (parallel full draft + single-section redraft) reference this so the two
 # paths describe the brief identically.
 NODE_BRIEF_FIELDS_ZH = (
     "具体要求 requirements、重点 emphasis、字数 wordMin-wordMax、"
-    "是否配图 needFigure、优先级 priority"
+    "是否配图 needFigure、重要性 importance"
 )
 
 
