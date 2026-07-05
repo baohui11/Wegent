@@ -264,14 +264,11 @@ it('runs the full chain new -> ... -> export download', async () => {
   // Confirm dialog gates the jump to Stage 3 (header owns the single entry).
   fireEvent.click(await screen.findByTestId('materials-next-button'))
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
-  await screen.findByTestId('bid-drafting-screen')
-  // Advance action lives in the shell header once generation finished.
-  fireEvent.click(await screen.findByTestId('bid-drafting-next-button'))
-  await screen.findByTestId('bid-review-screen')
-  // Review advances straight to Stage 5 via the header action.
+  await screen.findByTestId('bid-generate-refine-screen')
+  // Merged generate-refine screen: one header action advances to Stage 4 (check).
   fireEvent.click(await screen.findByTestId('review-next-button'))
   await screen.findByTestId('bid-audit-screen')
-  // Stage 5 merges audit + export: the Word download lives in the same screen.
+  // Stage 4 merges audit + export: the Word download lives in the same screen.
   fireEvent.click(await screen.findByTestId('bid-download-button'))
   await waitFor(() => expect(bidApis.downloadBid).toHaveBeenCalledWith(3))
 })

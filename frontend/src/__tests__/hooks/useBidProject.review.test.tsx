@@ -6,7 +6,7 @@ import { bidApis } from '@/apis/bid'
 
 jest.mock('@/apis/bid')
 
-it('enterReview then completeReview', async () => {
+it('completeReview advances from the merged drafting phase to audit', async () => {
   ;(bidApis.createProject as jest.Mock).mockResolvedValue({ id: 9 })
   ;(bidApis.getProject as jest.Mock).mockResolvedValue({ status: 'parsed', current_phase: 2 })
   ;(bidApis.parse as jest.Mock).mockResolvedValue({ status: 'parsed' })
@@ -16,14 +16,15 @@ it('enterReview then completeReview', async () => {
   await act(async () => {
     await result.current.startFromText('t')
   }) // projectId=9
+  // Review is now merged into the drafting phase (no separate enterReview).
   act(() => {
-    result.current.enterReview()
+    result.current.startDrafting()
   })
-  await waitFor(() => expect(result.current.phase).toBe('review'))
+  await waitFor(() => expect(result.current.phase).toBe('drafting'))
   await act(async () => {
     await result.current.completeReview()
   })
-  // Confirming the review advances straight to Stage 5 (audit).
+  // Confirming the merged generate-refine phase advances straight to Stage 4 (audit).
   await waitFor(() => expect(result.current.phase).toBe('audit'))
   expect(bidApis.completeReview).toHaveBeenCalledWith(9)
 })
