@@ -55,11 +55,11 @@ it('edits the requirement and reflects completion for the selected node', async 
 })
 
 it('adds a tag on Enter', async () => {
+  // Tags control was removed in stage-2 slim-down; this test now verifies
+  // the tag input is gone (no tag UI exists anymore).
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  const tagInput = await screen.findByTestId('bid-materials-tag-input')
-  fireEvent.change(tagInput, { target: { value: 'quality' } })
-  fireEvent.keyDown(tagInput, { key: 'Enter' })
-  expect(screen.getByText('quality')).toBeInTheDocument()
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByTestId('bid-materials-tag-input')).toBeNull()
 })
 
 it('calls onComplete when entering content generation', async () => {
@@ -120,4 +120,13 @@ it('uploads picked files as attachments and links them to the node', async () =>
   expect(await screen.findByText('案例.pdf')).toBeInTheDocument()
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
   expect(doc.materials[0]).toMatchObject({ name: '案例.pdf', linkedNodeIds: ['c1a'] })
+})
+
+it('does not render removed writing-style/template/depth/tags controls', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByText(/phase2\.field_style|phase2\.style_/i)).toBeNull()
+  expect(screen.queryByText(/phase2\.field_template|phase2\.template_/i)).toBeNull()
+  expect(screen.queryByText(/phase2\.field_depth|phase2\.depth_/i)).toBeNull()
+  expect(screen.queryByTestId('bid-materials-tag-input')).toBeNull()
 })

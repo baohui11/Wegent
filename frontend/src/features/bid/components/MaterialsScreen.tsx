@@ -12,14 +12,11 @@ import {
 } from '../canvas/outlineGraph'
 
 interface NodeConfig {
-  style: string
   wordMin: string
   wordMax: string
-  depth: string
-  template: string
   emphasis: string
   needFigure: string
-  tags: string[]
+  priority: string
 }
 
 interface Material {
@@ -27,17 +24,15 @@ interface Material {
   name: string
   size: number
   linkedNodeIds: string[]
+  stats?: { chars: number; pages: number; tables: number; images: number } | null
 }
 
 const defaultConfig = (): NodeConfig => ({
-  style: '专业、严谨、逻辑清晰',
-  wordMin: '800',
-  wordMax: '1200',
-  depth: '详细',
-  template: '技术方案标准模板',
-  emphasis: '兼容性、实时性、稳定性',
-  needFigure: '是',
-  tags: [],
+  wordMin: '',
+  wordMax: '',
+  emphasis: '',
+  needFigure: '否',
+  priority: '',
 })
 
 let matSeq = 0
@@ -72,7 +67,6 @@ export function MaterialsScreen({
   const [configs, setConfigs] = useState<Record<string, NodeConfig>>({})
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
-  const [tagInput, setTagInput] = useState('')
   const [company, setCompany] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
@@ -140,8 +134,7 @@ export function MaterialsScreen({
   const completion = (id: string): number => {
     const files = materials.filter(m => m.linkedNodeIds.includes(id)).length
     const req = (requirements[id] ?? '').trim().length > 0
-    const tags = getConfig(id).tags.length > 0
-    return Math.round((((files > 0 ? 1 : 0) + (req ? 1 : 0) + (tags ? 1 : 0)) / 3) * 100)
+    return Math.round((((files > 0 ? 1 : 0) + (req ? 1 : 0)) / 2) * 100)
   }
 
   const nodeStatus = (n: FlatNode): number => {
@@ -228,14 +221,6 @@ export function MaterialsScreen({
       )
     )
 
-  const addTag = (id: string, tag: string) => {
-    const v = tag.trim()
-    if (!v || getConfig(id).tags.includes(v)) return
-    patchConfig(id, { tags: [...getConfig(id).tags, v] })
-  }
-  const removeTag = (id: string, tag: string) =>
-    patchConfig(id, { tags: getConfig(id).tags.filter(x => x !== tag) })
-
   const inheritPrev = () => {
     if (!selectedId) return
     const idx = leaves.findIndex(l => l.id === selectedId)
@@ -243,23 +228,13 @@ export function MaterialsScreen({
     const prev = leaves[idx - 1]
     setConfigs(p => ({
       ...p,
-      [selectedId]: { ...getConfig(prev.id), tags: [...getConfig(prev.id).tags] },
+      [selectedId]: { ...getConfig(prev.id) },
     }))
     setRequirements(p => ({ ...p, [selectedId]: requirements[prev.id] ?? '' }))
-  }
-  const applyTemplate = () => {
-    if (!selectedId) return
-    patchConfig(selectedId, {
-      style: '专业、严谨、逻辑清晰',
-      depth: '详细',
-      template: '技术方案标准模板',
-    })
   }
   const autoFill = () => {
     if (!selectedId) return
     const node = flat.find(n => n.id === selectedId)
-    if (!getConfig(selectedId).tags.length)
-      patchConfig(selectedId, { tags: ['核心内容', '量化效果'] })
     if (!(requirements[selectedId] ?? '').trim()) {
       setRequirements(p => ({
         ...p,
@@ -284,20 +259,6 @@ export function MaterialsScreen({
   const reqText = selectedId ? (requirements[selectedId] ?? '') : ''
   const comp = selectedId ? completion(selectedId) : 0
 
-  const styleOpts = [
-    [t('phase2.style_pro'), '专业、严谨、逻辑清晰'],
-    [t('phase2.style_concise'), '简洁明快'],
-    [t('phase2.style_data'), '数据驱动'],
-  ] as const
-  const depthOpts = [
-    [t('phase2.depth_detailed'), '详细'],
-    [t('phase2.depth_medium'), '适中'],
-    [t('phase2.depth_brief'), '简要'],
-  ] as const
-  const templateOpts = [
-    [t('phase2.template_standard'), '技术方案标准模板'],
-    [t('phase2.template_generic'), '通用模板'],
-  ] as const
   const figureOpts = [
     [t('phase2.yes'), '是'],
     [t('phase2.no'), '否'],
@@ -453,13 +414,6 @@ export function MaterialsScreen({
 
             <SectionLabel className="mt-[18px]">{t('phase2.req_title')}</SectionLabel>
             <div className="grid grid-cols-3 gap-2.5">
-              <Field label={t('phase2.field_style')}>
-                <NativeSelect
-                  value={cfg.style}
-                  onChange={v => patchConfig(selected.id, { style: v })}
-                  options={styleOpts}
-                />
-              </Field>
               <Field label={t('phase2.field_words')}>
                 <div className="flex items-center gap-1">
                   <BareInput
@@ -472,20 +426,6 @@ export function MaterialsScreen({
                     onChange={v => patchConfig(selected.id, { wordMax: v })}
                   />
                 </div>
-              </Field>
-              <Field label={t('phase2.field_depth')}>
-                <NativeSelect
-                  value={cfg.depth}
-                  onChange={v => patchConfig(selected.id, { depth: v })}
-                  options={depthOpts}
-                />
-              </Field>
-              <Field label={t('phase2.field_template')}>
-                <NativeSelect
-                  value={cfg.template}
-                  onChange={v => patchConfig(selected.id, { template: v })}
-                  options={templateOpts}
-                />
               </Field>
               <Field label={t('phase2.field_emphasis')}>
                 <BareInput
@@ -515,40 +455,6 @@ export function MaterialsScreen({
                 fontFamily: 'inherit',
               }}
             />
-
-            <SectionLabel className="mt-4">{t('phase2.tags_title')}</SectionLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              {cfg.tags.map(tag => (
-                <span
-                  key={tag}
-                  className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-[11.5px]"
-                  style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
-                >
-                  {tag}
-                  <span
-                    onClick={() => removeTag(selected.id, tag)}
-                    className="cursor-pointer"
-                    style={{ color: '#B3453D' }}
-                  >
-                    ×
-                  </span>
-                </span>
-              ))}
-              <input
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && tagInput.trim()) {
-                    addTag(selected.id, tagInput)
-                    setTagInput('')
-                  }
-                }}
-                placeholder={t('phase2.tag_placeholder')}
-                data-testid="bid-materials-tag-input"
-                className="w-[150px] rounded-[7px] px-2.5 py-1 text-[11.5px] outline-none"
-                style={{ border: '1px dashed var(--bid-border-2)', background: '#fff' }}
-              />
-            </div>
 
             <div className="mt-5 flex gap-2.5">
               <button
@@ -693,7 +599,6 @@ export function MaterialsScreen({
                     [
                       [t('phase2.completion_files'), files.length > 0],
                       [t('phase2.completion_req'), reqText.trim().length > 0],
-                      [t('phase2.completion_tags'), cfg.tags.length > 0],
                     ] as const
                   ).map(([label, ok]) => (
                     <div key={label} className="flex justify-between text-[10.5px]">
@@ -714,7 +619,6 @@ export function MaterialsScreen({
               <SectionLabel>{t('phase2.quick_actions')}</SectionLabel>
               <div className="flex flex-col gap-2">
                 <QuickAction onClick={inheritPrev}>{t('phase2.inherit_prev')}</QuickAction>
-                <QuickAction onClick={applyTemplate}>{t('phase2.apply_template')}</QuickAction>
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
                 <button
                   type="button"
