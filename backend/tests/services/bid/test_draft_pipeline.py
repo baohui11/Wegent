@@ -251,3 +251,35 @@ def test_drafting_prompt_enforces_writing_brief():
     assert "writing_brief" in instructions or "编写要求" in instructions
     assert "必须遵守" in instructions
     assert "评分" in instructions  # conflict rule: scoring wins
+
+
+@pytest.mark.asyncio
+async def test_seed_corpus_seeds_normalized_tender(tmp_path):
+    import json
+    from unittest.mock import AsyncMock
+
+    from app.services.bid.draft_pipeline import _seed_corpus
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("seed-norm", root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [{"id": "M1", "is_veto": True, "clause": "有效期"}],
+        },
+    )
+
+    rt = type("RT", (), {})()
+    rt.seed_file = AsyncMock()
+    await _seed_corpus(rt, "envd", ws)
+
+    # locate the tender.json seed call: seed_file(envd, remote_path, data, name)
+    tender_calls = [
+        c for c in rt.seed_file.await_args_list if c.args[1].endswith("/tender.json")
+    ]
+    assert tender_calls, "tender.json was not seeded"
+    seeded = json.loads(tender_calls[0].args[2].decode("utf-8"))
+    # normalized: scoring flattened to a list, clause veto-aligned (not raw bucketed dict)
+    assert isinstance(seeded["scoring"], list) and seeded["scoring"][0]["id"] == "T1"
+    assert seeded["mandatory_clauses"][0]["veto"] is True
