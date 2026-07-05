@@ -28,6 +28,14 @@ from app.services.bid.workspace import BidWorkspace
 
 logger = logging.getLogger(__name__)
 
+# Project-wide consistency directive injected into every parallel ghostwriter
+# call so independently-drafted sections don't diverge on terminology / promise
+# numbers / identity (mitigates the main risk of parallel drafting).
+_STYLE_CARD = (
+    "全篇一致性：术语、方法论命名、承诺数值前后必须统一，各章节不得各自另起名目。\n"
+    "投标人身份一律用占位符 {{bidder}}，资质引用用 {{qual:ID}}；正文绝不直接写公司名/证书号。"
+)
+
 # How long to wait for a single section file to appear in the sandbox (C2:
 # completion = poll envd output file). Sections are produced sequentially by the
 # agent, so this is per-section, not for the whole draft.

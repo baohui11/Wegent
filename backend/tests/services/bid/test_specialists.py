@@ -369,3 +369,25 @@ async def test_call_ghostwriter_uses_canonical_brief_fields():
     assert materials_service.NODE_BRIEF_FIELDS_ZH in instructions
     for stale in ("模板 template", "标签 tags", "深度 depth", "风格 style"):
         assert stale not in instructions
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_appends_style_card():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import specialists
+
+    with patch.object(
+        specialists, "_complete_ctx", new=AsyncMock(return_value="正文")
+    ) as mock_ctx:
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "方案", "covers": []},
+            tender={"scoring": [], "mandatory_clauses": []},
+            knowledge_base={},
+            style_card="全篇一致性：术语统一。",
+        )
+    instructions = mock_ctx.await_args.kwargs["instructions"]
+    assert "项目一致性（全局，必须遵守）" in instructions
+    assert "全篇一致性：术语统一。" in instructions

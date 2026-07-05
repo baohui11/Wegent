@@ -335,6 +335,7 @@ async def call_ghostwriter(
     knowledge_base: dict,
     instruction: str | None = None,
     brief: dict | None = None,
+    style_card: str | None = None,
     project_id: int | None = None,
     user_id: int | None = None,
 ) -> str:
@@ -368,6 +369,8 @@ async def call_ghostwriter(
             f"（{materials_service.NODE_BRIEF_FIELDS_ZH}）。"
             "正文必须遵守这些要求；如与评分项覆盖冲突，以覆盖评分项为先。"
         )
+    if style_card:
+        instructions += "\n\n## 项目一致性（全局，必须遵守）\n" + style_card
     if instruction:
         instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
     raw = await _complete_ctx(
