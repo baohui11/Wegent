@@ -36,6 +36,10 @@ _STYLE_CARD = (
     "投标人身份一律用占位符 {{bidder}}，资质引用用 {{qual:ID}}；正文绝不直接写公司名/证书号。"
 )
 
+# Max concurrent section drafts in the parallel fan-out (one call_ghostwriter
+# per section). Capped to bound LLM concurrency and per-run cost.
+_DRAFT_CONCURRENCY = 4
+
 # How long to wait for a single section file to appear in the sandbox (C2:
 # completion = poll envd output file). Sections are produced sequentially by the
 # agent, so this is per-section, not for the whole draft.
@@ -76,6 +80,120 @@ def _section_importance_key(node: dict, tender_norm: dict) -> tuple[int, float]:
     has_veto = any(c.get("veto") for c in g["clauses"])
     weight = sum(float(s.get("weight") or 0) for s in g["scoring"])
     return (0 if has_veto else 1, -weight)
+
+
+async def _draft_section(
+    sem: asyncio.Semaphore,
+    ws: BidWorkspace,
+    node: dict,
+    *,
+    tender: dict,
+    kb: dict,
+    model: str,
+    model_config: dict | None,
+    project_id: int,
+    user_id: int,
+) -> None:
+    sid = str(node["id"])
+    async with sem:
+        ds.set_section_status(ws, sid, "drafting")
+        try:
+            brief = materials_service.read_briefs(ws).get("briefs", {}).get(sid)
+            md = await call_ghostwriter(
+                model=model,
+                model_config=model_config,
+                section=node,
+                tender=tender,
+                knowledge_base=kb,
+                brief=brief,
+                style_card=_STYLE_CARD,
+                project_id=project_id,
+                user_id=user_id,
+            )
+            target = ws.path(f"workspace/sections/{sid}.md")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(md, encoding="utf-8")
+            ds.set_section_status(ws, sid, "done")
+        except Exception as e:  # isolate per-section failure
+            logger.warning("draft section %s failed: %s", sid, e)
+            ds.set_section_status(ws, sid, "error")
+
+
+async def run_drafting_parallel(
+    *,
+    ws: BidWorkspace,
+    outline: dict,
+    model: str,
+    model_config: dict | None,
+    project_id: int,
+    user_id: int,
+) -> None:
+    """Draft every outline section in parallel — one stateless call_ghostwriter
+    per section, importance-ordered, capped at ``_DRAFT_CONCURRENCY``. Each
+    section is logged individually by call_ghostwriter's _complete_ctx; per-
+    section failures are isolated and the run always finishes."""
+    tender = ws.read_json(ensure_normalized_tender(ws))
+    try:
+        kb = ws.read_json("corpus/bidder_knowledge_base.json")
+    except FileNotFoundError:
+        kb = {}
+    sections = flatten_sections(outline)
+    ds.init_status(ws, [str(s["id"]) for s in sections])
+    ordered = sorted(sections, key=lambda n: _section_importance_key(n, tender))
+    sem = asyncio.Semaphore(_DRAFT_CONCURRENCY)
+    await asyncio.gather(
+        *[
+            _draft_section(
+                sem,
+                ws,
+                n,
+                tender=tender,
+                kb=kb,
+                model=model,
+                model_config=model_config,
+                project_id=project_id,
+                user_id=user_id,
+            )
+            for n in ordered
+        ]
+    )
+    ds.mark_finished(ws)
+
+
+async def _run_drafting_parallel(
+    project_id: int, user_id: int, model: str, model_config: dict | None
+) -> None:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        project = BidProjectService.get(db, user_id=user_id, project_id=project_id)
+        if project is None:
+            return
+        ws = BidWorkspace(project.workspace_ref)
+        try:
+            outline = ws.read_json("workspace/outline.json")
+        except FileNotFoundError:
+            ds.mark_finished(ws, error="outline not built")
+            project.status = "draft_failed"
+            db.commit()
+            return
+        try:
+            await run_drafting_parallel(
+                ws=ws,
+                outline=outline,
+                model=model,
+                model_config=model_config,
+                project_id=project_id,
+                user_id=user_id,
+            )
+            set_phase_done(db, project, 4)
+        except BidPipelineError as e:
+            ds.mark_finished(ws, error=str(e))
+            project.status = "draft_failed"
+            db.commit()
+    finally:
+        db.close()
 
 
 # ---- sandbox drafting (full draft) ------------------------------------------

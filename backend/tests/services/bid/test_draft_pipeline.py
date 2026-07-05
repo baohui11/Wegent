@@ -384,3 +384,44 @@ def test_section_importance_key_veto_first_then_weight():
     }
     ordered = sorted(keys, key=lambda i: keys[i])
     assert ordered == ["a", "b", "c", "d"]  # veto → heavy → light → none
+
+
+@pytest.mark.asyncio
+async def test_run_drafting_parallel_drafts_all_and_isolates_failure(tmp_path):
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import draft_pipeline as dp
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("parallel-draft", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
+    outline = {
+        "sections": [
+            {"id": "s1", "title": "一", "covers": []},
+            {"id": "s2", "title": "二", "covers": []},
+            {"id": "s3", "title": "三", "covers": []},
+        ]
+    }
+
+    async def fake_gw(**kw):
+        if str(kw["section"]["id"]) == "s2":
+            raise RuntimeError("boom")
+        return f"正文-{kw['section']['id']}"
+
+    with patch.object(dp, "call_ghostwriter", new=AsyncMock(side_effect=fake_gw)):
+        await dp.run_drafting_parallel(
+            ws=ws,
+            outline=outline,
+            model="m",
+            model_config=None,
+            project_id=1,
+            user_id=2,
+        )
+
+    st = dp.ds.read_status(ws)
+    assert st["finished"] is True
+    assert st["sections"]["s1"] == "done"
+    assert st["sections"]["s3"] == "done"
+    assert st["sections"]["s2"] == "error"  # isolated failure
+    assert ws.path("workspace/sections/s1.md").read_text(encoding="utf-8") == "正文-s1"
+    assert not ws.path("workspace/sections/s2.md").exists()
