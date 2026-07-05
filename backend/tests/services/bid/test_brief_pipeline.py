@@ -52,3 +52,47 @@ def test_brief_status_roundtrip(tmp_path):
     bp.mark_brief_finished(ws)
     st = bp.read_brief_status(ws)
     assert st["nodes"]["s1"] == "done" and st["finished"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_brief_autogen_only_fills_empty_and_preserves_existing(tmp_path):
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import brief_pipeline as bp
+    from app.services.bid import materials_service
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("brief-auto", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "s1", "title": "一"}, {"id": "s2", "title": "二"}]},
+    )
+    # s2 already has a user brief → must be preserved, not regenerated
+    materials_service.write_briefs(
+        ws, {"briefs": {"s2": {"requirements": "用户写的"}}, "materials": []}
+    )
+
+    async def fake_gen(ws_, *, node_ids, **kw):
+        return {
+            nid: {
+                "requirements": f"AI-{nid}",
+                "emphasis": "",
+                "wordMin": "800",
+                "wordMax": "1500",
+                "needFigure": "否",
+                "importance": "中",
+            }
+            for nid in node_ids
+        }
+
+    with patch.object(bp, "generate_briefs", new=AsyncMock(side_effect=fake_gen)):
+        await bp.run_brief_autogen(
+            ws, model="m", model_config=None, project_id=1, user_id=2
+        )
+
+    briefs = materials_service.read_briefs(ws)["briefs"]
+    assert briefs["s1"]["requirements"] == "AI-s1"  # empty node filled
+    assert briefs["s2"]["requirements"] == "用户写的"  # existing preserved
+    st = bp.read_brief_status(ws)
+    assert st["finished"] is True and st["nodes"]["s1"] == "done"

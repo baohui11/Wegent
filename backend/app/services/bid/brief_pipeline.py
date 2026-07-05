@@ -151,3 +151,97 @@ async def generate_briefs(
             "importance": imp,
         }
     return out
+
+
+def materials_service_read_briefs(ws: BidWorkspace) -> dict:
+    from app.services.bid import materials_service
+
+    return materials_service.read_briefs(ws).get("briefs", {})
+
+
+def _empty_brief_node_ids(ws: BidWorkspace, outline: dict) -> list[str]:
+    existing = materials_service_read_briefs(ws)
+    out = []
+    for n in flatten_sections(outline):
+        nid = str(n.get("id"))
+        b = existing.get(nid) or {}
+        if not str(b.get("requirements") or "").strip():
+            out.append(nid)
+    return out
+
+
+async def run_brief_autogen(
+    ws: BidWorkspace,
+    *,
+    model: str,
+    model_config: dict | None,
+    project_id: int | None = None,
+    user_id: int | None = None,
+) -> None:
+    """Background: generate briefs only for nodes whose requirements are empty
+    (never clobbers user/AI-filled briefs), merge into node_briefs.json, and
+    track per-node status. Always finishes."""
+    from app.services.bid import materials_service
+
+    outline = ws.read_json("workspace/outline.json")
+    targets = _empty_brief_node_ids(ws, outline)
+    init_brief_status(ws, targets)
+    if not targets:
+        mark_brief_finished(ws)
+        return
+    try:
+        for nid in targets:
+            set_brief_node_status(ws, nid, "generating")
+        generated = await generate_briefs(
+            ws,
+            model=model,
+            model_config=model_config,
+            node_ids=targets,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        doc = materials_service.read_briefs(ws)
+        briefs = dict(doc.get("briefs") or {})
+        for nid in targets:
+            if nid in generated:
+                briefs[nid] = generated[nid]
+                set_brief_node_status(ws, nid, "done")
+            else:
+                set_brief_node_status(ws, nid, "error")
+        materials_service.write_briefs(
+            ws, {"briefs": briefs, "materials": doc.get("materials", [])}
+        )
+        mark_brief_finished(ws)
+    except Exception as e:  # never leave status stuck
+        mark_brief_finished(ws, error=str(e))
+
+
+async def _run_brief_gen(
+    project_id: int, user_id: int, model: str, model_config: dict | None
+) -> None:
+    from app.db.session import SessionLocal
+    from app.services.bid.project_service import BidProjectService
+
+    db = SessionLocal()
+    try:
+        project = BidProjectService.get(db, user_id=user_id, project_id=project_id)
+        if project is None:
+            return
+        ws = BidWorkspace(project.workspace_ref)
+        if not ws.path("workspace/outline.json").exists():
+            return
+        await run_brief_autogen(
+            ws,
+            model=model,
+            model_config=model_config,
+            project_id=project_id,
+            user_id=user_id,
+        )
+    finally:
+        db.close()
+
+
+def launch_brief_gen(
+    project_id: int, user_id: int, model: str, model_config: dict | None
+) -> None:
+    asyncio.create_task(_run_brief_gen(project_id, user_id, model, model_config))
