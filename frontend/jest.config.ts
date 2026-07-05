@@ -30,8 +30,14 @@ const config: Config = {
     // Mock Tiptap 3 extension packages (ESM). useEditor is mocked in the
     // component tests, so extensions only need to be constructable objects.
     '^@tiptap/starter-kit$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
+    // Specific extension sub-packages with React components must be mapped
+    // BEFORE the generic extension catch-all below (first match wins).
+    '^@tiptap/extension-drag-handle-react$': '<rootDir>/src/__mocks__/tiptap-drag-handle-react.tsx',
     '^@tiptap/extension-(.*)$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
-    // Mock @tiptap/react globally — ProseMirror can't run under jsdom.
+    // Mock @tiptap/react + its /menus subpath globally — ProseMirror can't run
+    // under jsdom, and floating-ui (BubbleMenu) needs real layout. /menus must
+    // be mapped before the bare @tiptap/react entry.
+    '^@tiptap/react/menus$': '<rootDir>/src/__mocks__/tiptap-react-menus.tsx',
     '^@tiptap/react$': '<rootDir>/src/__mocks__/@tiptap__react.tsx',
     '^micromark-util-combine-extensions$': '<rootDir>/src/__mocks__/micromark-stub.ts',
     '^micromark-extension-.*$': '<rootDir>/src/__mocks__/micromark-stub.ts',
