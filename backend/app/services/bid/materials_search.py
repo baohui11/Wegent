@@ -6,6 +6,7 @@ call, BM25-ranked, scope-filtered by reusing materials_store.materials_for.
 Scope stays single-sourced in node_briefs.json — never stored here. Phase 4c
 wires search/read into the ghostwriter as tools; this module is just the engine."""
 
+import sqlite3
 from pathlib import Path
 
 from app.services.bid import materials_store
@@ -28,3 +29,62 @@ def read(ws: BidWorkspace, name: str, char_range: tuple[int, int] | None = None)
         start, end = char_range
         return text[start:end]
     return text
+
+
+_MAX_HITS = 5
+_SNIPPET_TOKENS = 12
+
+
+def _fts_query(q: str) -> str:
+    # Wrap the whole query as a quoted string so arbitrary user text (spaces,
+    # punctuation, FTS operators) can't break MATCH syntax. Double internal
+    # quotes per FTS5 escaping. With the trigram tokenizer this is substring.
+    return '"' + q.replace('"', '""') + '"'
+
+
+def _shape_hit(name: str, snippet: str) -> dict:
+    return {
+        "material": name,
+        "snippet": snippet,
+        "source": materials_store._extracted_path(name),
+    }
+
+
+def _fts_search(visible: list[tuple[str, str]], query: str) -> list[dict]:
+    """Build an in-memory FTS5 (trigram) index over the visible (name, text)
+    pairs and return BM25-ranked hits. Raises sqlite3.OperationalError if FTS5/
+    trigram is unavailable so the caller can fall back."""
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE VIRTUAL TABLE m USING fts5(name UNINDEXED, body, tokenize='trigram')"
+        )
+        conn.executemany("INSERT INTO m(name, body) VALUES (?, ?)", visible)
+        rows = conn.execute(
+            "SELECT name, snippet(m, 1, '【', '】', '…', ?) FROM m "
+            "WHERE m MATCH ? ORDER BY bm25(m) LIMIT ?",
+            (_SNIPPET_TOKENS, _fts_query(query), _MAX_HITS),
+        ).fetchall()
+        return [_shape_hit(name, snip) for name, snip in rows]
+    finally:
+        conn.close()
+
+
+def search(ws: BidWorkspace, query: str, node_id: str) -> list[dict]:
+    """Full-text search the materials visible to `node_id`, BM25-ranked.
+    Returns up to _MAX_HITS [{material, snippet, source}]. Never raises: an
+    empty query, no visible materials, or an FTS error yields []."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    visible = [
+        (m["name"], read(ws, m["name"]))
+        for m in materials_store.materials_for(ws, node_id)
+    ]
+    visible = [(n, t) for n, t in visible if t.strip()]
+    if not visible:
+        return []
+    try:
+        return _fts_search(visible, q)
+    except sqlite3.OperationalError:
+        return []
