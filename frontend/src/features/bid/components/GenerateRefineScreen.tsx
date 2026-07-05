@@ -12,8 +12,7 @@ import {
   type FlatNode,
 } from '../canvas/outlineGraph'
 import { EnhancedMarkdown } from '@/components/common/EnhancedMarkdown'
-import { SectionEditor } from './SectionEditor'
-import { useSectionAutosave } from '../hooks/useSectionAutosave'
+import { SectionEditor, type SectionEditorApi } from './SectionEditor'
 import { blockLineRange, topBlockIndexOf } from '../canvas/blockRange'
 
 type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
@@ -47,8 +46,12 @@ export function GenerateRefineScreen({
   const [instruction, setInstruction] = useState('')
   const docRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set())
-  // The focused section's Tiptap editor (for paragraph-level block targeting).
-  const editorRef = useRef<unknown>(null)
+  // Active editable section (the one with editor focus) + per-section editor
+  // APIs. In Edit mode many sections can be editable at once; the right panel
+  // and paragraph regen operate on the active one. SectionEditor registers its
+  // { editor, flush } here via onReady.
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const apisRef = useRef<Map<string, SectionEditorApi>>(new Map())
 
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
   const rows = useMemo(() => dfsOrder(flat), [flat])
@@ -116,55 +119,58 @@ export function GenerateRefineScreen({
   }, [status, chapterOrder])
 
   useEffect(() => {
-    if (!focusId && sectionIds.length) setFocusId(sectionIds[0])
+    if (!focusId && sectionIds.length) {
+      const first = sectionIds[0]
+      setFocusId(first)
+      setActiveId(first)
+    }
   }, [focusId, sectionIds])
 
-  // Autosave the focused section's edits. One live editor at a time, so a single
-  // autosave instance (keyed on focusId) is sufficient; flush before focus
-  // switch / redraft / accept so disk stays in sync with the editor. Declared
-  // before redraft/accept, which call autosave.flush().
-  const autosave = useSectionAutosave({
-    projectId,
-    sectionId: focusId,
-    version: focusId ? (versions[focusId] ?? '') : '',
-    onSaved: (id, v) => setVersions(prev => ({ ...prev, [id]: v })),
-  })
+  // Flush the active editable section's pending save and return its post-save
+  // version (the on-disk CAS token). SectionEditor now owns autosave, so the
+  // screen reaches it via the per-section API the editor registered on mount.
+  const flushActive = useCallback(async (): Promise<string> => {
+    const sid = activeId ?? focusId
+    const api = sid ? apisRef.current.get(sid) : undefined
+    if (api) return api.flush()
+    return sid ? (versions[sid] ?? '') : ''
+  }, [activeId, focusId, versions])
 
   const redraft = useCallback(
     async (id: string, instr?: string) => {
       // Persist any pending edit first so the redraft operates on the saved
       // content (and its on-disk version).
-      await autosave.flush()
+      await flushActive()
       loadedRef.current.delete(id) // force re-fetch after this section re-drafts
       await bidApis.redraftSection(projectId, id, instr || undefined)
     },
-    [projectId, autosave]
+    [projectId, flushActive]
   )
 
-  // Regenerate the cursor's top-level block only: flush the pending edit so the
-  // on-disk bytes match the editor, map the block to a markdown line range, then
-  // call redraft-range with the (post-flush) version. Line numbers are stable
-  // only against the just-saved bytes, so flush-then-map ordering matters.
-  // Declared before the early `if (!status) return` to respect the Rules of Hooks.
+  // Regenerate the active section's cursor block only: flush the pending edit
+  // so the on-disk bytes match the editor, map the block to a markdown line
+  // range, then call redraft-range with the (post-flush) version. Line numbers
+  // are stable only against the just-saved bytes, so flush-then-map ordering
+  // matters. Declared before the early `if (!status) return` (Rules of Hooks).
   const regenBlock = useCallback(async () => {
-    if (!focusId) return
-    // flush() returns the post-save version; reading versions[focusId] here
-    // would be stale (React state hasn't re-rendered yet).
-    const baseVersion = await autosave.flush()
-    const md = contents[focusId] ?? ''
-    const idx = topBlockIndexOf(editorRef.current)
+    const sid = activeId ?? focusId
+    if (!sid) return
+    const api = apisRef.current.get(sid)
+    const baseVersion = await flushActive()
+    const md = contents[sid] ?? ''
+    const idx = topBlockIndexOf(api?.editor ?? null)
     const { startLine, endLine } = blockLineRange(md, idx)
-    loadedRef.current.delete(focusId) // force re-fetch after the range redrafts
+    loadedRef.current.delete(sid) // force re-fetch after the range redrafts
     await bidApis.redraftRange(
       projectId,
-      focusId,
+      sid,
       startLine,
       endLine,
       instruction || undefined,
       baseVersion
     )
     setInstruction('')
-  }, [focusId, contents, instruction, projectId, autosave])
+  }, [activeId, focusId, contents, instruction, projectId, flushActive])
 
   if (!status) return null
 
@@ -179,8 +185,9 @@ export function GenerateRefineScreen({
   const scrollTo = (id: string) =>
     docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   const focus = (id: string) => {
-    void autosave.flush() // persist any in-flight edit before switching focus
+    void flushActive() // persist any in-flight edit before switching focus
     setFocusId(id)
+    setActiveId(id)
     scrollTo(id)
   }
   const toggleCollapse = (id: string) =>
@@ -197,7 +204,7 @@ export function GenerateRefineScreen({
   }
   const accept = async () => {
     if (!focusId) return
-    await autosave.flush() // don't accept a version that drops an unsaved edit
+    await flushActive() // don't accept a version that drops an unsaved edit
     await bidApis.acceptSection(projectId, focusId)
     setAccepted((await bidApis.getReviewStatus(projectId)).accepted)
   }
@@ -325,15 +332,6 @@ export function GenerateRefineScreen({
                     style={{ color: 'var(--bid-ink)', fontFamily: "'Noto Sans SC', sans-serif" }}
                   >
                     {heading}
-                    {id === focusId && autosave.state !== 'idle' && (
-                      <span
-                        data-testid="bid-section-save-state"
-                        className="ml-2 text-[11px] font-normal"
-                        style={{ color: 'var(--bid-muted-2)' }}
-                      >
-                        {t(`editor.save_${autosave.state}`)}
-                      </span>
-                    )}
                   </div>
                   {st === 'done' ? (
                     <span
@@ -368,15 +366,18 @@ export function GenerateRefineScreen({
                     {/* The focused section is editable in place (Tiptap); all
                         other done sections stay as read-only EnhancedMarkdown.
                         A section mid-redraft is read-only so async LLM rewrites
-                        never race an in-progress edit. */}
+                        never race an in-progress edit. SectionEditor owns its
+                        own autosave and registers its { editor, flush } API. */}
                     {id === focusId ? (
                       <SectionEditor
+                        projectId={projectId}
+                        sectionId={id}
                         content={contents[id] ?? ''}
+                        version={versions[id] ?? ''}
                         readOnly={status.sections[id] === 'drafting'}
-                        onChange={autosave.queueSave}
-                        onEditorReady={e => {
-                          editorRef.current = e
-                        }}
+                        onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
+                        onFocus={setActiveId}
+                        onReady={(sid, api) => apisRef.current.set(sid, api)}
                       />
                     ) : (
                       <div className="bid-prose">
