@@ -20,7 +20,7 @@ jest.mock('@/apis/bid', () => ({
     saveQualifications: jest.fn(() => Promise.resolve({ qualifications: {} })),
     getKnowledgeBase: jest.fn(() => Promise.reject(new Error('not set'))),
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
-    getScoringContext: jest.fn(() => Promise.resolve({ scoring: [], clauses: [] })),
+    getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -243,9 +243,13 @@ it('does not render removed writing-style/template/depth/tags controls', async (
 })
 
 it('renders resolved scoring/clause text and hides internal ids', async () => {
-  ;(bidApis.getScoringContext as jest.Mock).mockResolvedValueOnce({
-    scoring: [{ id: 'T1', item: '技术方案', weight: 30 }],
-    clauses: [{ id: 'MC-002', text: '投标保证金', veto: true }],
+  ;(bidApis.getGrounding as jest.Mock).mockResolvedValueOnce({
+    items: {
+      c1a: {
+        scoring: [{ id: 'T1', item: '技术方案', weight: 30 }],
+        clauses: [{ id: 'MC-002', text: '投标保证金', veto: true }],
+      },
+    },
   })
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   // The clause text resolves (outline leaf c1 covers T1; clause MC-002 is shown

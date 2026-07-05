@@ -5,12 +5,17 @@ import { useTranslation } from '@/hooks/useTranslation'
 import {
   bidApis,
   type BriefsDoc,
-  type ClauseItem,
   type NodeBrief,
   type OutlineDoc,
-  type ScoringItem,
+  type SectionGrounding,
 } from '@/apis/bid'
-import { dfsOrder, flattenOutline, isVisible, type FlatNode } from '../canvas/outlineGraph'
+import {
+  dfsOrder,
+  flattenOutline,
+  isDescendantOf,
+  isVisible,
+  type FlatNode,
+} from '../canvas/outlineGraph'
 import { ConfirmDialog } from './ConfirmDialog'
 
 interface NodeConfig {
@@ -39,17 +44,6 @@ const defaultConfig = (): NodeConfig => ({
 
 let matSeq = 0
 
-// Is `id` a descendant of `ancestorId` in the flat tree?
-function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean {
-  const map = new Map(flat.map(n => [n.id, n]))
-  let cur = map.get(id)
-  while (cur && cur.parentId) {
-    if (cur.parentId === ancestorId) return true
-    cur = map.get(cur.parentId)
-  }
-  return false
-}
-
 export function MaterialsScreen({
   projectId,
   outline,
@@ -70,8 +64,7 @@ export function MaterialsScreen({
   const [configs, setConfigs] = useState<Record<string, NodeConfig>>({})
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
-  const [scoring, setScoring] = useState<ScoringItem[]>([])
-  const [clauses, setClauses] = useState<ClauseItem[]>([])
+  const [grounding, setGrounding] = useState<Record<string, SectionGrounding>>({})
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   // Which save action is currently reflecting saveState, so the feedback shows
   // on the button the user actually clicked (not always the first one).
@@ -114,19 +107,18 @@ export function MaterialsScreen({
     }
   }, [projectId])
 
-  // Load scoring/clauses context for covers resolution + priority derivation.
+  // Per-node grounding (scoring/veto clauses each node covers), resolved by the
+  // backend from the canonical tender — no client-side id->text join.
   useEffect(() => {
     if (projectId == null) return
     let alive = true
     bidApis
-      .getScoringContext(projectId)
-      .then(sc => {
-        if (!alive) return
-        setScoring(sc.scoring ?? [])
-        setClauses(sc.clauses ?? [])
+      .getGrounding(projectId)
+      .then(doc => {
+        if (alive) setGrounding(doc.items ?? {})
       })
       .catch(() => {
-        /* no tender normalized yet -> neutral defaults */
+        /* no outline/tender yet -> empty grounding */
       })
     return () => {
       alive = false
@@ -254,7 +246,7 @@ export function MaterialsScreen({
   // All descendant sections under the selected node (its whole subtree). The
   // selected node is the source; batch propagates its config down to these.
   const descendantNodes = (): FlatNode[] =>
-    selectedId ? rows.filter(n => descendantOf(flat, selectedId, n.id)) : []
+    selectedId ? rows.filter(n => isDescendantOf(flat, selectedId, n.id)) : []
   // Batch: apply the selected node's writing config + requirements to every node
   // belonging to it (all descendants), overwriting them. Priority is excluded —
   // it derives per-node from that node's own covered scoring/veto clauses.
@@ -313,17 +305,12 @@ export function MaterialsScreen({
   const reqText = selectedId ? (requirements[selectedId] ?? '') : ''
   const comp = selectedId ? completion(selectedId) : 0
 
-  // Resolve outline covers (internal ids) to user-facing scoring/clause text.
-  const coverText = (cid: string): { text: string; veto: boolean; weight?: number } | null => {
-    const c = clauses.find(x => x.id === cid)
-    if (c) return { text: c.text || cid, veto: !!c.veto }
-    const s = scoring.find(x => x.id === cid)
-    if (s) return { text: s.item || cid, veto: false, weight: s.weight }
-    return null
-  }
-  const resolvedCovers = (selected?.covers ?? [])
-    .map(coverText)
-    .filter((x): x is { text: string; veto: boolean; weight?: number } => x != null)
+  // Backend-resolved covers for the selected node (scoring items + veto clauses).
+  const g = selectedId ? grounding[selectedId] : undefined
+  const resolvedCovers: { text: string; veto: boolean; weight?: number }[] = [
+    ...(g?.clauses ?? []).map(c => ({ text: c.text || c.id, veto: !!c.veto })),
+    ...(g?.scoring ?? []).map(s => ({ text: s.item || s.id, veto: false, weight: s.weight })),
+  ]
   const derivedPriority = (): string => {
     if (resolvedCovers.some(c => c.veto)) return '高'
     const w = resolvedCovers.reduce((a, c) => a + (c.weight ?? 0), 0)
