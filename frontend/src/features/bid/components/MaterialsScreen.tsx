@@ -31,6 +31,7 @@ interface Material {
   id: string
   name: string
   linkedNodeIds: string[]
+  scope?: 'global' | 'linked'
 }
 
 const defaultConfig = (): NodeConfig => ({
@@ -312,6 +313,7 @@ export function MaterialsScreen({
           id: `m${Date.now()}_${matSeq++}`,
           name: info.name,
           linkedNodeIds: [selectedId],
+          scope: 'linked',
         })
         setAttachMeta(prev => ({
           ...prev,
@@ -342,6 +344,12 @@ export function MaterialsScreen({
         m.id === mid && !m.linkedNodeIds.includes(nodeId)
           ? { ...m, linkedNodeIds: [...m.linkedNodeIds, nodeId] }
           : m
+      )
+    )
+  const toggleScope = (mid: string) =>
+    setMaterials(prev =>
+      prev.map(m =>
+        m.id === mid ? { ...m, scope: m.scope === 'global' ? 'linked' : 'global' } : m
       )
     )
 
@@ -574,6 +582,18 @@ export function MaterialsScreen({
                     >
                       ×
                     </span>
+                    <button
+                      type="button"
+                      data-testid={`bid-material-scope-${f.id}`}
+                      onClick={() => toggleScope(f.id)}
+                      className="text-[10px] rounded px-1.5 py-px"
+                      style={{
+                        border: '1px solid var(--bid-border-2)',
+                        color: f.scope === 'global' ? 'var(--bid-primary)' : 'var(--bid-muted-2)',
+                      }}
+                    >
+                      {f.scope === 'global' ? t('phase2.scope_global') : t('phase2.scope_linked')}
+                    </button>
                   </div>
                 ))}
               </div>

@@ -128,6 +128,7 @@ export interface MaterialEntry {
   id: string
   name: string
   linkedNodeIds: string[]
+  scope?: 'global' | 'linked'
 }
 
 export interface BriefsDoc {

@@ -336,6 +336,7 @@ async def call_ghostwriter(
     instruction: str | None = None,
     brief: dict | None = None,
     style_card: str | None = None,
+    materials: list[dict] | None = None,
     project_id: int | None = None,
     user_id: int | None = None,
 ) -> str:
@@ -356,6 +357,8 @@ async def call_ghostwriter(
     }
     if brief:
         ctx["writing_brief"] = brief
+    if materials:
+        ctx["scoped_materials"] = materials
     instructions = (
         _GW_PROMPT
         + "\n\n## 风格圣经（style-zhongda.md）\n"
@@ -371,6 +374,13 @@ async def call_ghostwriter(
         )
     if style_card:
         instructions += "\n\n## 项目一致性（全局，必须遵守）\n" + style_card
+    if materials:
+        instructions += (
+            "\n\n## 作用域材料（scoped_materials，参考用）\n"
+            "输入 JSON 的 scoped_materials 是本节作用域内的投标人材料摘要"
+            "（name/scope/summary）。可据此充实论证与证据，但**只作参考**："
+            "不得原样照抄材料文字、不得据此编造未提供的义务或数字、不得回显材料内部 ID。"
+        )
     if instruction:
         instructions += "\n\n## 本次修改要求（优先满足）\n" + instruction
     raw = await _complete_ctx(

@@ -468,3 +468,19 @@ it('does not overwrite a user-edited brief on autogen reload (edit always wins)'
     { timeout: 4000 }
   )
 })
+
+it('material scope toggle flips global/linked and persists into the brief', async () => {
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValueOnce({
+    briefs: {},
+    materials: [{ id: 'm9', name: 'cert.txt', linkedNodeIds: ['c1a'], scope: 'linked' }],
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  // Library lists materials not linked to the selected node; c1a is auto-selected
+  // and m9 IS linked to c1a, so the toggle is rendered on the linked files list.
+  const toggle = await screen.findByTestId('bid-material-scope-m9')
+  fireEvent.click(toggle)
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.materials[0].scope).toBe('global')
+})

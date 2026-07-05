@@ -192,3 +192,45 @@ async def test_run_drafting_parallel_drafts_all_and_isolates_failure(tmp_path):
     assert st["sections"]["s2"] == "error"  # isolated failure
     assert ws.path("workspace/sections/s1.md").read_text(encoding="utf-8") == "正文-s1"
     assert not ws.path("workspace/sections/s2.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_draft_section_passes_scoped_materials(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import draft_pipeline as dp
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("draft-mat", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
+    ws.write_json("corpus/node_briefs.json", {"briefs": {}, "materials": []})
+
+    captured = {}
+
+    async def fake_gw(**kw):
+        captured.update(kw)
+        return "正文"
+
+    with (
+        patch.object(dp, "call_ghostwriter", new=AsyncMock(side_effect=fake_gw)),
+        patch.object(
+            dp.materials_store,
+            "materials_for",
+            return_value=[{"name": "c.txt", "scope": "global", "summary": "s"}],
+        ),
+    ):
+        await dp._draft_section(
+            asyncio.Semaphore(1),
+            ws,
+            {"id": "s1", "title": "方案"},
+            tender={"scoring": [], "mandatory_clauses": []},
+            kb={},
+            model="m",
+            model_config=None,
+            project_id=1,
+            user_id=2,
+        )
+    assert captured["materials"] == [
+        {"name": "c.txt", "scope": "global", "summary": "s"}
+    ]

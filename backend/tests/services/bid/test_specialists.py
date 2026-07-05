@@ -422,3 +422,58 @@ async def test_call_brief_writer_parses_json_briefs():
         )
     assert out["s1"]["requirements"] == "写详细"
     assert out["s1"]["emphasis"] == "重点A"
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_injects_scoped_materials_into_ctx():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import specialists
+
+    captured = {}
+
+    async def fake_complete_ctx(**kw):
+        captured.update(kw)
+        return "正文"
+
+    with patch.object(
+        specialists, "_complete_ctx", new=AsyncMock(side_effect=fake_complete_ctx)
+    ):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "方案"},
+            tender={"scoring": [], "mandatory_clauses": []},
+            knowledge_base={},
+            materials=[{"name": "cert.txt", "scope": "global", "summary": "资质摘要"}],
+        )
+    assert captured["ctx"]["scoped_materials"][0]["name"] == "cert.txt"
+    assert (
+        "scoped_materials" in captured["instructions"]
+        or "作用域材料" in captured["instructions"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_omits_scoped_materials_when_none():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import specialists
+
+    captured = {}
+
+    async def fake_complete_ctx(**kw):
+        captured.update(kw)
+        return "正文"
+
+    with patch.object(
+        specialists, "_complete_ctx", new=AsyncMock(side_effect=fake_complete_ctx)
+    ):
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "方案"},
+            tender={"scoring": [], "mandatory_clauses": []},
+            knowledge_base={},
+        )
+    assert "scoped_materials" not in captured["ctx"]
