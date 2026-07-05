@@ -18,6 +18,7 @@ from app.schemas.bid import (
     AttachmentListResponse,
     BidProjectCreate,
     BidProjectResponse,
+    BriefStatusResponse,
     CoverageResponse,
     DraftStatusResponse,
     ExtractTextResponse,
@@ -537,6 +538,43 @@ async def generate_briefs_endpoint(
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"brief generation failed: {e}")
     return GenerateBriefsResponse(briefs=briefs)
+
+
+@router.post(
+    "/projects/{project_id}/materials/briefs/auto-generate",
+    response_model=SimpleStatusResponse,
+)
+async def auto_generate_briefs(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # async: launch_brief_gen uses asyncio.create_task (needs a running loop).
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/outline.json").exists():
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    st = brief_pipeline.read_brief_status(ws)
+    if st["total"] and not st["finished"]:
+        return SimpleStatusResponse(status="generating")  # already running
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
+    brief_pipeline.launch_brief_gen(project.id, current_user.id, model, model_config)
+    return SimpleStatusResponse(status="generating")
+
+
+@router.get(
+    "/projects/{project_id}/materials/briefs/status",
+    response_model=BriefStatusResponse,
+)
+def brief_status(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    return BriefStatusResponse(
+        **brief_pipeline.read_brief_status(BidWorkspace(project.workspace_ref))
+    )
 
 
 @router.post(

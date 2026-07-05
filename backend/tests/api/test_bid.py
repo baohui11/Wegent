@@ -728,3 +728,17 @@ async def test_generate_briefs_endpoint_returns_briefs(tmp_path, monkeypatch):
         user_id=2,
     )
     assert out["s1"]["requirements"] == "写详细"
+
+
+def test_brief_status_endpoint_reads_status(tmp_path):
+    from app.api.endpoints import bid as bid_ep
+    from app.services.bid import brief_pipeline as bp
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("brief-ep", root=tmp_path)
+    bp.init_brief_status(ws, ["s1"])
+    st = bid_ep.brief_pipeline.read_brief_status(ws)
+    assert st["nodes"] == {"s1": "pending"}
+    # endpoints must be registered
+    assert hasattr(bid_ep, "auto_generate_briefs")
+    assert hasattr(bid_ep, "brief_status")

@@ -95,6 +95,13 @@ class GenerateBriefsResponse(BaseModel):
     briefs: dict
 
 
+class BriefStatusResponse(BaseModel):
+    total: int
+    nodes: dict
+    finished: bool
+    error: str | None = None
+
+
 class QualificationsResponse(BaseModel):
     qualifications: dict
 
