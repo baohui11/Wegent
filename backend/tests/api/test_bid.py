@@ -399,6 +399,33 @@ def test_save_section_cas_conflict_and_accept_clear(
     )
 
 
+def test_redraft_range_stale_version_returns_409(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    # POST /sections/{sid}/redraft-range: CAS on base_version -> 409 when stale.
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "rr"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    ws.path("workspace/sections/s1.md").write_text("A\nB\nC", encoding="utf-8")
+
+    r = test_client.post(
+        f"/api/bid/projects/{pid}/sections/s1/redraft-range",
+        json={
+            "start_line": 1,
+            "end_line": 1,
+            "instruction": None,
+            "base_version": "stale",
+        },
+        headers=h,
+    )
+    assert r.status_code == 409
+
+
 def test_audit_finalize_download(test_client, test_token, tmp_path, monkeypatch):
     from app.core.config import settings
 

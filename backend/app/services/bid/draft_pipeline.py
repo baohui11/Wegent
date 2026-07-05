@@ -13,7 +13,7 @@ from app.services.bid import drafting_service as ds
 from app.services.bid import materials_service, post_gate, section_retrieval
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
-from app.services.bid.specialists import call_ghostwriter
+from app.services.bid.specialists import call_ghostwriter, rewrite_excerpt
 from app.services.bid.tender_normalize import ensure_normalized_tender
 from app.services.bid.workspace import BidWorkspace
 
@@ -313,4 +313,106 @@ def launch_redraft(
 ) -> None:
     asyncio.create_task(
         _run_redraft(project_id, user_id, section_id, instruction, model, model_config)
+    )
+
+
+async def redraft_range(
+    ws: BidWorkspace,
+    section_id: str,
+    *,
+    start_line: int,
+    end_line: int,
+    instruction: str | None,
+    model: str,
+    model_config: dict | None,
+    project_id: int | None = None,
+    user_id: int | None = None,
+) -> None:
+    """Rewrite a 1-indexed inclusive line range of a section in place.
+
+    The whole section is passed to the LLM as context; only the excerpt in the
+    target range is replaced. Keeps redraft granularity at the block level
+    (markdown "lines" are stable only against the just-saved on-disk bytes, so
+    callers must flush any pending edit before invoking this).
+    """
+    ds.set_section_status(ws, section_id, "drafting")
+    try:
+        content = ds.read_section(ws, section_id)
+        lines = content.split("\n")
+        s = max(1, start_line)
+        e = min(len(lines), end_line)
+        if s > e:
+            raise BidPipelineError(f"invalid range {start_line}-{end_line}")
+        excerpt = "\n".join(lines[s - 1 : e])
+        rewritten = await rewrite_excerpt(
+            model=model,
+            model_config=model_config,
+            full_section=content,
+            excerpt=excerpt,
+            instruction=instruction,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        new_lines = lines[: s - 1] + rewritten.split("\n") + lines[e:]
+        ds.write_section(ws, section_id, "\n".join(new_lines))
+        ds.set_section_status(ws, section_id, "done")
+    except Exception as ex:  # isolate failure to this section
+        logger.warning("redraft range %s failed: %s", section_id, ex)
+        ds.set_section_status(ws, section_id, "error")
+
+
+async def _run_redraft_range(
+    project_id: int,
+    user_id: int,
+    section_id: str,
+    start_line: int,
+    end_line: int,
+    instruction: str | None,
+    model: str,
+    model_config: dict | None,
+) -> None:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        project = BidProjectService.get(db, user_id=user_id, project_id=project_id)
+        if project is None:
+            return
+        ws = BidWorkspace(project.workspace_ref)
+        await redraft_range(
+            ws,
+            section_id,
+            start_line=start_line,
+            end_line=end_line,
+            instruction=instruction,
+            model=model,
+            model_config=model_config,
+            project_id=project_id,
+            user_id=user_id,
+        )
+    finally:
+        db.close()
+
+
+def launch_redraft_range(
+    project_id: int,
+    user_id: int,
+    section_id: str,
+    start_line: int,
+    end_line: int,
+    instruction: str | None,
+    model: str,
+    model_config: dict | None,
+) -> None:
+    asyncio.create_task(
+        _run_redraft_range(
+            project_id,
+            user_id,
+            section_id,
+            start_line,
+            end_line,
+            instruction,
+            model,
+            model_config,
+        )
     )

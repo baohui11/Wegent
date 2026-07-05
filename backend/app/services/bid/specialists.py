@@ -484,3 +484,46 @@ async def call_brief_writer(
         for k, v in briefs.items()
         if isinstance(v, dict)
     }
+
+
+_EXCERPT_PROMPT = (
+    "你是标书写作专家。下面给出某一节的完整内容作为上下文，以及其中需要改写的"
+    "“目标片段”。请仅改写目标片段，保持与上下文一致的语气与术语，遵循用户指令。"
+    "只返回改写后的目标片段文本，不要返回整节内容、不要解释、不要代码围栏。"
+)
+
+
+async def rewrite_excerpt(
+    *,
+    model: str,
+    model_config: dict | None,
+    full_section: str,
+    excerpt: str,
+    instruction: str | None,
+    project_id: int | None = None,
+    user_id: int | None = None,
+) -> str:
+    """Rewrite only the target excerpt, using the full section as context.
+
+    Returns the rewritten excerpt text (no fences, no whole-section output).
+    Used by paragraph-range redrafts so the LLM rewrites a slice, not the
+    whole section.
+    """
+    ctx = {
+        "full_section": full_section,
+        "excerpt": excerpt,
+        "instruction": instruction or "",
+    }
+    raw = await _complete_ctx(
+        model=model,
+        model_config=model_config,
+        ctx=ctx,
+        shrink_order=["full_section"],
+        instructions=_EXCERPT_PROMPT,
+        metadata={},
+        specialist="excerpt_rewriter",
+        label=f"{len(excerpt)} chars",
+        project_id=project_id,
+        user_id=user_id,
+    )
+    return _strip_fence(raw).strip()
