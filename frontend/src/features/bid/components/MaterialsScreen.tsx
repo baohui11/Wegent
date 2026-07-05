@@ -149,6 +149,9 @@ export function MaterialsScreen({
   useEffect(() => {
     if (projectId == null) return
     let alive = true
+    // Hoisted so the cleanup can clear a poll started inside the async `.finally`
+    // — otherwise unmounting mid-poll leaks the interval (unbounded status GETs).
+    let handle: ReturnType<typeof setInterval> | undefined
     bidApis
       .autoGenerateBriefs(projectId)
       .catch(() => {
@@ -163,7 +166,7 @@ export function MaterialsScreen({
               if (!alive) return
               setBriefStatus(st)
               if (st.finished) {
-                clearInterval(handle)
+                if (handle) clearInterval(handle)
                 loadBriefs({ onlyEmpty: true })
               }
             })
@@ -171,11 +174,12 @@ export function MaterialsScreen({
               /* transient poll error -> keep polling */
             })
         }
-        const handle = setInterval(tick, 2500)
+        handle = setInterval(tick, 2500)
         tick()
       })
     return () => {
       alive = false
+      if (handle) clearInterval(handle)
     }
   }, [projectId, loadBriefs])
 
