@@ -225,7 +225,7 @@ export function chapterColor(flat: FlatNode[], id: string): string {
 /**
  * Walk the parent chain from `id` up to its top-level (root) chapter and return
  * that chapter's id. Single source for "which root chapter does this node belong
- * to?" — shared by `chapterColor` (palette index) and DraftingScreen's
+ * to?" — shared by `chapterColor` (palette index) and GenerateRefineScreen's
  * per-section status inheritance. Falls back to `id` itself when the node is a
  * root chapter or its id is not in the flat tree.
  */

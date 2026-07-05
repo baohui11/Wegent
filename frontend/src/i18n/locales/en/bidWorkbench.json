@@ -327,7 +327,6 @@
     "status_needs_rework": "Needs rework",
     "drafting_now": "The ghostwriter is drafting this section…",
     "progress_title": "Outline · progress",
-    "view_result": "View results →",
     "restart": "↻ Regenerate",
     "stop": "⏸ Stop",
     "resume": "▶ Continue",
@@ -463,15 +462,10 @@
     "op_figure": "🖼 Add figure",
     "op_structure": "🗂 Adjust structure",
     "accept_version": "Accept this version",
-    "suggestions": "Improvement suggestions",
-    "ai_badge": "AI",
     "instruction_placeholder": "Custom rewrite instruction…",
     "redraft": "Rewrite with instruction",
     "complete": "Complete review →",
     "pick_section": "Select a section on the left",
-    "sug_1": "Add quantified metrics and case data to strengthen persuasiveness.",
-    "sug_2": "Align terminology with the tender scoring items.",
-    "sug_3": "Trim redundant wording for a more concise read.",
     "header_action": "Confirm content & enter check"
   }
 }
