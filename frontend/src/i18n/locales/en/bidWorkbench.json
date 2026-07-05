@@ -10,15 +10,11 @@
       "desc": "Upload materials and writing requirements"
     },
     "3": {
-      "label": "Stage 3 · Generate",
-      "desc": "Agents collaborate to draft content"
+      "label": "Stage 3 · Generate & Refine",
+      "desc": "Draft each section and refine in place"
     },
     "4": {
-      "label": "Stage 4 · Review",
-      "desc": "Read and refine or regenerate"
-    },
-    "5": {
-      "label": "Stage 5 · Check & Export",
+      "label": "Stage 4 · Check & Export",
       "desc": "Review, typeset and export the bid"
     }
   },
@@ -32,15 +28,11 @@
       "subtitle": "Upload materials and writing requirements per node for content generation"
     },
     "3": {
-      "title": "Stage 3 · Agent generation",
-      "subtitle": "Multiple agents collaborate to draft each section"
+      "title": "Stage 3 · Generate & refine",
+      "subtitle": "Draft each section, then refine and accept in place"
     },
     "4": {
-      "title": "Stage 4 · Read & regenerate",
-      "subtitle": "Read the content and refine or regenerate as needed"
-    },
-    "5": {
-      "title": "Stage 5 · Check & export",
+      "title": "Stage 4 · Check & export",
       "subtitle": "Review the full bid, set typography, and export the final document"
     }
   },
@@ -335,7 +327,6 @@
     "status_needs_rework": "Needs rework",
     "drafting_now": "The ghostwriter is drafting this section…",
     "progress_title": "Outline · progress",
-    "view_result": "View results →",
     "restart": "↻ Regenerate",
     "stop": "⏸ Stop",
     "resume": "▶ Continue",
@@ -471,15 +462,10 @@
     "op_figure": "🖼 Add figure",
     "op_structure": "🗂 Adjust structure",
     "accept_version": "Accept this version",
-    "suggestions": "Improvement suggestions",
-    "ai_badge": "AI",
     "instruction_placeholder": "Custom rewrite instruction…",
     "redraft": "Rewrite with instruction",
     "complete": "Complete review →",
     "pick_section": "Select a section on the left",
-    "sug_1": "Add quantified metrics and case data to strengthen persuasiveness.",
-    "sug_2": "Align terminology with the tender scoring items.",
-    "sug_3": "Trim redundant wording for a more concise read.",
     "header_action": "Confirm content & enter check"
   }
 }

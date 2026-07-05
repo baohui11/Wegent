@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { phaseToStage } from '../hooks/useBidProject'
 
-const STAGES = [1, 2, 3, 4, 5] as const
+const STAGES = [1, 2, 3, 4] as const
 
 export function WorkbenchShell({
   phase,

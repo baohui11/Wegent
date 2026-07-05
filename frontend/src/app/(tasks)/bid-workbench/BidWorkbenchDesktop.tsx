@@ -12,8 +12,7 @@ import { WorkbenchShell } from '@/features/bid/components/WorkbenchShell'
 import { UploadScreen } from '@/features/bid/components/UploadScreen'
 import { OutlineCanvas } from '@/features/bid/components/OutlineCanvas'
 import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
-import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
-import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
+import { GenerateRefineScreen } from '@/features/bid/components/GenerateRefineScreen'
 import { AuditScreen } from '@/features/bid/components/AuditScreen'
 import { ConfirmDialog } from '@/features/bid/components/ConfirmDialog'
 
@@ -83,7 +82,6 @@ export function BidWorkbenchDesktop() {
     enterMaterials,
     completeMaterials,
     startDrafting,
-    enterReview,
     completeReview,
     finalizeBid,
     goStage,
@@ -213,9 +211,9 @@ export function BidWorkbenchDesktop() {
         {t('phase2.header_action')}
       </HeaderButton>
     ) : phase === 'drafting' ? (
-      // Sandbox drafting runs a ClaudeCode SDK agent autonomously — it cannot be
-      // paused mid-run, so there is no stop/resume. Only the terminal "done" state
-      // exposes actions (regenerate / view result).
+      // Merged generate-refine screen: only the terminal "done" state exposes
+      // header actions (regenerate / proceed to check). There is no separate
+      // review phase — refinements happen in place on the same screen.
       <>
         {draftState === 'done' && (
           <HeaderGhostButton
@@ -226,15 +224,11 @@ export function BidWorkbenchDesktop() {
           </HeaderGhostButton>
         )}
         {draftState === 'done' && (
-          <HeaderButton onClick={enterReview} testid="bid-drafting-next-button">
-            {t('drafting.view_result')}
+          <HeaderButton onClick={completeReview} testid="review-next-button">
+            {t('review.header_action')}
           </HeaderButton>
         )}
       </>
-    ) : phase === 'review' ? (
-      <HeaderButton onClick={completeReview} testid="review-next-button">
-        {t('review.header_action')}
-      </HeaderButton>
     ) : undefined
 
   return (
@@ -268,23 +262,20 @@ export function BidWorkbenchDesktop() {
           />
         )}
         {phase === 'drafting' && projectId != null && (
-          <DraftingScreen
+          <GenerateRefineScreen
             projectId={projectId}
             outline={outline ?? undefined}
             onStateChange={setDraftState}
           />
-        )}
-        {phase === 'review' && projectId != null && (
-          <ReviewScreen projectId={projectId} outline={outline ?? undefined} />
         )}
         {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (
           <AuditScreen
             projectId={projectId}
             finalized={phase === 'done'}
             finalizing={phase === 'finalizing'}
-            onRework={enterReview}
+            onRework={() => goStage(3)}
             onFinalize={finalizeBid}
-            onLocate={() => goStage(4)}
+            onLocate={() => goStage(3)}
           />
         )}
         {phase === 'error' && (

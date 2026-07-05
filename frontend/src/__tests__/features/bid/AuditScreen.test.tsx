@@ -10,8 +10,8 @@ jest.mock('@/hooks/useTranslation', () => ({
 }))
 
 // jest.config has no clearMocks:true, so isolate call counts per test (matches
-// the ReviewScreen.test.tsx convention) — otherwise calls accumulate across
-// `it` blocks within this file.
+// the GenerateRefineScreen.test.tsx convention) — otherwise calls accumulate
+// across `it` blocks within this file.
 beforeEach(() => {
   jest.clearAllMocks()
 })

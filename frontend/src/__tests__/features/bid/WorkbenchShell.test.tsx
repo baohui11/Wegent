@@ -20,13 +20,14 @@ it('renders title, children, and highlights the stage for the phase', () => {
   expect(screen.getByTestId('bid-stepper-stage-1')).toHaveAttribute('data-current', 'false')
 })
 
-it('maps audit/export phases to stage 5', () => {
+it('maps audit/export phases to stage 4', () => {
   render(
     <WorkbenchShell phase="audit" title="x" onBack={jest.fn()}>
       <div />
     </WorkbenchShell>
   )
-  expect(screen.getByTestId('bid-stepper-stage-5')).toHaveAttribute('data-current', 'true')
+  expect(screen.getByTestId('bid-stepper-stage-4')).toHaveAttribute('data-current', 'true')
+  expect(screen.queryByTestId('bid-stepper-stage-5')).toBeNull()
 })
 
 it('fires onBack when the back button is clicked', () => {

@@ -19,25 +19,22 @@ export type Phase =
   | 'outline_ready'
   | 'materials'
   | 'drafting'
-  | 'review'
   | 'audit'
   | 'finalizing'
   | 'done'
   | 'error'
 
-// Maps a workbench phase to the mockup's five-stage stepper index.
+// Maps a workbench phase to the four-stage stepper index.
 export function phaseToStage(phase: Phase | string): number {
   switch (phase) {
     case 'materials':
       return 2
     case 'drafting':
       return 3
-    case 'review':
-      return 4
     case 'audit':
     case 'finalizing':
     case 'done':
-      return 5
+      return 4
     default:
       return 1
   }
@@ -148,7 +145,8 @@ export function useBidProject() {
           return
         }
         if (cp === 5) {
-          setPhase('review')
+          // Stage-4 (backend review) is merged into the generate-refine phase.
+          setPhase('drafting')
           return
         }
         if (cp === 6) {
@@ -248,8 +246,6 @@ export function useBidProject() {
     setPhase('drafting')
   }, [projectId])
 
-  const enterReview = useCallback(() => setPhase('review'), [])
-
   // Confirming the review advances straight to Stage 5 (check & export).
   const completeReview = useCallback(async () => {
     if (projectId == null) return
@@ -265,8 +261,7 @@ export function useBidProject() {
       1: 'outline_ready',
       2: 'materials',
       3: 'drafting',
-      4: 'review',
-      5: 'audit',
+      4: 'audit',
     }
     const next = target[stage]
     if (next) setPhase(next)
@@ -302,7 +297,6 @@ export function useBidProject() {
     enterMaterials,
     completeMaterials,
     startDrafting,
-    enterReview,
     completeReview,
     enterAudit,
     finalizeBid,
