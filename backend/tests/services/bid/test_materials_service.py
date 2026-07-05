@@ -77,3 +77,27 @@ def test_briefs_validation(tmp_path):
         ms.write_briefs(ws, {"briefs": {}, "materials": {"m": 1}})  # list required
     ms.write_briefs(ws, {"briefs": {}})  # materials optional -> []
     assert ms.read_briefs(ws)["materials"] == []
+
+
+def test_reconcile_briefs_drops_missing_files(tmp_path):
+    ws = BidWorkspace("recon-ws", root=tmp_path)
+    ws.write_json(
+        ms._BRIEFS,
+        {
+            "briefs": {},
+            "materials": [
+                {
+                    "id": "m1",
+                    "name": "present.docx",
+                    "size": 10,
+                    "linkedNodeIds": ["n1"],
+                },
+                {"id": "m2", "name": "gone.docx", "size": 10, "linkedNodeIds": ["n1"]},
+            ],
+        },
+    )
+    ms.save_attachment(ws, "present.docx", b"x" * 10)
+
+    doc = ms.reconcile_briefs(ws, ms.read_briefs(ws))
+    names = [m["name"] for m in doc["materials"]]
+    assert names == ["present.docx"]  # gone.docx dropped, present kept

@@ -36,6 +36,7 @@ from app.schemas.bid import (
     QualificationsSaveRequest,
     RedraftRequest,
     ReviewStatusResponse,
+    ScoringContextResponse,
     SectionContentResponse,
     SectionListResponse,
     SectionStatus,
@@ -349,6 +350,28 @@ def get_coverage(
 
 
 @router.get(
+    "/projects/{project_id}/scoring-context",
+    response_model=ScoringContextResponse,
+)
+def get_scoring_context(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    if (
+        not ws.path("workspace/tender.json").exists()
+        and not ws.path("workspace/tender_normalized.json").exists()
+    ):
+        return ScoringContextResponse(scoring=[], clauses=[])
+    tender = _read_tender_for_coverage(ws)
+    return ScoringContextResponse(
+        scoring=tender.get("scoring", []) or [],
+        clauses=tender.get("mandatory_clauses", []) or [],
+    )
+
+
+@router.get(
     "/projects/{project_id}/materials/knowledge-base",
     response_model=KnowledgeBaseResponse,
 )
@@ -431,6 +454,9 @@ async def upload_attachment(
         info = materials.save_attachment(ws, file.filename or "", content)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from app.services.bid.tender_extract import extract_stats
+
+    info["stats"] = extract_stats(file.filename or "", content)
     return AttachmentInfo(**info)
 
 
@@ -456,7 +482,9 @@ def get_briefs(
     db: Session = Depends(get_db),
 ):
     ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
-    return NodeBriefsPayload(**materials.read_briefs(ws))
+    return NodeBriefsPayload(
+        **materials.reconcile_briefs(ws, materials.read_briefs(ws))
+    )
 
 
 @router.put("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)

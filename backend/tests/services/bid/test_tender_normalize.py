@@ -50,6 +50,25 @@ def test_normalize_clauses_maps_is_veto():
     assert normalize_clauses(None) == []
 
 
+def test_normalize_clauses_canonicalizes_text():
+    # qwen/mimo emit clause text under varying keys; converge onto `text` so
+    # consumers (scoring-context / materials panel) never fall back to the id.
+    assert (
+        normalize_clauses([{"id": "MC-002", "clause": "投标保证金16万", "veto": True}])[
+            0
+        ]["text"]
+        == "投标保证金16万"
+    )
+    assert (
+        normalize_clauses([{"id": "MC-01", "原文": "封面盖章", "is_veto": False}])[0][
+            "text"
+        ]
+        == "封面盖章"
+    )
+    assert normalize_clauses([{"id": "X", "text": "已是text"}])[0]["text"] == "已是text"
+    assert normalize_clauses([{"id": "Y"}])[0]["text"] == ""
+
+
 def test_normalized_tender_full():
     from app.services.bid.tender_normalize import normalized_tender
 

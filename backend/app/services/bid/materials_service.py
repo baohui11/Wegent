@@ -86,3 +86,13 @@ def write_briefs(ws: BidWorkspace, doc: dict) -> None:
     ):
         raise ValueError("materials must be a list of objects")
     ws.write_json(_BRIEFS, {"briefs": briefs, "materials": materials})
+
+
+def reconcile_briefs(ws: BidWorkspace, doc: dict) -> dict:
+    """Drop material entries whose backing file no longer exists on disk.
+
+    Read-time alignment only (does not rewrite): keeps the returned view honest;
+    the next explicit save persists the cleanup."""
+    present = {a["name"] for a in list_attachments(ws)}
+    mats = [m for m in doc.get("materials", []) if m.get("name") in present]
+    return {"briefs": doc.get("briefs", {}), "materials": mats}

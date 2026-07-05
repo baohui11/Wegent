@@ -56,3 +56,39 @@ def test_unsupported_extension():
 def test_too_short_rejected():
     with pytest.raises(TenderExtractError):
         extract_text("a.txt", "短".encode("utf-8"))
+
+
+# --- extract_stats (deterministic per-attachment stats) ---
+
+
+from app.services.bid.tender_extract import extract_stats  # noqa: E402
+
+
+def _docx_with_table_and_image() -> bytes:
+    from docx import Document
+
+    doc = Document()
+    doc.add_paragraph("投标人具备完善的项目实施能力。" * 5)
+    doc.add_table(rows=2, cols=3)
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_extract_stats_docx_counts_tables_and_chars():
+    stats = extract_stats("cap.docx", _docx_with_table_and_image())
+    assert stats is not None
+    assert stats["tables"] == 1
+    assert stats["chars"] >= 30
+    assert stats["images"] == 0
+    assert stats["pages"] == 0  # docx has no fixed page count
+
+
+def test_extract_stats_txt_counts_chars():
+    stats = extract_stats("note.txt", LONG.encode("utf-8"))
+    assert stats == {"chars": len(LONG), "pages": 0, "tables": 0, "images": 0}
+
+
+def test_extract_stats_unsupported_or_scanned_returns_none():
+    assert extract_stats("photo.png", b"\x89PNG...") is None
+    assert extract_stats("empty.txt", b"  ") is None  # below min-chars

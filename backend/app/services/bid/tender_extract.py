@@ -67,3 +67,48 @@ def extract_text(filename: str, content: bytes) -> str:
             "未能提取到有效文本（可能是扫描版或空文档），请提供文字版"
         )
     return text
+
+
+def _docx_stats(content: bytes) -> dict:
+    from docx import Document
+
+    doc = Document(io.BytesIO(content))
+    text = _docx_text(content)
+    return {
+        "chars": len(text.strip()),
+        "pages": 0,  # docx flows; no fixed page count without rendering
+        "tables": len(doc.tables),
+        "images": len(doc.inline_shapes),
+    }
+
+
+def extract_stats(filename: str, content: bytes) -> dict | None:
+    """Deterministic per-attachment stats for the materials panel. Returns None
+    for unsupported/corrupt/scanned files (no OCR) — the caller keeps the raw
+    bytes regardless, stats are informational only."""
+    suffix = Path(filename or "").suffix.lower()
+    try:
+        if suffix in _TEXT_SUFFIXES:
+            text = _decode(content)
+            if len(text.strip()) < _MIN_CHARS:
+                return None
+            return {"chars": len(text), "pages": 0, "tables": 0, "images": 0}
+        if suffix == ".docx":
+            stats = _docx_stats(content)
+            return stats if stats["chars"] >= _MIN_CHARS else None
+        if suffix == ".pdf":
+            from PyPDF2 import PdfReader
+
+            reader = PdfReader(io.BytesIO(content))
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+            if len(text.strip()) < _MIN_CHARS:
+                return None
+            return {
+                "chars": len(text),
+                "pages": len(reader.pages),
+                "tables": 0,
+                "images": 0,
+            }
+    except Exception:
+        return None
+    return None

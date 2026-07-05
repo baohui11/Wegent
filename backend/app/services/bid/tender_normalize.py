@@ -78,7 +78,19 @@ def normalize_clauses(clauses) -> list:
         veto = c.get("veto")
         if veto is None:
             veto = bool(c.get("is_veto"))
-        out.append({**c, "veto": bool(veto)})
+        # Converge clause text onto a canonical ``text`` key. qwen/mimo emit it
+        # under varying keys (clause / clause_text / 原文 / requirement); without
+        # this, scoring-context ships no ``text`` and the materials panel falls
+        # back to the raw id (e.g. "MC-002"), leaking an internal identifier.
+        text = (
+            c.get("clause")
+            or c.get("clause_text")
+            or c.get("text")
+            or c.get("requirement")
+            or c.get("原文")
+            or ""
+        )
+        out.append({**c, "veto": bool(veto), "text": str(text).strip()})
     return out
 
 

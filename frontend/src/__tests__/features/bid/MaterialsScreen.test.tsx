@@ -20,6 +20,7 @@ jest.mock('@/apis/bid', () => ({
     saveQualifications: jest.fn(() => Promise.resolve({ qualifications: {} })),
     getKnowledgeBase: jest.fn(() => Promise.reject(new Error('not set'))),
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
+    getScoringContext: jest.fn(() => Promise.resolve({ scoring: [], clauses: [] })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -33,8 +34,8 @@ const OUTLINE: OutlineDoc = {
       title: 'Chapter 1',
       covers: ['T1'],
       children: [
-        { id: 'c1a', title: 'Leaf A' },
-        { id: 'c1b', title: 'Leaf B' },
+        { id: 'c1a', title: 'Leaf A', covers: ['T1'] },
+        { id: 'c1b', title: 'Leaf B', covers: ['MC-002'] },
       ],
     },
   ],
@@ -55,18 +56,21 @@ it('edits the requirement and reflects completion for the selected node', async 
 })
 
 it('adds a tag on Enter', async () => {
+  // Tags control was removed in stage-2 slim-down; this test now verifies
+  // the tag input is gone (no tag UI exists anymore).
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  const tagInput = await screen.findByTestId('bid-materials-tag-input')
-  fireEvent.change(tagInput, { target: { value: 'quality' } })
-  fireEvent.keyDown(tagInput, { key: 'Enter' })
-  expect(screen.getByText('quality')).toBeInTheDocument()
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByTestId('bid-materials-tag-input')).toBeNull()
 })
 
 it('calls onComplete when entering content generation', async () => {
+  // The in-panel "enter generation" button was removed in stage-2 (the header
+  // owns the single entry point now). onComplete stays on the props contract
+  // for the Desktop confirm flow; this test verifies the button is gone.
   const onComplete = jest.fn()
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={onComplete} />)
-  fireEvent.click(await screen.findByTestId('bid-materials-complete-button'))
-  await waitFor(() => expect(onComplete).toHaveBeenCalled())
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByTestId('bid-materials-complete-button')).toBeNull()
 })
 
 it('loads persisted briefs on mount', async () => {
@@ -82,33 +86,25 @@ it('loads persisted briefs on mount', async () => {
   )
 })
 
-it('persists briefs when completing the stage', async () => {
-  const onComplete = jest.fn()
-  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={onComplete} />)
-  fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
+it('persists briefs when saving the node', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
     target: { value: '新要求' },
   })
-  fireEvent.click(screen.getByTestId('bid-materials-complete-button'))
-  await waitFor(() => expect(onComplete).toHaveBeenCalled())
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
   expect(doc.briefs.c1a.requirements).toBe('新要求')
 })
 
 it('saves bidder company into qualifications and kb', async () => {
+  // Bidder info card was removed in stage-2 (no in-screen editor anymore);
+  // company capture moves to project creation in a follow-up. Verify the card
+  // is gone so the SoT gap is explicit.
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  fireEvent.change(await screen.findByTestId('bid-bidder-company'), {
-    target: { value: '华信数智' },
-  })
-  fireEvent.click(screen.getByTestId('bid-bidder-save'))
-  await waitFor(() =>
-    expect(bidApis.saveQualifications).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({ company: '华信数智' })
-    )
-  )
-  expect(bidApis.saveKnowledgeBase).toHaveBeenCalledWith(7, {
-    bidder_knowledge_base: expect.objectContaining({ company: '华信数智' }),
-  })
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByTestId('bid-bidder-company')).toBeNull()
+  expect(screen.queryByTestId('bid-bidder-save')).toBeNull()
 })
 
 it('uploads picked files as attachments and links them to the node', async () => {
@@ -120,4 +116,86 @@ it('uploads picked files as attachments and links them to the node', async () =>
   expect(await screen.findByText('案例.pdf')).toBeInTheDocument()
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
   expect(doc.materials[0]).toMatchObject({ name: '案例.pdf', linkedNodeIds: ['c1a'] })
+})
+
+it('does not render removed writing-style/template/depth/tags controls', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-requirement')
+  expect(screen.queryByText(/phase2\.field_style|phase2\.style_/i)).toBeNull()
+  expect(screen.queryByText(/phase2\.field_template|phase2\.template_/i)).toBeNull()
+  expect(screen.queryByText(/phase2\.field_depth|phase2\.depth_/i)).toBeNull()
+  expect(screen.queryByTestId('bid-materials-tag-input')).toBeNull()
+})
+
+it('renders resolved scoring/clause text and hides internal ids', async () => {
+  ;(bidApis.getScoringContext as jest.Mock).mockResolvedValueOnce({
+    scoring: [{ id: 'T1', item: '技术方案', weight: 30 }],
+    clauses: [{ id: 'MC-002', text: '投标保证金', veto: true }],
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  // The clause text resolves (outline leaf c1 covers T1; clause MC-002 is shown
+  // when a node covers it). The first leaf c1a covers T1 -> shows "技术方案".
+  expect(await screen.findByText(/技术方案/)).toBeInTheDocument()
+  // Internal ids never leak to the user.
+  expect(screen.queryByText('T1')).toBeNull()
+})
+
+it('removes fake material-analysis card and shows honest section-materials', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-requirement')
+  // No AI-extract badge / fake arithmetic card.
+  expect(screen.queryByText(/phase2\.ai_extract/i)).toBeNull()
+  expect(screen.queryByText(/phase2\.keypoints/i)).toBeNull()
+})
+
+it('priority is editable and persists into the brief', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const select = await screen.findByTestId('bid-materials-priority')
+  fireEvent.change(select, { target: { value: '高' } })
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.c1a.priority).toBe('高')
+})
+
+it('shows deterministic stats from uploaded attachment', async () => {
+  ;(bidApis.uploadAttachment as jest.Mock).mockResolvedValueOnce({
+    name: 'cap.pdf',
+    size: 1024,
+    stats: { chars: 1234, pages: 5, tables: 2, images: 1 },
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const dropzone = await screen.findByTestId('bid-materials-dropzone')
+  const input = dropzone.parentElement!.querySelector('input[type="file"]')!
+  fireEvent.change(input, { target: { files: [new File(['x'], 'cap.pdf')] } })
+  // Real stats surface in the right panel.
+  await waitFor(() => expect(bidApis.uploadAttachment).toHaveBeenCalled())
+})
+
+it('surfaces save state feedback when saving the node', async () => {
+  let resolveSave!: (v: unknown) => void
+  ;(bidApis.saveBriefs as jest.Mock).mockReturnValueOnce(
+    new Promise(r => {
+      resolveSave = r
+    })
+  )
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.click(await screen.findByTestId('bid-materials-save'))
+  // While in-flight, the button shows the saving label.
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.saving')
+  )
+  resolveSave({})
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.saved')
+  )
+})
+
+it('surfaces save error feedback on failure', async () => {
+  ;(bidApis.saveBriefs as jest.Mock).mockRejectedValueOnce(new Error('boom'))
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.click(await screen.findByTestId('bid-materials-save'))
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.save_error')
+  )
 })

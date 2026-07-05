@@ -202,11 +202,15 @@ def test_materials_kb_quals_attachments_and_complete(
         files={"file": ("iso9001.pdf", b"PDFDATA", "application/pdf")},
         headers=h,
     )
-    assert r.status_code == 200 and r.json() == {"name": "iso9001.pdf", "size": 7}
+    assert r.status_code == 200 and r.json() == {
+        "name": "iso9001.pdf",
+        "size": 7,
+        "stats": None,
+    }
     lst = test_client.get(
         f"/api/bid/projects/{pid}/materials/attachments", headers=h
     ).json()
-    assert lst["items"] == [{"name": "iso9001.pdf", "size": 7}]
+    assert lst["items"] == [{"name": "iso9001.pdf", "size": 7, "stats": None}]
 
     # complete -> phase advances
     assert (
@@ -542,6 +546,12 @@ def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
     r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
     assert r.status_code == 200 and r.json() == {"briefs": {}, "materials": []}
 
+    # Backing file must exist on disk or the read-time reconcile drops the entry.
+    test_client.post(
+        f"/api/bid/projects/{pid}/materials/attachments",
+        files={"file": ("a.pdf", b"PDF", "application/pdf")},
+        headers=h,
+    )
     doc = {
         "briefs": {"s1": {"style": "专业", "requirements": "写清楚", "tags": ["核心"]}},
         "materials": [
@@ -551,9 +561,13 @@ def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
     r = test_client.put(
         f"/api/bid/projects/{pid}/materials/briefs", json=doc, headers=h
     )
+    # PUT writes the doc verbatim (no reconcile on write — only read aligns).
     assert r.status_code == 200 and r.json() == doc
     r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
-    assert r.json() == doc
+    # GET reconciles against on-disk attachments: a.pdf exists, so it survives.
+    got = r.json()
+    assert got["briefs"] == doc["briefs"]
+    assert [m["name"] for m in got["materials"]] == ["a.pdf"]
 
     # invalid shape -> 400
     r = test_client.put(
@@ -634,3 +648,85 @@ def test_parse_stage_endpoint(test_client, test_token, tmp_path, monkeypatch):
         ]
         == "idle"
     )
+
+
+def test_upload_attachment_returns_stats(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    import io
+
+    from docx import Document
+
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "M"}, headers=h).json()[
+        "id"
+    ]
+
+    doc = Document()
+    doc.add_paragraph("投标人具备完善能力。" * 8)
+    doc.add_table(rows=2, cols=2)
+    buf = io.BytesIO()
+    doc.save(buf)
+
+    r = test_client.post(
+        f"/api/bid/projects/{pid}/materials/attachments",
+        files={
+            "file": (
+                "cap.docx",
+                buf.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        headers=h,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "cap.docx"
+    assert body["stats"]["tables"] == 1
+    assert body["stats"]["chars"] >= 30
+
+
+def test_scoring_context_resolves_normalized(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "SC"}, headers=h).json()[
+        "id"
+    ]
+    ws_ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()[
+        "workspace_ref"
+    ]
+    ws = BidWorkspace(ws_ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": [
+                {"id": "S1", "item": "技术方案", "weight": 30, "category": "技术"}
+            ],
+            "mandatory_clauses": [
+                {"id": "MC-002", "text": "投标保证金", "is_veto": True}
+            ],
+        },
+    )
+
+    r = test_client.get(f"/api/bid/projects/{pid}/scoring-context", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["scoring"][0]["item"] == "技术方案"
+    assert body["scoring"][0]["weight"] == 30
+    assert body["clauses"][0]["veto"] is True  # is_veto normalized to veto
+
+
+def test_scoring_context_empty_when_no_tender(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "SC2"}, headers=h
+    ).json()["id"]
+    r = test_client.get(f"/api/bid/projects/{pid}/scoring-context", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"scoring": [], "clauses": []}

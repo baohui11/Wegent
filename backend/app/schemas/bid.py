@@ -89,10 +89,16 @@ class QualificationsSaveRequest(BaseModel):
 class AttachmentInfo(BaseModel):
     name: str
     size: int
+    stats: dict | None = None
 
 
 class AttachmentListResponse(BaseModel):
     items: list[AttachmentInfo]
+
+
+class ScoringContextResponse(BaseModel):
+    scoring: list = []
+    clauses: list = []
 
 
 class DraftStatusResponse(BaseModel):
