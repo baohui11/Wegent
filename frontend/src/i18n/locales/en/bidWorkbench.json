@@ -10,15 +10,11 @@
       "desc": "Upload materials and writing requirements"
     },
     "3": {
-      "label": "Stage 3 · Generate",
-      "desc": "Agents collaborate to draft content"
+      "label": "Stage 3 · Generate & Refine",
+      "desc": "Draft each section and refine in place"
     },
     "4": {
-      "label": "Stage 4 · Review",
-      "desc": "Read and refine or regenerate"
-    },
-    "5": {
-      "label": "Stage 5 · Check & Export",
+      "label": "Stage 4 · Check & Export",
       "desc": "Review, typeset and export the bid"
     }
   },
@@ -32,15 +28,11 @@
       "subtitle": "Upload materials and writing requirements per node for content generation"
     },
     "3": {
-      "title": "Stage 3 · Agent generation",
-      "subtitle": "Multiple agents collaborate to draft each section"
+      "title": "Stage 3 · Generate & refine",
+      "subtitle": "Draft each section, then refine and accept in place"
     },
     "4": {
-      "title": "Stage 4 · Read & regenerate",
-      "subtitle": "Read the content and refine or regenerate as needed"
-    },
-    "5": {
-      "title": "Stage 5 · Check & export",
+      "title": "Stage 4 · Check & export",
       "subtitle": "Review the full bid, set typography, and export the final document"
     }
   },
