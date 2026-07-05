@@ -265,6 +265,7 @@
     "apply_children_none": "This section has no subsections to apply to.",
     "auto_fill": "✦ Auto-fill",
     "auto_filling": "Generating…",
+    "brief_generating": "Generating…",
     "status_configured": "Configured",
     "status_progress": "In progress",
     "status_todo": "Pending",

@@ -536,6 +536,15 @@ export const bidMockApis = {
         ])
       ),
     }),
+  autoGenerateBriefs: (_id: number): Promise<{ status: string }> => delay({ status: 'generating' }),
+  getBriefStatus: (
+    _id: number
+  ): Promise<{
+    total: number
+    nodes: Record<string, string>
+    finished: boolean
+    error: string | null
+  }> => delay({ total: 0, nodes: {}, finished: true, error: null }),
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     delay({ items: need(id).attachments ?? [] }),
   uploadAttachment: (id: number, file: File): Promise<AttachmentInfo> => {

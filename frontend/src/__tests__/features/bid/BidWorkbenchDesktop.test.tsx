@@ -24,6 +24,15 @@ beforeEach(() => {
   ;(bidApis.getParseStage as jest.Mock).mockResolvedValue({ stage: 'extracting' })
   ;(bidApis.getGrounding as jest.Mock).mockResolvedValue({ items: {} })
   ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
+  // MaterialsScreen autogen polling defaults (finished immediately) so unrelated
+  // tests that mount Materials don't hang on the polling effect.
+  ;(bidApis.autoGenerateBriefs as jest.Mock).mockResolvedValue({ status: 'generating' })
+  ;(bidApis.getBriefStatus as jest.Mock).mockResolvedValue({
+    total: 0,
+    nodes: {},
+    finished: true,
+    error: null,
+  })
 })
 
 // Helper: land on the list, click "new", reach the standalone new-project screen.

@@ -265,6 +265,7 @@
     "apply_children_none": "当前节点没有子节点可应用。",
     "auto_fill": "✦ 一键补全",
     "auto_filling": "生成中…",
+    "brief_generating": "生成中…",
     "status_configured": "已配置",
     "status_progress": "进行中",
     "status_todo": "待配置",

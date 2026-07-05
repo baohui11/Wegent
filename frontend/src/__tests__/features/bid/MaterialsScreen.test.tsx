@@ -23,6 +23,10 @@ jest.mock('@/apis/bid', () => ({
     getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
     listAttachments: jest.fn(() => Promise.resolve({ items: [] })),
     generateBriefs: jest.fn(() => Promise.resolve({ briefs: {} })),
+    autoGenerateBriefs: jest.fn(() => Promise.resolve({ status: 'generating' })),
+    getBriefStatus: jest.fn(() =>
+      Promise.resolve({ total: 0, nodes: {}, finished: true, error: null })
+    ),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -394,5 +398,73 @@ it('surfaces save error feedback on failure', async () => {
   fireEvent.click(await screen.findByTestId('bid-materials-save'))
   await waitFor(() =>
     expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.save_error')
+  )
+})
+
+it('auto-generates briefs on mount and fills empty nodes after polling finishes', async () => {
+  // First the empty briefs doc (mount load), then the autogen-filled one.
+  ;(bidApis.getBriefs as jest.Mock)
+    .mockResolvedValueOnce({ briefs: {}, materials: [] })
+    .mockResolvedValueOnce({
+      briefs: { c1a: { requirements: 'AI生成要点', importance: '中' } },
+      materials: [],
+    })
+  // Poll: first generating, then finished.
+  ;(bidApis.getBriefStatus as jest.Mock)
+    .mockResolvedValueOnce({
+      total: 1,
+      nodes: { c1a: 'generating' },
+      finished: false,
+      error: null,
+    })
+    .mockResolvedValueOnce({
+      total: 1,
+      nodes: { c1a: 'done' },
+      finished: true,
+      error: null,
+    })
+
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+
+  // Mount triggers autogen.
+  await waitFor(() => expect(bidApis.autoGenerateBriefs).toHaveBeenCalledWith(7))
+  // After polling finishes, the empty node is filled with the generated brief.
+  await waitFor(
+    () => {
+      const req = screen.getByTestId('bid-materials-requirement') as HTMLTextAreaElement
+      expect(req.value).toBe('AI生成要点')
+    },
+    { timeout: 4000 }
+  )
+})
+
+it('does not overwrite a user-edited brief on autogen reload (edit always wins)', async () => {
+  // c1a already has a saved brief; user keeps their text.
+  ;(bidApis.getBriefs as jest.Mock)
+    .mockResolvedValueOnce({
+      briefs: { c1a: { requirements: '用户写的', importance: '中' } },
+      materials: [],
+    })
+    // Autogen reload returns an AI text — must NOT overwrite the user's.
+    .mockResolvedValueOnce({
+      briefs: { c1a: { requirements: 'AI覆盖尝试', importance: '中' } },
+      materials: [],
+    })
+  ;(bidApis.getBriefStatus as jest.Mock).mockResolvedValue({
+    total: 0,
+    nodes: {},
+    finished: true,
+    error: null,
+  })
+
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await waitFor(() => expect(bidApis.autoGenerateBriefs).toHaveBeenCalledWith(7))
+  // The user's text survives the autogen reload.
+  await waitFor(
+    () => {
+      const req = screen.getByTestId('bid-materials-requirement') as HTMLTextAreaElement
+      expect(req.value).toBe('用户写的')
+    },
+    { timeout: 4000 }
   )
 })
