@@ -17,6 +17,8 @@ interface SectionEditorProps {
   content: string
   readOnly: boolean
   onChange: (markdown: string) => void
+  /** Receives the Tiptap Editor instance once it is mounted (for block-regen). */
+  onEditorReady?: (editor: unknown) => void
 }
 
 // The tiptap-markdown extension populates editor.storage.markdown.getMarkdown().
@@ -32,7 +34,7 @@ function markdownOf(editor: Editor | null): string {
   return storage.markdown?.getMarkdown() ?? ''
 }
 
-export function SectionEditor({ content, readOnly, onChange }: SectionEditorProps) {
+export function SectionEditor({ content, readOnly, onChange, onEditorReady }: SectionEditorProps) {
   const editor = useEditor({
     editable: !readOnly,
     content,
@@ -60,6 +62,12 @@ export function SectionEditor({ content, readOnly, onChange }: SectionEditorProp
   useEffect(() => {
     editor?.setEditable(!readOnly)
   }, [readOnly, editor])
+
+  // Hand the editor instance to the parent so it can compute the current
+  // top-level block for paragraph-level regeneration.
+  useEffect(() => {
+    if (editor) onEditorReady?.(editor)
+  }, [editor, onEditorReady])
 
   return (
     <div className="bid-prose">

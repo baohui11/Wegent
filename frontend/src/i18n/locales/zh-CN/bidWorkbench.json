@@ -314,7 +314,8 @@
   "editor": {
     "save_saving": "保存中…",
     "save_saved": "已保存",
-    "save_error": "保存失败"
+    "save_error": "保存失败",
+    "regen_block": "重新生成本段"
   },
   "drafting": {
     "canvas": "生成画布",
