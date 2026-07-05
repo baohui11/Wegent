@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from app.services.bid.parse_pipeline import BidPipelineError
-from app.services.bid.tender_normalize import normalize_scoring
+from app.services.bid.tender_normalize import ensure_normalized_tender
 from app.services.bid.workspace import BidWorkspace
 
 _SCRIPT = (
@@ -28,21 +28,6 @@ _QUALS = "corpus/qualifications.json"
 _KB = "corpus/bidder_knowledge_base.json"
 _TASKS = "workspace/_fidelity_tasks.json"
 _VERDICTS = "workspace/_fidelity_verdicts.json"
-_TENDER = "workspace/tender.json"
-# Audit-only normalized copy; the canonical tender.json is never mutated.
-_TENDER_AUDIT = "workspace/_tender_audit.json"
-
-
-def _prepare_tender(ws: BidWorkspace) -> str:
-    """Write an audit-only tender copy with normalized scoring; return its path.
-
-    Points ``--tender`` at this copy so every check reads normalized scoring
-    while the canonical ``workspace/tender.json`` stays untouched.
-    """
-    tender = dict(ws.read_json(_TENDER))
-    tender["scoring"] = normalize_scoring(tender)
-    ws.write_json(_TENDER_AUDIT, tender)
-    return _TENDER_AUDIT
 
 
 def _audit_args(verdicts: bool, tender_path: str) -> list[str]:
@@ -90,7 +75,7 @@ def _run(ws: BidWorkspace, *, verdicts: bool) -> dict:
         ws.write_json(_QUALS, {"company": "", "items": []})
     if not ws.path(_KB).exists():
         ws.write_json(_KB, {"bidder_knowledge_base": {}})
-    tender_path = _prepare_tender(ws)
+    tender_path = ensure_normalized_tender(ws)
     proc = subprocess.run(
         _audit_args(verdicts, tender_path),
         cwd=str(ws.dir()),

@@ -63,3 +63,21 @@ def test_coverage_scoring_carries_text():
     assert cov["uncovered_scoring"] == [
         {"id": "T1", "text": "总体方案", "target_section": "第一章"}
     ]
+
+
+def test_read_tender_for_coverage_generates_and_normalizes(tmp_path):
+    from app.api.endpoints.bid import _read_tender_for_coverage
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("cov-endpoint", root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {"mandatory_clauses": [{"id": "M1", "is_veto": True, "clause": "X"}]},
+    )
+    # no canonical file yet
+
+    t = _read_tender_for_coverage(ws)
+
+    assert t["mandatory_clauses"][0]["veto"] is True
+    assert t["mandatory_clauses"][0]["text"] == "X"
+    assert ws.path("workspace/tender_normalized.json").exists()

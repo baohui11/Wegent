@@ -169,3 +169,14 @@ def test_write_verdicts_and_rerun_with_verdicts(tmp_path):
     report = audit.run_audit_verdicts(ws)
     assert report["verdict"] in ("PASS", "NEED_FIX", "NEED_FIX_VETO")
     assert "checks" in report
+
+
+def test_run_audit_uses_canonical_normalized_tender(tmp_path):
+    ws = BidWorkspace("aud-canon", root=tmp_path)
+    _seed(ws)
+
+    audit.run_audit(ws)
+
+    assert ws.path("workspace/tender_normalized.json").exists()
+    # the audit-only duplicate no longer exists
+    assert not ws.path("workspace/_tender_audit.json").exists()

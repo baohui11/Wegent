@@ -227,14 +227,11 @@ def get_file(
 
 
 def _read_tender_for_coverage(ws: BidWorkspace) -> dict:
-    # Prefer the normalized projection (scoring flattened, clauses veto-aligned);
-    # fall back to normalizing the raw tender on the fly for pre-existing projects
-    # whose parse predates the canonical write.
-    if ws.path("workspace/tender_normalized.json").exists():
-        return ws.read_json("workspace/tender_normalized.json")
-    from app.services.bid.tender_normalize import normalized_tender
+    # Single canonical normalized projection; generated once on first read for
+    # pre-existing projects whose parse predates the canonical write.
+    from app.services.bid.tender_normalize import ensure_normalized_tender
 
-    return normalized_tender(ws.read_json("workspace/tender.json"))
+    return ws.read_json(ensure_normalized_tender(ws))
 
 
 def _coverage(ws) -> CoverageResponse:

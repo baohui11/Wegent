@@ -71,3 +71,17 @@ def test_build_outline_produces_outline(tmp_path):
     outline = ws.read_json("workspace/outline.json")
     assert isinstance(outline.get("sections"), list) and outline["sections"]
     assert "volumes" in outline
+
+
+def test_build_outline_uses_canonical_normalized_tender(tmp_path):
+    ws = BidWorkspace("outline-canon", root=tmp_path)
+    (ws.dir() / "workspace").mkdir(parents=True)
+    shutil.copy(FIX / "tender.json", ws.path("workspace/tender.json"))
+
+    op.run_build_outline(ws)
+
+    # canonical normalized tender is generated and used
+    assert ws.path("workspace/tender_normalized.json").exists()
+    # the build-only duplicate no longer exists
+    assert not ws.path("workspace/_tender_build.json").exists()
+    assert ws.read_json("workspace/outline.json")["sections"]

@@ -19,23 +19,14 @@ def _covered_ids(outline: dict) -> set[str]:
 
 
 def _scoring_text(s: dict) -> str:
-    return str(
-        s.get("item")
-        or s.get("name")
-        or s.get("title")
-        or s.get("target_section")
-        or ""
-    ).strip()
+    # `item` is the canonical key set by normalize_scoring; coverage always
+    # receives a normalized tender (callers resolve via ensure_normalized_tender).
+    return str(s.get("item") or "").strip()
 
 
 def _clause_text(c: dict) -> str:
-    return str(
-        c.get("clause")
-        or c.get("clause_text")
-        or c.get("text")
-        or c.get("requirement")
-        or ""
-    ).strip()
+    # `text` is the canonical key set by normalize_clauses.
+    return str(c.get("text") or "").strip()
 
 
 def compute_coverage(outline: dict, tender: dict) -> dict:

@@ -22,6 +22,7 @@ from app.services.bid.project_service import BidProjectService
 from app.services.bid.sandbox_runtime import SandboxRuntime
 from app.services.bid.skill_registrar import ensure_bid_skill_registered
 from app.services.bid.specialists import call_ghostwriter
+from app.services.bid.tender_normalize import ensure_normalized_tender
 from app.services.bid.workspace import BidWorkspace
 
 logger = logging.getLogger(__name__)
@@ -66,9 +67,11 @@ async def _seed_corpus(rt: SandboxRuntime, envd: str, ws: BidWorkspace) -> None:
     The agent reads these on demand (per the bid-section-writer methodology) so
     uploaded materials actually drive the drafting instead of being dead storage.
     Missing files are skipped (not every project has qualifications/briefs)."""
-    # JSON artifacts: tender, outline, briefs, knowledge base, qualifications.
+    # JSON artifacts: seed the CANONICAL normalized tender (so the drafting agent
+    # sees the same scoring/clauses shape as coverage/UI), plus outline, briefs,
+    # knowledge base, qualifications.
     json_rels = [
-        ("workspace/tender.json", "tender.json"),
+        (ensure_normalized_tender(ws), "tender.json"),
         ("workspace/outline.json", "outline.json"),
         ("corpus/node_briefs.json", "node_briefs.json"),
         ("corpus/bidder_knowledge_base.json", "bidder_knowledge_base.json"),

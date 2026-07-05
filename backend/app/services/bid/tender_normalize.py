@@ -6,6 +6,8 @@ would KeyError/AttributeError the deterministic build/audit. These helpers fill
 safe defaults so the vendored scripts cannot crash on partial LLM output. Used
 by both outline_pipeline (build_outline) and audit_service (run_audit)."""
 
+from app.services.bid.workspace import BidWorkspace
+
 # Category values that mean "price" and must be excluded from scoring coverage.
 _PRICE_CATEGORIES = {"price", "价格", "报价"}
 
@@ -154,3 +156,20 @@ def normalized_tender(tender: dict) -> dict:
             tender.get("required_outline")
         )
     return out
+
+
+_NORMALIZED_REL = "workspace/tender_normalized.json"
+
+
+def ensure_normalized_tender(ws: BidWorkspace) -> str:
+    """Return the workspace-relative path to the single canonical normalized
+    tender, generating it from the raw ``workspace/tender.json`` when absent
+    (older projects parsed before the canonical write). Idempotent; the raw
+    tender is never mutated. This is the ONE normalized projection every
+    downstream consumer reads (coverage / scoring-context / build_outline /
+    audit / sandbox drafting seed)."""
+    if not ws.path(_NORMALIZED_REL).exists():
+        ws.write_json(
+            _NORMALIZED_REL, normalized_tender(ws.read_json("workspace/tender.json"))
+        )
+    return _NORMALIZED_REL
