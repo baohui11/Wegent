@@ -39,6 +39,17 @@ const defaultConfig = (): NodeConfig => ({
 
 let matSeq = 0
 
+// Is `id` a descendant of `ancestorId` in the flat tree?
+function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean {
+  const map = new Map(flat.map(n => [n.id, n]))
+  let cur = map.get(id)
+  while (cur && cur.parentId) {
+    if (cur.parentId === ancestorId) return true
+    cur = map.get(cur.parentId)
+  }
+  return false
+}
+
 export function MaterialsScreen({
   projectId,
   outline,
@@ -240,31 +251,24 @@ export function MaterialsScreen({
       )
     )
 
-  // Following sections at the current node's level — the direct following
-  // siblings only (same parent, same depth). NOT their subtrees and NOT the
-  // current node's own children (those are a different level). Empty when there
-  // is nothing after it at this level.
-  const followingAtLevel = (): FlatNode[] => {
-    if (!selectedId) return []
-    const idx = rows.findIndex(n => n.id === selectedId)
-    if (idx < 0) return []
-    const parentId = flat.find(n => n.id === selectedId)?.parentId ?? null
-    return rows.slice(idx + 1).filter(n => (n.parentId ?? null) === parentId)
-  }
-  // Batch: apply the current node's writing config + requirements to every
-  // following leaf at this level (overwrites). Priority is excluded — it derives
-  // per-node from that node's own covered scoring/veto clauses.
-  const doApplyFollowing = () => {
+  // All descendant sections under the selected node (its whole subtree). The
+  // selected node is the source; batch propagates its config down to these.
+  const descendantNodes = (): FlatNode[] =>
+    selectedId ? rows.filter(n => descendantOf(flat, selectedId, n.id)) : []
+  // Batch: apply the selected node's writing config + requirements to every node
+  // belonging to it (all descendants), overwriting them. Priority is excluded —
+  // it derives per-node from that node's own covered scoring/veto clauses.
+  const doApplyToChildren = () => {
     if (!selectedId) return
-    const following = followingAtLevel()
-    if (!following.length) return
+    const targets = descendantNodes()
+    if (!targets.length) return
     const { priority: _priority, ...srcCfg } = getConfig(selectedId)
     const srcReq = requirements[selectedId] ?? ''
     const nextConfigs = { ...configs }
     const nextReqs = { ...requirements }
-    following.forEach(l => {
-      nextConfigs[l.id] = { ...getConfig(l.id), ...srcCfg }
-      nextReqs[l.id] = srcReq
+    targets.forEach(n => {
+      nextConfigs[n.id] = { ...getConfig(n.id), ...srcCfg }
+      nextReqs[n.id] = srcReq
     })
     setConfigs(nextConfigs)
     setRequirements(nextReqs)
@@ -698,12 +702,12 @@ export function MaterialsScreen({
               <div className="flex flex-col gap-2">
                 <QuickAction
                   onClick={() => setConfirmBatch(true)}
-                  disabled={followingAtLevel().length === 0}
+                  disabled={descendantNodes().length === 0}
                   title={
-                    followingAtLevel().length === 0 ? t('phase2.apply_following_none') : undefined
+                    descendantNodes().length === 0 ? t('phase2.apply_children_none') : undefined
                   }
                 >
-                  {t('phase2.apply_following')}
+                  {t('phase2.apply_children')}
                 </QuickAction>
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
               </div>
@@ -713,14 +717,14 @@ export function MaterialsScreen({
       </div>
       {confirmBatch && (
         <ConfirmDialog
-          title={t('phase2.apply_following')}
-          desc={t('phase2.apply_following_confirm', { count: followingAtLevel().length })}
+          title={t('phase2.apply_children')}
+          desc={t('phase2.apply_children_confirm', { count: descendantNodes().length })}
           cancel={t('outline.delete_cancel')}
-          confirm={t('phase2.apply_following_ok')}
+          confirm={t('phase2.apply_children_ok')}
           onCancel={() => setConfirmBatch(false)}
           onConfirm={() => {
             setConfirmBatch(false)
-            doApplyFollowing()
+            doApplyToChildren()
           }}
         />
       )}

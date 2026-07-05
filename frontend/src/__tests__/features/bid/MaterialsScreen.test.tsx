@@ -85,29 +85,23 @@ it('marks a leaf configured once it has requirements (materials optional)', asyn
   await waitFor(() => expect(tree.textContent).toContain('phase2.status_configured'))
 })
 
-it('batch-applies the current node requirements to following leaves', async () => {
+it('applies the current section config to all its subsections (descendants)', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   await screen.findByTestId('bid-materials-tree')
-  fireEvent.click(screen.getByText('Leaf A')) // select the leaf (auto-select is the chapter)
+  fireEvent.click(screen.getByText('Chapter 1')) // the chapter owns the subsections
   fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
     target: { value: 'BATCH_REQ' },
   })
-  fireEvent.click(screen.getByText('phase2.apply_following'))
+  fireEvent.click(screen.getByText('phase2.apply_children'))
   // In-app confirm dialog (not native window.confirm) -> click its OK.
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
-  await waitFor(() =>
-    expect(bidApis.saveBriefs).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({
-        briefs: expect.objectContaining({
-          c1b: expect.objectContaining({ requirements: 'BATCH_REQ' }),
-        }),
-      })
-    )
-  )
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.c1a.requirements).toBe('BATCH_REQ') // subsection: applied
+  expect(doc.briefs.c1b.requirements).toBe('BATCH_REQ') // subsection: applied
 })
 
-it('batch scope stays within the current parent branch (not sibling chapters)', async () => {
+it('scopes apply-to-subsections to the node own subtree, not sibling chapters', async () => {
   const TWO_CHAPTERS: OutlineDoc = {
     sections: [
       {
@@ -123,19 +117,20 @@ it('batch scope stays within the current parent branch (not sibling chapters)', 
   }
   render(<MaterialsScreen projectId={7} outline={TWO_CHAPTERS} onComplete={jest.fn()} />)
   await screen.findByTestId('bid-materials-tree')
-  fireEvent.click(screen.getByText('Leaf A')) // select the leaf under chapter 1
+  fireEvent.click(screen.getByText('Chapter 1')) // apply down from chapter 1
   fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
     target: { value: 'SCOPED' },
   })
-  fireEvent.click(screen.getByText('phase2.apply_following'))
+  fireEvent.click(screen.getByText('phase2.apply_children'))
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
-  expect(doc.briefs.c1b.requirements).toBe('SCOPED') // same-parent sibling: applied
+  expect(doc.briefs.c1a.requirements).toBe('SCOPED') // own subsection: applied
+  expect(doc.briefs.c1b.requirements).toBe('SCOPED') // own subsection: applied
   expect(doc.briefs.c2a?.requirements ?? '').toBe('') // other chapter: untouched
 })
 
-it('batch applies to same-level following siblings only, not their subtrees', async () => {
+it('applies to the whole subtree including nested grandchildren', async () => {
   const NESTED: OutlineDoc = {
     sections: [
       {
@@ -150,21 +145,22 @@ it('batch applies to same-level following siblings only, not their subtrees', as
   }
   render(<MaterialsScreen projectId={7} outline={NESTED} onComplete={jest.fn()} />)
   await screen.findByTestId('bid-materials-tree')
-  fireEvent.click(screen.getByText('Sec A')) // leaf, sibling of sub-chapter 'b'
-  fireEvent.change(screen.getByTestId('bid-materials-requirement'), { target: { value: 'LEVEL' } })
-  fireEvent.click(screen.getByText('phase2.apply_following'))
+  fireEvent.click(screen.getByText('Chapter')) // top chapter owns the whole subtree
+  fireEvent.change(screen.getByTestId('bid-materials-requirement'), { target: { value: 'DEEP' } })
+  fireEvent.click(screen.getByText('phase2.apply_children'))
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
-  expect(doc.briefs.b.requirements).toBe('LEVEL') // same-level sibling: applied
-  expect(doc.briefs.b1?.requirements ?? '').toBe('') // sibling's child (deeper level): untouched
+  expect(doc.briefs.a.requirements).toBe('DEEP') // child
+  expect(doc.briefs.b.requirements).toBe('DEEP') // child (sub-chapter)
+  expect(doc.briefs.b1.requirements).toBe('DEEP') // grandchild — whole subtree
 })
 
-it('disables batch-apply when there are no following sections at this level', async () => {
+it('disables apply-to-subsections on a leaf (no subsections)', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   await screen.findByTestId('bid-materials-tree')
-  fireEvent.click(screen.getByText('Leaf B')) // last leaf under the chapter
-  expect(screen.getByText('phase2.apply_following').closest('button')).toBeDisabled()
+  fireEvent.click(screen.getByText('Leaf A')) // a leaf -> no descendants
+  expect(screen.getByText('phase2.apply_children').closest('button')).toBeDisabled()
 })
 
 it('save & next advances off a chapter node (not stuck) since chapters are sections too', async () => {
