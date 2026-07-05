@@ -121,7 +121,7 @@ export interface NodeBrief {
   wordMin?: string
   wordMax?: string
   needFigure?: string
-  priority?: string
+  importance?: string
 }
 
 export interface MaterialEntry {

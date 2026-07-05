@@ -251,7 +251,7 @@
     "detail_placeholder": "请详细描述本节的编写要求…",
     "save_next": "保存并继续下一个节点",
     "node_info": "节点信息",
-    "priority": "优先级",
+    "importance": "重要性",
     "scoring_ref": "关联评分条款",
     "completion": "填写完成度",
     "completion_files": "素材",
@@ -284,10 +284,10 @@
     "saving": "保存中…",
     "saved": "已保存",
     "save_error": "保存失败",
-    "priority_high": "高",
-    "priority_mid": "中",
-    "priority_low": "低",
-    "priority_auto": "自动（{{value}}）"
+    "importance_high": "高",
+    "importance_mid": "中",
+    "importance_low": "低",
+    "importance_auto": "自动（{{value}}）"
   },
   "materials": {
     "kb_title": "投标人知识库",
