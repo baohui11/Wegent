@@ -20,7 +20,6 @@ import type {
   OutlineDoc,
   OutlineNode,
   OutlineResponse,
-  ScoringContext,
   ScoringItem,
   TenderDoc,
 } from './bid'
@@ -272,7 +271,6 @@ interface MockProject extends BidProject {
   quals?: Record<string, unknown>
   attachments?: AttachmentInfo[]
   briefsDoc?: BriefsDoc
-  scoringContext?: ScoringContext
   accepted?: Record<string, boolean>
   audit?: AuditReport
 }
@@ -475,7 +473,6 @@ export const bidMockApis = {
     p.outline = outline
     return delay({ outline, coverage: p.coverage ?? MOCK_COVERAGE })
   },
-  getCoverage: (id: number): Promise<CoverageReport> => delay(need(id).coverage ?? MOCK_COVERAGE),
   declarePackage: (): Promise<{ status: string }> => delay({ status: 'declared' }),
   getKnowledgeBase: (id: number): Promise<{ knowledge_base: Record<string, unknown> }> =>
     delay({ knowledge_base: need(id).kb ?? {} }),
@@ -514,8 +511,6 @@ export const bidMockApis = {
     }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
-  getScoringContext: (id: number): Promise<ScoringContext> =>
-    delay(need(id).scoringContext ?? { scoring: [], clauses: [] }),
   getGrounding: (_id: number): Promise<GroundingDoc> => delay(MOCK_GROUNDING),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {
     need(id).briefsDoc = doc

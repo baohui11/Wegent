@@ -106,11 +106,6 @@ export interface ClauseItem {
   [k: string]: unknown
 }
 
-export interface ScoringContext {
-  scoring: ScoringItem[]
-  clauses: ClauseItem[]
-}
-
 export interface SectionGrounding {
   scoring: ScoringItem[]
   clauses: ClauseItem[]
@@ -220,10 +215,6 @@ const realBidApis = {
     apiClient.get<OutlineResponse>(`/bid/projects/${id}/outline`),
   saveOutline: (id: number, outline: OutlineDoc): Promise<OutlineResponse> =>
     apiClient.put<OutlineResponse>(`/bid/projects/${id}/outline`, { outline }),
-  getCoverage: (id: number): Promise<CoverageReport> =>
-    apiClient.get<CoverageReport>(`/bid/projects/${id}/coverage`),
-  getScoringContext: (id: number): Promise<ScoringContext> =>
-    apiClient.get<ScoringContext>(`/bid/projects/${id}/scoring-context`),
   getGrounding: (id: number): Promise<GroundingDoc> =>
     apiClient.get<GroundingDoc>(`/bid/projects/${id}/grounding`),
   declarePackage: (id: number, pkg: string): Promise<{ status: string }> =>
