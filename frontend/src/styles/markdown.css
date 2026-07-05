@@ -327,3 +327,66 @@
   border-radius: var(--radius);
   background-color: rgba(var(--color-bg-muted), 0.3);
 }
+
+/* ==========================================================================
+   Bid Workbench — serif "paper" prose (scopes EnhancedMarkdown to the
+   bid document look; relies on the container's --bid-* token remap)
+   ========================================================================== */
+
+.bid-prose {
+  font-family: var(--bid-serif);
+  color: var(--bid-ink-2);
+  font-size: 14.5px;
+}
+
+.bid-prose p {
+  margin-bottom: 0.75em;
+  line-height: 2;
+  text-indent: 2em;
+}
+
+.bid-prose h1,
+.bid-prose h2,
+.bid-prose h3,
+.bid-prose h4 {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-weight: 700;
+  color: var(--bid-ink);
+  margin: 0.75em 0 0.5em;
+}
+
+.bid-prose h3 {
+  font-size: 15px;
+}
+
+.bid-prose ul,
+.bid-prose ol {
+  line-height: 2;
+  margin-bottom: 0.75em;
+}
+
+.bid-prose blockquote {
+  border-left: 3px solid var(--bid-primary);
+  padding-left: 1em;
+  color: var(--bid-sub);
+  margin: 0.75em 0;
+}
+
+.bid-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.bid-prose th,
+.bid-prose td {
+  border: 1px solid var(--bid-border-2);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.bid-prose th {
+  background: var(--bid-paper);
+  font-weight: 700;
+}

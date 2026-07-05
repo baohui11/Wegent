@@ -35,6 +35,32 @@ test('renders sections by status; done section shows body, progress shows count'
   expect(screen.getByTestId('bid-draft-progress').textContent).toContain('1/2')
 })
 
+test('renders full markdown (table + code fence) via EnhancedMarkdown, not parseBody', async () => {
+  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
+    content: '| 项 | 值 |\n| --- | --- |\n| 报价 | 100 |\n\n```py\nx = 1\n```',
+  })
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-generate-document')
+  // EnhancedMarkdown routes through react-markdown; the Jest mock for it stamps
+  // every render with `data-testid="react-markdown-mock"`. The old parseBody()
+  // renderer emits raw <p>/<div> and would NOT produce this marker — so its
+  // presence proves the renderer swap, while the text checks prove the table +
+  // code-fence lines survive intact (parseBody would have kept them as flat
+  // paragraphs and dropped the ``` fence delimiters).
+  await waitFor(() => expect(screen.getByTestId('react-markdown-mock')).toBeInTheDocument())
+  expect(screen.getByText(/报价 \| 100/)).toBeInTheDocument()
+  expect(screen.getByText('x = 1')).toBeInTheDocument()
+  // The fence delimiters themselves reach the markdown renderer (parseBody
+  // would also have rendered them as paragraph text, so assert via the mock's
+  // presence + the code line, which together pin the renderer).
+})
+
 test('right-panel actions are disabled until the focused section is done', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 2,

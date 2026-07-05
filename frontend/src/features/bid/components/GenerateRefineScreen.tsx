@@ -11,6 +11,7 @@ import {
   rootChapterId,
   type FlatNode,
 } from '../canvas/outlineGraph'
+import { EnhancedMarkdown } from '@/components/common/EnhancedMarkdown'
 
 type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
 
@@ -20,22 +21,6 @@ const DOT: Record<string, string> = {
   done: 'var(--bid-success)',
   error: 'var(--bid-primary)',
   needs_rework: 'var(--bid-warn)',
-}
-
-interface Block {
-  kind: 'sub' | 'bullet' | 'para'
-  text: string
-}
-function parseBody(content: string): Block[] {
-  return content
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('## ') && !l.startsWith('# '))
-    .map(l => {
-      if (l.startsWith('### ')) return { kind: 'sub' as const, text: l.slice(4) }
-      if (l.startsWith('- ')) return { kind: 'bullet' as const, text: l.slice(2) }
-      return { kind: 'para' as const, text: l }
-    })
 }
 
 export type DraftState = 'running' | 'done'
@@ -274,7 +259,6 @@ export function GenerateRefineScreen({
           {sectionIds.map(id => {
             const st = status.sections[id] as SecStatus
             const heading = nameOf.get(id) ?? id
-            const blocks = st === 'done' ? parseBody(contents[id] ?? '') : []
             return (
               <div
                 key={id}
@@ -324,33 +308,13 @@ export function GenerateRefineScreen({
 
                 {st === 'done' && (
                   <>
-                    {blocks.map((b, i) =>
-                      b.kind === 'sub' ? (
-                        <div
-                          key={i}
-                          className="mb-2 mt-3 text-[15px] font-bold"
-                          style={{ color: 'var(--bid-ink)' }}
-                        >
-                          {b.text}
-                        </div>
-                      ) : b.kind === 'bullet' ? (
-                        <div
-                          key={i}
-                          className="mb-1.5 pl-6 text-[14.5px] leading-[2]"
-                          style={{ color: 'var(--bid-ink-2)' }}
-                        >
-                          • {b.text}
-                        </div>
-                      ) : (
-                        <p
-                          key={i}
-                          className="mb-3 text-[14.5px] leading-[2]"
-                          style={{ color: 'var(--bid-ink-2)', textIndent: '2em' }}
-                        >
-                          {b.text}
-                        </p>
-                      )
-                    )}
+                    {/* Render section content as full Markdown (code fences,
+                        GFM tables, blockquotes, emphasis, math, lists) via the
+                        shared EnhancedMarkdown renderer. Scoped to the bid
+                        paper look via the .bid-prose class in markdown.css. */}
+                    <div className="bid-prose">
+                      <EnhancedMarkdown source={contents[id] ?? ''} theme="light" />
+                    </div>
                     {accepted[id] && (
                       <div
                         className="inline-block rounded-md px-2 py-0.5 text-[10.5px]"
