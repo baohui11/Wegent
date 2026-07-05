@@ -59,10 +59,12 @@ export function MaterialsScreen({
   projectId,
   outline,
   onComplete: _onComplete,
+  persistRef,
 }: {
   projectId: number | null
   outline?: OutlineDoc
   onComplete: () => void
+  persistRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }) {
   const { t } = useTranslation('bidWorkbench')
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
@@ -76,6 +78,7 @@ export function MaterialsScreen({
   const [materials, setMaterials] = useState<Material[]>([])
   const [scoring, setScoring] = useState<ScoringItem[]>([])
   const [clauses, setClauses] = useState<ClauseItem[]>([])
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   // Select the first leaf once the outline is available.
@@ -143,12 +146,21 @@ export function MaterialsScreen({
   }
   const persist = async (mats?: Material[]) => {
     if (projectId == null) return
+    setSaveState('saving')
     try {
       await bidApis.saveBriefs(projectId, buildDoc(mats))
+      setSaveState('saved')
+      window.setTimeout(() => setSaveState('idle'), 1500)
     } catch {
-      /* keep editing; next save retries */
+      setSaveState('error')
     }
   }
+
+  // Expose the persist callback so the shell header can save before opening the
+  // drafting confirm dialog (single entry point that always persists first).
+  useEffect(() => {
+    if (persistRef) persistRef.current = () => persist()
+  })
 
   const completion = (id: string): number => {
     const files = materials.filter(m => m.linkedNodeIds.includes(id)).length
@@ -486,10 +498,21 @@ export function MaterialsScreen({
                 style={{
                   background: '#fff',
                   border: '1px solid var(--bid-primary)',
-                  color: 'var(--bid-primary)',
+                  color:
+                    saveState === 'error'
+                      ? '#B3453D'
+                      : saveState === 'saved'
+                        ? 'var(--bid-success)'
+                        : 'var(--bid-primary)',
                 }}
               >
-                {t('phase2.save')}
+                {saveState === 'saving'
+                  ? t('phase2.saving')
+                  : saveState === 'saved'
+                    ? t('phase2.saved')
+                    : saveState === 'error'
+                      ? t('phase2.save_error')
+                      : t('phase2.save')}
               </button>
               <button
                 type="button"

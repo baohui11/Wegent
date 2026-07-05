@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidThemeVars } from '@/features/bid/theme'
 import { useBidProject, phaseToStage } from '@/features/bid/hooks/useBidProject'
@@ -59,6 +59,9 @@ export function BidWorkbenchDesktop() {
   const [maxStage, setMaxStage] = useState(1)
   const [draftState, setDraftState] = useState<'running' | 'done'>('running')
   const [confirmDraft, setConfirmDraft] = useState(false)
+  // Header "enter generation" must persist the current materials briefs before
+  // the confirm dialog opens; MaterialsScreen registers its persist here.
+  const materialsPersist = useRef<(() => Promise<void>) | null>(null)
   // Real LLM call log for the outline canvas' parse-log panel (B3 endpoint).
   const [llmLog, setLlmLog] = useState<LlmCall[]>([])
   // Current real backend parse stage (segmenting/extracting/merging/…) shown in
@@ -199,7 +202,13 @@ export function BidWorkbenchDesktop() {
         {t('outline.confirm')}
       </HeaderButton>
     ) : phase === 'materials' ? (
-      <HeaderButton onClick={() => setConfirmDraft(true)} testid="materials-next-button">
+      <HeaderButton
+        onClick={async () => {
+          await materialsPersist.current?.()
+          setConfirmDraft(true)
+        }}
+        testid="materials-next-button"
+      >
         {t('phase2.header_action')}
       </HeaderButton>
     ) : phase === 'drafting' ? (
@@ -254,6 +263,7 @@ export function BidWorkbenchDesktop() {
             projectId={projectId}
             outline={outline ?? undefined}
             onComplete={() => setConfirmDraft(true)}
+            persistRef={materialsPersist}
           />
         )}
         {phase === 'drafting' && projectId != null && (

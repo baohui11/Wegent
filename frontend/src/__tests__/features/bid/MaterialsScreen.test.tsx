@@ -171,3 +171,31 @@ it('shows deterministic stats from uploaded attachment', async () => {
   // Real stats surface in the right panel.
   await waitFor(() => expect(bidApis.uploadAttachment).toHaveBeenCalled())
 })
+
+it('surfaces save state feedback when saving the node', async () => {
+  let resolveSave!: (v: unknown) => void
+  ;(bidApis.saveBriefs as jest.Mock).mockReturnValueOnce(
+    new Promise(r => {
+      resolveSave = r
+    })
+  )
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.click(await screen.findByTestId('bid-materials-save'))
+  // While in-flight, the button shows the saving label.
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.saving')
+  )
+  resolveSave({})
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.saved')
+  )
+})
+
+it('surfaces save error feedback on failure', async () => {
+  ;(bidApis.saveBriefs as jest.Mock).mockRejectedValueOnce(new Error('boom'))
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.click(await screen.findByTestId('bid-materials-save'))
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save')).toHaveTextContent('phase2.save_error')
+  )
+})

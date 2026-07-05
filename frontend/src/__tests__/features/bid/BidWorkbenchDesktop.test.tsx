@@ -132,6 +132,37 @@ it('opening a phase-3 project resumes at the materials screen', async () => {
   expect(screen.getByTestId('bid-stepper-stage-2')).toHaveAttribute('data-current', 'true')
 })
 
+it('materials-next-button persists briefs before opening the confirm dialog', async () => {
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([
+    {
+      id: 7,
+      title: '政务',
+      current_phase: 3,
+      max_phase_reached: 3,
+      status: 'parsed',
+      created_at: '2026-07-03T00:00:00Z',
+    },
+  ])
+  ;(bidApis.getKnowledgeBase as jest.Mock).mockResolvedValue({
+    knowledge_base: { bidder_knowledge_base: {} },
+  })
+  ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
+    qualifications: { company: '', items: {} },
+  })
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValue({ briefs: {}, materials: [] })
+  ;(bidApis.saveBriefs as jest.Mock).mockImplementation((_id: number, d: unknown) =>
+    Promise.resolve(d)
+  )
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(await screen.findByTestId('bid-project-card-7'))
+  await screen.findByTestId('bid-materials-screen')
+  fireEvent.click(screen.getByTestId('materials-next-button'))
+  // Header must persist the current briefs before the confirm dialog appears.
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  expect(await screen.findByTestId('bid-confirm-ok')).toBeInTheDocument()
+})
+
 it('opening a parse_failed project resumes to import panel and parses the existing project', async () => {
   ;(bidApis.listProjects as jest.Mock).mockResolvedValue([
     {
