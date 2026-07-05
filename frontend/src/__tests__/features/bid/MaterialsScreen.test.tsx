@@ -135,6 +135,31 @@ it('batch scope stays within the current parent branch (not sibling chapters)', 
   expect(doc.briefs.c2a?.requirements ?? '').toBe('') // other chapter: untouched
 })
 
+it('batch applies to same-level following siblings only, not their subtrees', async () => {
+  const NESTED: OutlineDoc = {
+    sections: [
+      {
+        id: 'ch',
+        title: 'Chapter',
+        children: [
+          { id: 'a', title: 'Sec A' },
+          { id: 'b', title: 'Sec B', children: [{ id: 'b1', title: 'Sub B1' }] },
+        ],
+      },
+    ],
+  }
+  render(<MaterialsScreen projectId={7} outline={NESTED} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-tree')
+  fireEvent.click(screen.getByText('Sec A')) // leaf, sibling of sub-chapter 'b'
+  fireEvent.change(screen.getByTestId('bid-materials-requirement'), { target: { value: 'LEVEL' } })
+  fireEvent.click(screen.getByText('phase2.apply_following'))
+  fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.b.requirements).toBe('LEVEL') // same-level sibling: applied
+  expect(doc.briefs.b1?.requirements ?? '').toBe('') // sibling's child (deeper level): untouched
+})
+
 it('disables batch-apply when there are no following sections at this level', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   await screen.findByTestId('bid-materials-tree')

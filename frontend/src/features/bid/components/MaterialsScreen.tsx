@@ -39,17 +39,6 @@ const defaultConfig = (): NodeConfig => ({
 
 let matSeq = 0
 
-// Is `id` a descendant of `ancestorId` in the flat tree?
-function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean {
-  const map = new Map(flat.map(n => [n.id, n]))
-  let cur = map.get(id)
-  while (cur && cur.parentId) {
-    if (cur.parentId === ancestorId) return true
-    cur = map.get(cur.parentId)
-  }
-  return false
-}
-
 export function MaterialsScreen({
   projectId,
   outline,
@@ -251,18 +240,16 @@ export function MaterialsScreen({
       )
     )
 
-  // Following sections at the current node's level — nodes after it (DFS) that
-  // share its parent branch, excluding the current node's own subtree. Empty
-  // when there is nothing after it at this level.
+  // Following sections at the current node's level — the direct following
+  // siblings only (same parent, same depth). NOT their subtrees and NOT the
+  // current node's own children (those are a different level). Empty when there
+  // is nothing after it at this level.
   const followingAtLevel = (): FlatNode[] => {
     if (!selectedId) return []
     const idx = rows.findIndex(n => n.id === selectedId)
     if (idx < 0) return []
     const parentId = flat.find(n => n.id === selectedId)?.parentId ?? null
-    return rows.slice(idx + 1).filter(n => {
-      const underParent = parentId != null ? descendantOf(flat, parentId, n.id) : true
-      return underParent && !descendantOf(flat, selectedId, n.id)
-    })
+    return rows.slice(idx + 1).filter(n => (n.parentId ?? null) === parentId)
   }
   // Batch: apply the current node's writing config + requirements to every
   // following leaf at this level (overwrites). Priority is excluded — it derives
