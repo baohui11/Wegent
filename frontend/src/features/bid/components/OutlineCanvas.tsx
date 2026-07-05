@@ -621,12 +621,6 @@ export function OutlineCanvas({
                 k={t('outline.detail_parent')}
                 v={c.selected.parent?.name || t('outline.root')}
               />
-              <Row
-                k={t('outline.detail_words')}
-                v={`${t('outline.words_hint', {
-                  n: c.selected.hasChildren ? '1200–1800' : '600–1000',
-                })}${t('outline.estimate_suffix')}`}
-              />
               <div className="flex items-center justify-between gap-2">
                 <span className="flex-shrink-0 text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
                   {t('outline.detail_priority')}
