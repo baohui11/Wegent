@@ -24,7 +24,6 @@ export type Phase =
   | 'done'
   | 'error'
 
-// Maps a workbench phase to the mockup's five-stage stepper index.
 // Maps a workbench phase to the four-stage stepper index.
 export function phaseToStage(phase: Phase | string): number {
   switch (phase) {
