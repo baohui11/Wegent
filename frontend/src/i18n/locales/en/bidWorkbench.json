@@ -288,7 +288,8 @@
     "save_error": "Save failed",
     "priority_high": "High",
     "priority_mid": "Medium",
-    "priority_low": "Low"
+    "priority_low": "Low",
+    "priority_auto": "Auto ({{value}})"
   },
   "materials": {
     "kb_title": "Bidder knowledge base",

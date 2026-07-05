@@ -4,13 +4,19 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import {
   bidApis,
+  type AttachmentStats,
   type BriefsDoc,
-  type ClauseItem,
   type NodeBrief,
   type OutlineDoc,
-  type ScoringItem,
+  type SectionGrounding,
 } from '@/apis/bid'
-import { dfsOrder, flattenOutline, isVisible, type FlatNode } from '../canvas/outlineGraph'
+import {
+  dfsOrder,
+  flattenOutline,
+  isDescendantOf,
+  isVisible,
+  type FlatNode,
+} from '../canvas/outlineGraph'
 import { ConfirmDialog } from './ConfirmDialog'
 
 interface NodeConfig {
@@ -24,9 +30,7 @@ interface NodeConfig {
 interface Material {
   id: string
   name: string
-  size: number
   linkedNodeIds: string[]
-  stats?: { chars: number; pages: number; tables: number; images: number } | null
 }
 
 const defaultConfig = (): NodeConfig => ({
@@ -38,17 +42,6 @@ const defaultConfig = (): NodeConfig => ({
 })
 
 let matSeq = 0
-
-// Is `id` a descendant of `ancestorId` in the flat tree?
-function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean {
-  const map = new Map(flat.map(n => [n.id, n]))
-  let cur = map.get(id)
-  while (cur && cur.parentId) {
-    if (cur.parentId === ancestorId) return true
-    cur = map.get(cur.parentId)
-  }
-  return false
-}
 
 export function MaterialsScreen({
   projectId,
@@ -70,8 +63,13 @@ export function MaterialsScreen({
   const [configs, setConfigs] = useState<Record<string, NodeConfig>>({})
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
-  const [scoring, setScoring] = useState<ScoringItem[]>([])
-  const [clauses, setClauses] = useState<ClauseItem[]>([])
+  const [grounding, setGrounding] = useState<Record<string, SectionGrounding>>({})
+  // Display-only metadata (size/stats) for materials, resolved from the backend
+  // attachments list. The brief stores only references ({id, name, linkedNodeIds}),
+  // so size/stats are sourced from the single backend authority on each load.
+  const [attachMeta, setAttachMeta] = useState<
+    Record<string, { size: number; stats?: AttachmentStats | null }>
+  >({})
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   // Which save action is currently reflecting saveState, so the feedback shows
   // on the button the user actually clicked (not always the first one).
@@ -114,19 +112,40 @@ export function MaterialsScreen({
     }
   }, [projectId])
 
-  // Load scoring/clauses context for covers resolution + priority derivation.
+  // Per-node grounding (scoring/veto clauses each node covers), resolved by the
+  // backend from the canonical tender — no client-side id->text join.
   useEffect(() => {
     if (projectId == null) return
     let alive = true
     bidApis
-      .getScoringContext(projectId)
-      .then(sc => {
-        if (!alive) return
-        setScoring(sc.scoring ?? [])
-        setClauses(sc.clauses ?? [])
+      .getGrounding(projectId)
+      .then(doc => {
+        if (alive) setGrounding(doc.items ?? {})
       })
       .catch(() => {
-        /* no tender normalized yet -> neutral defaults */
+        /* no outline/tender yet -> empty grounding */
+      })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
+  // Display-only material metadata (size/stats) comes from the attachments list;
+  // the brief itself stores only references, so this is the single source for
+  // size/stats at render time.
+  useEffect(() => {
+    if (projectId == null) return
+    let alive = true
+    bidApis
+      .listAttachments(projectId)
+      .then(res => {
+        if (!alive) return
+        const m: Record<string, { size: number; stats?: AttachmentStats | null }> = {}
+        for (const a of res.items) m[a.name] = { size: a.size, stats: a.stats ?? null }
+        setAttachMeta(m)
+      })
+      .catch(() => {
+        /* attachments not yet available -> neutral size/stats */
       })
     return () => {
       alive = false
@@ -216,13 +235,17 @@ export function MaterialsScreen({
     for (const f of picked) {
       try {
         const info = await bidApis.uploadAttachment(projectId, f)
+        // Brief stores only a reference; size/stats are sourced from the
+        // attachments list at render, so they are not duplicated here.
         added.push({
           id: `m${Date.now()}_${matSeq++}`,
           name: info.name,
-          size: info.size,
           linkedNodeIds: [selectedId],
-          stats: info.stats ?? null,
         })
+        setAttachMeta(prev => ({
+          ...prev,
+          [info.name]: { size: info.size, stats: info.stats ?? null },
+        }))
       } catch {
         /* skip failed upload; user can retry */
       }
@@ -254,7 +277,7 @@ export function MaterialsScreen({
   // All descendant sections under the selected node (its whole subtree). The
   // selected node is the source; batch propagates its config down to these.
   const descendantNodes = (): FlatNode[] =>
-    selectedId ? rows.filter(n => descendantOf(flat, selectedId, n.id)) : []
+    selectedId ? rows.filter(n => isDescendantOf(flat, selectedId, n.id)) : []
   // Batch: apply the selected node's writing config + requirements to every node
   // belonging to it (all descendants), overwriting them. Priority is excluded —
   // it derives per-node from that node's own covered scoring/veto clauses.
@@ -313,17 +336,12 @@ export function MaterialsScreen({
   const reqText = selectedId ? (requirements[selectedId] ?? '') : ''
   const comp = selectedId ? completion(selectedId) : 0
 
-  // Resolve outline covers (internal ids) to user-facing scoring/clause text.
-  const coverText = (cid: string): { text: string; veto: boolean; weight?: number } | null => {
-    const c = clauses.find(x => x.id === cid)
-    if (c) return { text: c.text || cid, veto: !!c.veto }
-    const s = scoring.find(x => x.id === cid)
-    if (s) return { text: s.item || cid, veto: false, weight: s.weight }
-    return null
-  }
-  const resolvedCovers = (selected?.covers ?? [])
-    .map(coverText)
-    .filter((x): x is { text: string; veto: boolean; weight?: number } => x != null)
+  // Backend-resolved covers for the selected node (scoring items + veto clauses).
+  const g = selectedId ? grounding[selectedId] : undefined
+  const resolvedCovers: { text: string; veto: boolean; weight?: number }[] = [
+    ...(g?.clauses ?? []).map(c => ({ text: c.text || c.id, veto: !!c.veto })),
+    ...(g?.scoring ?? []).map(s => ({ text: s.item || s.id, veto: false, weight: s.weight })),
+  ]
   const derivedPriority = (): string => {
     if (resolvedCovers.some(c => c.veto)) return '高'
     const w = resolvedCovers.reduce((a, c) => a + (c.weight ?? 0), 0)
@@ -331,7 +349,6 @@ export function MaterialsScreen({
     if (w > 0) return '中'
     return '中'
   }
-  const priorityValue = cfg.priority || derivedPriority()
 
   const figureOpts = [
     [t('phase2.yes'), '是'],
@@ -342,6 +359,10 @@ export function MaterialsScreen({
     [t('phase2.priority_mid'), '中'],
     [t('phase2.priority_low'), '低'],
   ] as const
+  // The auto option carries an empty value: when selected, `cfg.priority` is
+  // cleared and the rendered priority falls back to the derived one. Its label
+  // shows the currently-derived value so the user knows what "auto" resolves to.
+  const autoOptLabel = t('phase2.priority_auto', { value: derivedPriority() })
 
   return (
     <div className="flex h-full overflow-x-auto" data-testid="bid-materials-screen">
@@ -452,7 +473,7 @@ export function MaterialsScreen({
                     <span>📄</span>
                     <span className="min-w-0 flex-1 truncate">{f.name}</span>
                     <span className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                      {Math.max(1, Math.round(f.size / 1024))} KB
+                      {Math.max(1, Math.round((attachMeta[f.name]?.size ?? 0) / 1024))} KB
                     </span>
                     <span
                       onClick={() => removeMaterial(f.id, selected.id)}
@@ -597,12 +618,15 @@ export function MaterialsScreen({
                     {t('phase2.priority')}
                   </span>
                   <select
-                    value={priorityValue}
+                    value={cfg.priority}
                     onChange={e => patchConfig(selected.id, { priority: e.target.value })}
                     data-testid="bid-materials-priority"
                     className="rounded-[7px] px-1.5 py-1 text-[11px] outline-none"
                     style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
                   >
+                    {/* Auto option: empty value clears any manual override so the
+                        priority re-derives from covered scoring/veto clauses. */}
+                    <option value="">{autoOptLabel}</option>
                     {priorityOpts.map(([label, val]) => (
                       <option key={val} value={val}>
                         {label}
@@ -643,14 +667,17 @@ export function MaterialsScreen({
                         📄 {f.name}
                       </div>
                       <div className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                        {f.stats
-                          ? t('phase2.stats_line', {
-                              chars: f.stats.chars,
-                              pages: f.stats.pages,
-                              tables: f.stats.tables,
-                              images: f.stats.images,
-                            })
-                          : t('phase2.stats_unavailable')}
+                        {(() => {
+                          const st = attachMeta[f.name]?.stats
+                          return st
+                            ? t('phase2.stats_line', {
+                                chars: st.chars,
+                                pages: st.pages,
+                                tables: st.tables,
+                                images: st.images,
+                              })
+                            : t('phase2.stats_unavailable')
+                        })()}
                       </div>
                     </div>
                   ))

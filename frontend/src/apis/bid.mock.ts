@@ -10,14 +10,17 @@ import type {
   AuditReport,
   BidProject,
   BriefsDoc,
+  ClauseItem,
   CoverageReport,
   DraftSection,
   DraftStatus,
   ExtractedFile,
+  GroundingDoc,
   LlmCall,
   OutlineDoc,
+  OutlineNode,
   OutlineResponse,
-  ScoringContext,
+  ScoringItem,
   TenderDoc,
 } from './bid'
 
@@ -165,6 +168,33 @@ const MOCK_COVERAGE: CoverageReport = {
   uncovered_clauses: [],
 }
 
+// Derive per-node grounding from the mock outline's `covers` ∩ mock tender
+// (scoring items + veto clauses). Mirrors the backend `_grounding_items` so the
+// mock mode renders the same per-section covered items as a live backend.
+const MOCK_GROUNDING: GroundingDoc = (() => {
+  const scoring: ScoringItem[] = (MOCK_TENDER.scoring ?? []).map(s => ({ ...s, id: String(s.id) }))
+  const clauses: ClauseItem[] = (MOCK_TENDER.mandatory_clauses ?? [])
+    .filter(c => c.veto)
+    .map(c => ({ ...c, id: String(c.id), veto: true }))
+  const scoringById = new Map(scoring.map(s => [s.id, s]))
+  const clauseById = new Map(clauses.map(c => [c.id, c]))
+  const items: GroundingDoc['items'] = {}
+  const walk = (node: OutlineNode | undefined): void => {
+    if (!node) return
+    const covers = (node.covers ?? []).map(String)
+    if (covers.length) {
+      const s = covers.map(id => scoringById.get(id)).filter((x): x is ScoringItem => !!x)
+      const c = covers.map(id => clauseById.get(id)).filter((x): x is ClauseItem => !!x)
+      if (s.length || c.length) {
+        items[String(node.id)] = { scoring: s, clauses: c }
+      }
+    }
+    for (const child of node.children ?? []) walk(child)
+  }
+  for (const sec of MOCK_OUTLINE.sections ?? []) walk(sec)
+  return { items }
+})()
+
 // Draftable/reviewable sections (chapter level) with mock body content.
 const SECTION_IDS = ['s1', 's2', 's3', 's4', 's5']
 const SECTION_TITLE: Record<string, string> = {
@@ -241,7 +271,6 @@ interface MockProject extends BidProject {
   quals?: Record<string, unknown>
   attachments?: AttachmentInfo[]
   briefsDoc?: BriefsDoc
-  scoringContext?: ScoringContext
   accepted?: Record<string, boolean>
   audit?: AuditReport
 }
@@ -444,7 +473,6 @@ export const bidMockApis = {
     p.outline = outline
     return delay({ outline, coverage: p.coverage ?? MOCK_COVERAGE })
   },
-  getCoverage: (id: number): Promise<CoverageReport> => delay(need(id).coverage ?? MOCK_COVERAGE),
   declarePackage: (): Promise<{ status: string }> => delay({ status: 'declared' }),
   getKnowledgeBase: (id: number): Promise<{ knowledge_base: Record<string, unknown> }> =>
     delay({ knowledge_base: need(id).kb ?? {} }),
@@ -483,8 +511,7 @@ export const bidMockApis = {
     }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
-  getScoringContext: (id: number): Promise<ScoringContext> =>
-    delay(need(id).scoringContext ?? { scoring: [], clauses: [] }),
+  getGrounding: (_id: number): Promise<GroundingDoc> => delay(MOCK_GROUNDING),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {
     need(id).briefsDoc = doc
     return delay(doc)

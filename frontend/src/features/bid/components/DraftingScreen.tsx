@@ -8,6 +8,7 @@ import {
   dfsOrder,
   flattenOutline,
   isVisible,
+  rootChapterId,
   type FlatNode,
 } from '../canvas/outlineGraph'
 
@@ -109,14 +110,8 @@ export function DraftingScreen({
   const doneCount = sectionIds.filter(id => status.sections[id] === 'done').length
 
   // Effective per-node status: a leaf inherits its chapter's draft status.
-  const rootChapterId = (n: FlatNode): string => {
-    const map = new Map(flat.map(x => [x.id, x]))
-    let cur: FlatNode | undefined = n
-    while (cur && cur.parentId) cur = map.get(cur.parentId)
-    return cur?.id ?? n.id
-  }
   const statusFor = (n: FlatNode): SecStatus =>
-    (status.sections[n.id] ?? status.sections[rootChapterId(n)] ?? 'pending') as SecStatus
+    (status.sections[n.id] ?? status.sections[rootChapterId(flat, n.id)] ?? 'pending') as SecStatus
 
   const scrollTo = (id: string) =>
     docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
@@ -149,7 +144,7 @@ export function DraftingScreen({
             return (
               <div
                 key={n.id}
-                onClick={() => scrollTo(rootChapterId(n))}
+                onClick={() => scrollTo(rootChapterId(flat, n.id))}
                 className="flex cursor-pointer items-center gap-1.5 rounded-md py-1.5"
                 style={{ paddingLeft: 8 + n.depth * 14, paddingRight: 8 }}
               >

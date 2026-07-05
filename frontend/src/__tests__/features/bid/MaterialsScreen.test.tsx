@@ -20,7 +20,8 @@ jest.mock('@/apis/bid', () => ({
     saveQualifications: jest.fn(() => Promise.resolve({ qualifications: {} })),
     getKnowledgeBase: jest.fn(() => Promise.reject(new Error('not set'))),
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
-    getScoringContext: jest.fn(() => Promise.resolve({ scoring: [], clauses: [] })),
+    getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
+    listAttachments: jest.fn(() => Promise.resolve({ items: [] })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -243,9 +244,13 @@ it('does not render removed writing-style/template/depth/tags controls', async (
 })
 
 it('renders resolved scoring/clause text and hides internal ids', async () => {
-  ;(bidApis.getScoringContext as jest.Mock).mockResolvedValueOnce({
-    scoring: [{ id: 'T1', item: '技术方案', weight: 30 }],
-    clauses: [{ id: 'MC-002', text: '投标保证金', veto: true }],
+  ;(bidApis.getGrounding as jest.Mock).mockResolvedValueOnce({
+    items: {
+      c1a: {
+        scoring: [{ id: 'T1', item: '技术方案', weight: 30 }],
+        clauses: [{ id: 'MC-002', text: '投标保证金', veto: true }],
+      },
+    },
   })
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   // The clause text resolves (outline leaf c1 covers T1; clause MC-002 is shown
@@ -273,6 +278,40 @@ it('priority is editable and persists into the brief', async () => {
   expect(doc.briefs.c1a.priority).toBe('高')
 })
 
+it('priority defaults to auto (derived) and brief does not persist priority', async () => {
+  // No manual selection: priority select sits on the "auto" option; saving the
+  // brief must NOT write a priority (it stays derived at render time). Touch the
+  // node so it appears in the saved brief, then assert priority is empty/absent.
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const select = await screen.findByTestId('bid-materials-priority')
+  // The "auto" option (empty value) is present and currently selected.
+  const autoOpt = (select as HTMLSelectElement).querySelector('option[value=""]')!
+  expect(autoOpt).toBeTruthy()
+  expect((select as HTMLSelectElement).value).toBe('')
+  const req = await screen.findByTestId('bid-materials-requirement')
+  fireEvent.change(req, { target: { value: 'auto-priority node' } })
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  // priority is absent (or empty) when the user never picked one manually.
+  expect(doc.briefs.c1a.priority ?? '').toBe('')
+})
+
+it('priority "restore auto" clears a previously-set manual override', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const select = await screen.findByTestId('bid-materials-priority')
+  // Pick a manual value first.
+  fireEvent.change(select, { target: { value: '高' } })
+  expect((select as HTMLSelectElement).value).toBe('高')
+  // Then restore auto (the empty-string option).
+  fireEvent.change(select, { target: { value: '' } })
+  expect((select as HTMLSelectElement).value).toBe('')
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.c1a.priority ?? '').toBe('')
+})
+
 it('shows deterministic stats from uploaded attachment', async () => {
   ;(bidApis.uploadAttachment as jest.Mock).mockResolvedValueOnce({
     name: 'cap.pdf',
@@ -285,6 +324,28 @@ it('shows deterministic stats from uploaded attachment', async () => {
   fireEvent.change(input, { target: { files: [new File(['x'], 'cap.pdf')] } })
   // Real stats surface in the right panel.
   await waitFor(() => expect(bidApis.uploadAttachment).toHaveBeenCalled())
+})
+
+it('brief materials store only references; size shown from attachments list', async () => {
+  // The briefs doc persists only {id, name, linkedNodeIds}; size/stats are NOT
+  // duplicated into the brief — they are resolved from listAttachments at render.
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValueOnce({
+    briefs: {},
+    materials: [{ id: 'm1', name: 'a.pdf', linkedNodeIds: ['c1a'] }],
+  })
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValueOnce({
+    items: [{ name: 'a.pdf', size: 2048, stats: { chars: 10, pages: 1, tables: 0, images: 0 } }],
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  // c1a is auto-selected; its material area shows the size resolved from the
+  // attachments list (2048 bytes -> "2 KB").
+  expect(await screen.findByText(/2 KB/)).toBeInTheDocument()
+  // Saving must persist a reference-only material (no size/stats keys).
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.materials[0]).toEqual({ id: 'm1', name: 'a.pdf', linkedNodeIds: ['c1a'] })
+  expect(Object.keys(doc.materials[0]).sort()).toEqual(['id', 'linkedNodeIds', 'name'])
 })
 
 it('surfaces save state feedback when saving the node', async () => {

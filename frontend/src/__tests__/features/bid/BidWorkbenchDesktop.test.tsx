@@ -22,10 +22,8 @@ beforeEach(() => {
   jest.clearAllMocks()
   ;(bidApis.getLlmLog as jest.Mock).mockResolvedValue({ items: [] })
   ;(bidApis.getParseStage as jest.Mock).mockResolvedValue({ stage: 'extracting' })
-  ;(bidApis.getScoringContext as jest.Mock).mockResolvedValue({
-    scoring: [],
-    clauses: [],
-  })
+  ;(bidApis.getGrounding as jest.Mock).mockResolvedValue({ items: {} })
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
 })
 
 // Helper: land on the list, click "new", reach the standalone new-project screen.

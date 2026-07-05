@@ -194,4 +194,14 @@ describe('bidApis', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/5/audit/verify')
     expect(r.verdict).toBe('NEED_FIX')
   })
+
+  it('getGrounding GETs the grounding endpoint', async () => {
+    const doc = {
+      items: { s1: { scoring: [{ id: 'T1', item: '方案' }], clauses: [] } },
+    }
+    ;(apiClient.get as jest.Mock).mockResolvedValueOnce(doc)
+    const res = await bidApis.getGrounding(7)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/7/grounding')
+    expect(res.items.s1.scoring[0].id).toBe('T1')
+  })
 })
