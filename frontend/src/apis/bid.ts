@@ -303,7 +303,10 @@ const realBidApis = {
     apiClient.get(`/bid/projects/${id}/draft/status`),
   getDraftSections: (id: number): Promise<{ items: DraftSection[] }> =>
     apiClient.get(`/bid/projects/${id}/sections`),
-  getSectionContent: (id: number, sectionId: string): Promise<{ id: string; content: string }> =>
+  getSectionContent: (
+    id: number,
+    sectionId: string
+  ): Promise<{ id: string; content: string; version: string }> =>
     apiClient.get(`/bid/projects/${id}/sections/${sectionId}`),
   redraftSection: (
     id: number,
@@ -312,6 +315,16 @@ const realBidApis = {
   ): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/sections/${sectionId}/redraft`, {
       instruction: instruction ?? null,
+    }),
+  saveSection: (
+    id: number,
+    sectionId: string,
+    content: string,
+    baseVersion: string
+  ): Promise<{ version: string }> =>
+    apiClient.put(`/bid/projects/${id}/sections/${sectionId}/content`, {
+      content,
+      base_version: baseVersion,
     }),
   acceptSection: (id: number, sectionId: string): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/sections/${sectionId}/accept`),
