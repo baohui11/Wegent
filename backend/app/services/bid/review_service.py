@@ -17,3 +17,10 @@ def mark_accepted(ws: BidWorkspace, section_id: str) -> None:
     st = read_review(ws)
     st.setdefault("accepted", {})[section_id] = True
     ws.write_json(_REVIEW, st)
+
+
+def clear_accepted(ws: BidWorkspace, section_id: str) -> None:
+    """Drop the accepted flag for a section (editing invalidates prior review)."""
+    st = read_review(ws)
+    st.get("accepted", {}).pop(section_id, None)
+    ws.write_json(_REVIEW, st)

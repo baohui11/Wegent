@@ -41,6 +41,8 @@ from app.schemas.bid import (
     QualificationsSaveRequest,
     RedraftRequest,
     ReviewStatusResponse,
+    SaveSectionRequest,
+    SaveSectionResponse,
     SectionContentResponse,
     SectionGrounding,
     SectionListResponse,
@@ -672,11 +674,38 @@ def get_section(
     db: Session = Depends(get_db),
 ):
     project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
     try:
-        content = drafting.read_section(BidWorkspace(project.workspace_ref), section_id)
+        content = drafting.read_section(ws, section_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="section not drafted yet")
-    return SectionContentResponse(id=section_id, content=content)
+    return SectionContentResponse(
+        id=section_id, content=content, version=drafting.section_version(ws, section_id)
+    )
+
+
+@router.put(
+    "/projects/{project_id}/sections/{section_id}/content",
+    response_model=SaveSectionResponse,
+)
+def save_section(
+    project_id: int,
+    section_id: str,
+    body: SaveSectionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # sync def: no asyncio.create_task here — write is synchronous and atomic.
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    current = drafting.section_version(ws, section_id)
+    if body.base_version != current:
+        # Optimistic-lock conflict: section changed since the client last read
+        # it (e.g. an async redraft landed). Client must refresh and retry.
+        raise HTTPException(status_code=409, detail="stale version")
+    drafting.write_section(ws, section_id, body.content)
+    review.clear_accepted(ws, section_id)
+    return SaveSectionResponse(version=drafting.section_version(ws, section_id))
 
 
 @router.post(

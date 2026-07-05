@@ -345,6 +345,60 @@ def test_review_redraft_accept_complete(test_client, test_token, tmp_path, monke
     )
 
 
+def test_save_section_cas_conflict_and_accept_clear(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    # PUT /sections/{sid}/content: stale base_version -> 409; correct version ->
+    # 200, returns new version, and clears any prior "accepted" flag for the section.
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "save"}, headers=h
+    ).json()["id"]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    ws.path("workspace/sections/s1.md").write_text("初稿", encoding="utf-8")
+    # mark the section accepted up front so we can assert editing clears it
+    ws.write_json("workspace/_review_status.json", {"accepted": {"s1": True}})
+
+    # GET returns the current version (sha256 of file bytes)
+    got = test_client.get(f"/api/bid/projects/{pid}/sections/s1", headers=h).json()
+    assert got["content"] == "初稿"
+    assert got["version"]
+
+    # save with a stale base_version -> 409
+    r = test_client.put(
+        f"/api/bid/projects/{pid}/sections/s1/content",
+        json={"content": "edited", "base_version": "deadbeef"},
+        headers=h,
+    )
+    assert r.status_code == 409
+
+    # save with the correct base_version -> 200 + new version
+    r2 = test_client.put(
+        f"/api/bid/projects/{pid}/sections/s1/content",
+        json={"content": "edited", "base_version": got["version"]},
+        headers=h,
+    )
+    assert r2.status_code == 200
+    assert r2.json()["version"] != got["version"]
+    # content persisted
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/sections/s1", headers=h).json()[
+            "content"
+        ]
+        == "edited"
+    )
+    # editing cleared the accepted flag
+    assert (
+        "s1"
+        not in test_client.get(
+            f"/api/bid/projects/{pid}/review/status", headers=h
+        ).json()["accepted"]
+    )
+
+
 def test_audit_finalize_download(test_client, test_token, tmp_path, monkeypatch):
     from app.core.config import settings
 

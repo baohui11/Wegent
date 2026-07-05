@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Drafting progress (blackboard file) + section read/list for phase 4."""
 
+import hashlib
+
 from app.services.bid.workspace import BidWorkspace
 
 _STATUS = "workspace/_drafting_status.json"
@@ -56,3 +58,22 @@ def read_section(ws: BidWorkspace, section_id: str) -> str:
     if not p.exists():
         raise FileNotFoundError(section_id)
     return p.read_text(encoding="utf-8")
+
+
+def write_section(ws: BidWorkspace, section_id: str, content: str) -> None:
+    """Write a section's markdown body back to disk (human edit / range redraft)."""
+    p = ws.path(f"{_SECTIONS}/{section_id}.md")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+
+
+def section_version(ws: BidWorkspace, section_id: str) -> str:
+    """Content-hash version of a section file (sha256 of its UTF-8 bytes).
+
+    Used as an optimistic-lock token for save / range-redraft. Empty string
+    when the section has not been drafted yet.
+    """
+    p = ws.path(f"{_SECTIONS}/{section_id}.md")
+    if not p.exists():
+        return ""
+    return hashlib.sha256(p.read_bytes()).hexdigest()
