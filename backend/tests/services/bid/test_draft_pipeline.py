@@ -236,3 +236,18 @@ async def test_run_drafting_sandbox_deletes_sandbox_on_agent_failure(tmp_path):
 
     # Sandbox must be cleaned up even when the agent call blows up.
     rt.delete.assert_awaited_once()
+
+
+# ---- full-draft prompt enforces per-node writing brief ------------------------
+
+
+def test_drafting_prompt_enforces_writing_brief():
+    from app.services.bid.draft_pipeline import _drafting_prompt
+
+    outline = {"sections": [{"id": "s1", "title": "技术方案"}]}
+    _prompt, instructions = _drafting_prompt(outline)
+    # Full-draft must enforce per-node briefs, matching the redraft path.
+    assert "node_briefs.json" in instructions
+    assert "writing_brief" in instructions or "编写要求" in instructions
+    assert "必须遵守" in instructions
+    assert "评分" in instructions  # conflict rule: scoring wins
