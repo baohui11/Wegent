@@ -33,6 +33,8 @@ def read(ws: BidWorkspace, name: str, char_range: tuple[int, int] | None = None)
 
 _MAX_HITS = 5
 _SNIPPET_TOKENS = 12
+_TRIGRAM_MIN = 3
+_SNIPPET_WINDOW = 60
 
 
 def _fts_query(q: str) -> str:
@@ -48,6 +50,21 @@ def _shape_hit(name: str, snippet: str) -> dict:
         "snippet": snippet,
         "source": materials_store._extracted_path(name),
     }
+
+
+def _substring_search(visible: list[tuple[str, str]], query: str) -> list[dict]:
+    """Fallback when the query is shorter than trigram's 3-gram floor or FTS5 is
+    unavailable: plain substring scan ordered by occurrence count."""
+    scored = []
+    for name, text in visible:
+        count = text.count(query)
+        if count:
+            i = text.find(query)
+            lo = max(0, i - _SNIPPET_WINDOW // 2)
+            snippet = text[lo : lo + _SNIPPET_WINDOW]
+            scored.append((count, _shape_hit(name, snippet)))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [hit for _, hit in scored[:_MAX_HITS]]
 
 
 def _fts_search(visible: list[tuple[str, str]], query: str) -> list[dict]:
@@ -84,7 +101,10 @@ def search(ws: BidWorkspace, query: str, node_id: str) -> list[dict]:
     visible = [(n, t) for n, t in visible if t.strip()]
     if not visible:
         return []
+    if len(q) < _TRIGRAM_MIN:
+        return _substring_search(visible, q)
     try:
         return _fts_search(visible, q)
     except sqlite3.OperationalError:
-        return []
+        # FTS5/trigram unavailable in this runtime -> degrade, don't crash.
+        return _substring_search(visible, q)

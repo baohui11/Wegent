@@ -88,3 +88,26 @@ def test_search_global_material_visible_everywhere(tmp_path):
     )
     hits = msearch.search(ws, "高新技术企业", "any-node")
     assert hits and hits[0]["material"] == "corp.md"
+
+
+def test_search_short_query_uses_substring_fallback(tmp_path):
+    ws = _ws(tmp_path)
+    _write_material(ws, "corp.md", "华信数智公司简介：ISO 认证齐全。")
+    _seed_scoped(
+        ws, [{"id": "m1", "name": "corp.md", "linkedNodeIds": [], "scope": "global"}]
+    )
+    # 2-char query: below trigram's 3-gram floor -> substring fallback still hits
+    hits = msearch.search(ws, "华信", "s1")
+    assert hits and hits[0]["material"] == "corp.md"
+    assert "华信" in hits[0]["snippet"]
+
+
+def test_search_special_chars_query_does_not_crash(tmp_path):
+    ws = _ws(tmp_path)
+    _write_material(ws, "corp.md", "报价为 100% 合规（含税）。")
+    _seed_scoped(
+        ws, [{"id": "m1", "name": "corp.md", "linkedNodeIds": [], "scope": "global"}]
+    )
+    # must not raise regardless of FTS operators / quotes in the query
+    msearch.search(ws, '"100%" AND (含税)', "s1")
+    msearch.search(ws, "报价", "s1")
