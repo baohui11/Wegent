@@ -318,7 +318,6 @@ export function MaterialsScreen({
     if (w > 0) return '中'
     return '中'
   }
-  const priorityValue = cfg.priority || derivedPriority()
 
   const figureOpts = [
     [t('phase2.yes'), '是'],
@@ -329,6 +328,10 @@ export function MaterialsScreen({
     [t('phase2.priority_mid'), '中'],
     [t('phase2.priority_low'), '低'],
   ] as const
+  // The auto option carries an empty value: when selected, `cfg.priority` is
+  // cleared and the rendered priority falls back to the derived one. Its label
+  // shows the currently-derived value so the user knows what "auto" resolves to.
+  const autoOptLabel = t('phase2.priority_auto', { value: derivedPriority() })
 
   return (
     <div className="flex h-full overflow-x-auto" data-testid="bid-materials-screen">
@@ -584,12 +587,15 @@ export function MaterialsScreen({
                     {t('phase2.priority')}
                   </span>
                   <select
-                    value={priorityValue}
+                    value={cfg.priority}
                     onChange={e => patchConfig(selected.id, { priority: e.target.value })}
                     data-testid="bid-materials-priority"
                     className="rounded-[7px] px-1.5 py-1 text-[11px] outline-none"
                     style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
                   >
+                    {/* Auto option: empty value clears any manual override so the
+                        priority re-derives from covered scoring/veto clauses. */}
+                    <option value="">{autoOptLabel}</option>
                     {priorityOpts.map(([label, val]) => (
                       <option key={val} value={val}>
                         {label}

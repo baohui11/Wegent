@@ -277,6 +277,40 @@ it('priority is editable and persists into the brief', async () => {
   expect(doc.briefs.c1a.priority).toBe('高')
 })
 
+it('priority defaults to auto (derived) and brief does not persist priority', async () => {
+  // No manual selection: priority select sits on the "auto" option; saving the
+  // brief must NOT write a priority (it stays derived at render time). Touch the
+  // node so it appears in the saved brief, then assert priority is empty/absent.
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const select = await screen.findByTestId('bid-materials-priority')
+  // The "auto" option (empty value) is present and currently selected.
+  const autoOpt = (select as HTMLSelectElement).querySelector('option[value=""]')!
+  expect(autoOpt).toBeTruthy()
+  expect((select as HTMLSelectElement).value).toBe('')
+  const req = await screen.findByTestId('bid-materials-requirement')
+  fireEvent.change(req, { target: { value: 'auto-priority node' } })
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  // priority is absent (or empty) when the user never picked one manually.
+  expect(doc.briefs.c1a.priority ?? '').toBe('')
+})
+
+it('priority "restore auto" clears a previously-set manual override', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const select = await screen.findByTestId('bid-materials-priority')
+  // Pick a manual value first.
+  fireEvent.change(select, { target: { value: '高' } })
+  expect((select as HTMLSelectElement).value).toBe('高')
+  // Then restore auto (the empty-string option).
+  fireEvent.change(select, { target: { value: '' } })
+  expect((select as HTMLSelectElement).value).toBe('')
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.c1a.priority ?? '').toBe('')
+})
+
 it('shows deterministic stats from uploaded attachment', async () => {
   ;(bidApis.uploadAttachment as jest.Mock).mockResolvedValueOnce({
     name: 'cap.pdf',

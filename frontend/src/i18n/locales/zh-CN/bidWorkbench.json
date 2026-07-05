@@ -288,7 +288,8 @@
     "save_error": "保存失败",
     "priority_high": "高",
     "priority_mid": "中",
-    "priority_low": "低"
+    "priority_low": "低",
+    "priority_auto": "自动（{{value}}）"
   },
   "materials": {
     "kb_title": "投标人知识库",
