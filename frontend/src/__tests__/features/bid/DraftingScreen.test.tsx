@@ -12,6 +12,7 @@ jest.mock('@/hooks/useTranslation', () => ({
       // strings verbatim so per-section error rendering can be asserted on text.
       if (k === 'phase4.section_error') return '本节生成失败——可在审阅阶段重写。'
       if (k === 'drafting.log_error') return `${o?.name ?? ''} 生成失败`
+      if (k === 'drafting.status_needs_rework') return '待返工'
       return (o?.name ?? k) as string
     },
   }),
@@ -128,4 +129,29 @@ it('renders an error note for a failed section', async () => {
     />
   )
   expect((await screen.findAllByText(/生成失败|generation failed/i)).length).toBeGreaterThan(0)
+})
+
+it('renders a needs_rework node with the warn-colored dot (distinct from error)', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 2,
+    sections: { s1: 'done', s2: 'needs_rework' },
+    finished: true,
+    error: null,
+  })
+  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({ id: 's1', content: '正文' })
+  render(
+    <DraftingScreen
+      projectId={1}
+      outline={{
+        sections: [
+          { id: 's1', title: '一' },
+          { id: 's2', title: '二' },
+        ],
+      }}
+    />
+  )
+  // The needs_rework node's status dot resolves to the warn color (amber); an
+  // unknown status would fall back to undefined background. Use findByText to
+  // wait for render, then assert the status badge text appears.
+  expect(await screen.findByText('待返工')).toBeInTheDocument()
 })

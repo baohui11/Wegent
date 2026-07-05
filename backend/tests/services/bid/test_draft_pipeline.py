@@ -229,3 +229,78 @@ async def test_draft_section_passes_retrieved_materials(tmp_path):
             user_id=2,
         )
     assert captured["materials"] == hits
+
+
+@pytest.mark.asyncio
+async def test_draft_section_retries_then_needs_rework(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import draft_pipeline as dp
+    from app.services.bid import drafting_service as ds
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("gate-draft", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
+    ws.write_json(
+        "corpus/node_briefs.json",
+        {"briefs": {"s1": {"wordMin": "500"}}, "materials": []},
+    )
+    ds.init_status(ws, ["s1"])
+
+    # ghostwriter always returns a too-short draft -> gate fails both times
+    with (
+        patch.object(dp, "call_ghostwriter", new=AsyncMock(return_value="太短")),
+        patch.object(dp.section_retrieval, "retrieve_for_section", return_value=[]),
+    ):
+        await dp._draft_section(
+            asyncio.Semaphore(1),
+            ws,
+            {"id": "s1", "title": "方案"},
+            tender={"scoring": [], "mandatory_clauses": []},
+            kb={},
+            model="m",
+            model_config=None,
+            project_id=1,
+            user_id=2,
+        )
+        assert ds.read_status(ws)["sections"]["s1"] == "needs_rework"
+        assert dp.call_ghostwriter.await_count == 2  # drafted once + retried once
+        assert "s1" in dp.post_gate.read_issues(ws)  # issues recorded
+
+
+@pytest.mark.asyncio
+async def test_draft_section_retry_recovers_to_done(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import draft_pipeline as dp
+    from app.services.bid import drafting_service as ds
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("gate-draft2", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
+    ws.write_json(
+        "corpus/node_briefs.json",
+        {"briefs": {"s1": {"wordMin": "20"}}, "materials": []},
+    )
+    ds.init_status(ws, ["s1"])
+
+    good = "达标正文" * 50
+    with (
+        patch.object(dp, "call_ghostwriter", new=AsyncMock(side_effect=["短", good])),
+        patch.object(dp.section_retrieval, "retrieve_for_section", return_value=[]),
+    ):
+        await dp._draft_section(
+            asyncio.Semaphore(1),
+            ws,
+            {"id": "s1", "title": "方案"},
+            tender={"scoring": [], "mandatory_clauses": []},
+            kb={},
+            model="m",
+            model_config=None,
+            project_id=1,
+            user_id=2,
+        )
+        assert ds.read_status(ws)["sections"]["s1"] == "done"
+        assert dp.call_ghostwriter.await_count == 2
