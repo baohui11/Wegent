@@ -311,6 +311,11 @@
     "complete": "Start drafting",
     "json_error": "JSON format error"
   },
+  "editor": {
+    "save_saving": "Saving…",
+    "save_saved": "Saved",
+    "save_error": "Save failed"
+  },
   "drafting": {
     "canvas": "Generation canvas",
     "log": "Generation log",

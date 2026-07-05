@@ -12,6 +12,8 @@ import {
   type FlatNode,
 } from '../canvas/outlineGraph'
 import { EnhancedMarkdown } from '@/components/common/EnhancedMarkdown'
+import { SectionEditor } from './SectionEditor'
+import { useSectionAutosave } from '../hooks/useSectionAutosave'
 
 type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
 
@@ -37,6 +39,7 @@ export function GenerateRefineScreen({
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
   const [contents, setContents] = useState<Record<string, string>>({})
+  const [versions, setVersions] = useState<Record<string, string>>({})
   const [accepted, setAccepted] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -53,6 +56,7 @@ export function GenerateRefineScreen({
     async (id: string) => {
       const r = await bidApis.getSectionContent(projectId, id)
       setContents(prev => ({ ...prev, [id]: r.content }))
+      setVersions(prev => ({ ...prev, [id]: r.version }))
     },
     [projectId]
   )
@@ -112,12 +116,26 @@ export function GenerateRefineScreen({
     if (!focusId && sectionIds.length) setFocusId(sectionIds[0])
   }, [focusId, sectionIds])
 
+  // Autosave the focused section's edits. One live editor at a time, so a single
+  // autosave instance (keyed on focusId) is sufficient; flush before focus
+  // switch / redraft / accept so disk stays in sync with the editor. Declared
+  // before redraft/accept, which call autosave.flush().
+  const autosave = useSectionAutosave({
+    projectId,
+    sectionId: focusId,
+    version: focusId ? (versions[focusId] ?? '') : '',
+    onSaved: (id, v) => setVersions(prev => ({ ...prev, [id]: v })),
+  })
+
   const redraft = useCallback(
     async (id: string, instr?: string) => {
+      // Persist any pending edit first so the redraft operates on the saved
+      // content (and its on-disk version).
+      await autosave.flush()
       loadedRef.current.delete(id) // force re-fetch after this section re-drafts
       await bidApis.redraftSection(projectId, id, instr || undefined)
     },
-    [projectId]
+    [projectId, autosave]
   )
 
   if (!status) return null
@@ -133,6 +151,7 @@ export function GenerateRefineScreen({
   const scrollTo = (id: string) =>
     docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   const focus = (id: string) => {
+    void autosave.flush() // persist any in-flight edit before switching focus
     setFocusId(id)
     scrollTo(id)
   }
@@ -150,6 +169,7 @@ export function GenerateRefineScreen({
   }
   const accept = async () => {
     if (!focusId) return
+    await autosave.flush() // don't accept a version that drops an unsaved edit
     await bidApis.acceptSection(projectId, focusId)
     setAccepted((await bidApis.getReviewStatus(projectId)).accepted)
   }
@@ -277,6 +297,15 @@ export function GenerateRefineScreen({
                     style={{ color: 'var(--bid-ink)', fontFamily: "'Noto Sans SC', sans-serif" }}
                   >
                     {heading}
+                    {id === focusId && autosave.state !== 'idle' && (
+                      <span
+                        data-testid="bid-section-save-state"
+                        className="ml-2 text-[11px] font-normal"
+                        style={{ color: 'var(--bid-muted-2)' }}
+                      >
+                        {t(`editor.save_${autosave.state}`)}
+                      </span>
+                    )}
                   </div>
                   {st === 'done' ? (
                     <span
@@ -308,13 +337,21 @@ export function GenerateRefineScreen({
 
                 {st === 'done' && (
                   <>
-                    {/* Render section content as full Markdown (code fences,
-                        GFM tables, blockquotes, emphasis, math, lists) via the
-                        shared EnhancedMarkdown renderer. Scoped to the bid
-                        paper look via the .bid-prose class in markdown.css. */}
-                    <div className="bid-prose">
-                      <EnhancedMarkdown source={contents[id] ?? ''} theme="light" />
-                    </div>
+                    {/* The focused section is editable in place (Tiptap); all
+                        other done sections stay as read-only EnhancedMarkdown.
+                        A section mid-redraft is read-only so async LLM rewrites
+                        never race an in-progress edit. */}
+                    {id === focusId ? (
+                      <SectionEditor
+                        content={contents[id] ?? ''}
+                        readOnly={status.sections[id] === 'drafting'}
+                        onChange={autosave.queueSave}
+                      />
+                    ) : (
+                      <div className="bid-prose">
+                        <EnhancedMarkdown source={contents[id] ?? ''} theme="light" />
+                      </div>
+                    )}
                     {accepted[id] && (
                       <div
                         className="inline-block rounded-md px-2 py-0.5 text-[10.5px]"
