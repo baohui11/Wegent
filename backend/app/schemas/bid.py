@@ -48,6 +48,15 @@ class CoverageResponse(BaseModel):
     uncovered_clauses: list[UncoveredItem]
 
 
+class SectionGrounding(BaseModel):
+    scoring: list[dict]
+    clauses: list[dict]
+
+
+class GroundingResponse(BaseModel):
+    items: dict[str, SectionGrounding]
+
+
 class OutlineResponse(BaseModel):
     outline: dict
     coverage: CoverageResponse

@@ -338,13 +338,11 @@ async def call_ghostwriter(
     project_id: int | None = None,
     user_id: int | None = None,
 ) -> str:
-    covers = set(section.get("covers") or [])
-    scoring = [s for s in tender.get("scoring", []) or [] if str(s.get("id")) in covers]
-    clauses = [
-        c
-        for c in tender.get("mandatory_clauses", []) or []
-        if c.get("veto") and str(c.get("id")) in covers
-    ]
+    from app.services.bid.coverage import resolve_section_grounding
+
+    grounding = resolve_section_grounding(section, tender)
+    scoring = grounding["scoring"]
+    clauses = grounding["clauses"]
     ctx = {
         "section": {
             "id": section.get("id"),

@@ -21,6 +21,7 @@ from app.schemas.bid import (
     CoverageResponse,
     DraftStatusResponse,
     ExtractTextResponse,
+    GroundingResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
     LlmCallInfo,
@@ -38,6 +39,7 @@ from app.schemas.bid import (
     ReviewStatusResponse,
     ScoringContextResponse,
     SectionContentResponse,
+    SectionGrounding,
     SectionListResponse,
     SectionStatus,
     SimpleStatusResponse,
@@ -47,9 +49,10 @@ from app.services.bid import assemble_service, audit_service
 from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
 from app.services.bid import review_service as review
-from app.services.bid.coverage import compute_coverage
+from app.services.bid.coverage import compute_coverage, resolve_section_grounding
 from app.services.bid.draft_pipeline import (
     find_section,
+    flatten_sections,
     launch_drafting,
     launch_redraft,
 )
@@ -240,6 +243,20 @@ def _coverage(ws) -> CoverageResponse:
     return CoverageResponse(**compute_coverage(outline, tender))
 
 
+def _grounding_items(ws: BidWorkspace) -> dict:
+    outline = read_outline(ws)
+    tender = _read_tender_for_coverage(ws)
+    items: dict = {}
+    for node in flatten_sections(outline):
+        nid = node.get("id")
+        if nid is None:
+            continue
+        g = resolve_section_grounding(node, tender)
+        if g["scoring"] or g["clauses"]:
+            items[str(nid)] = g
+    return items
+
+
 @router.get("/projects/{project_id}/llm-log", response_model=LlmLogResponse)
 def get_llm_log(
     project_id: int,
@@ -344,6 +361,21 @@ def get_coverage(
     if not ws.path("workspace/outline.json").exists():
         raise HTTPException(status_code=409, detail="outline not built yet")
     return _coverage(ws)
+
+
+@router.get("/projects/{project_id}/grounding", response_model=GroundingResponse)
+def get_grounding(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/outline.json").exists():
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    return GroundingResponse(
+        items={k: SectionGrounding(**v) for k, v in _grounding_items(ws).items()}
+    )
 
 
 @router.get(
