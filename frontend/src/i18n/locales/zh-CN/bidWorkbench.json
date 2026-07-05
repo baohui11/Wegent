@@ -315,7 +315,9 @@
     "save_saving": "保存中…",
     "save_saved": "已保存",
     "save_error": "保存失败",
-    "regen_block": "重新生成本段"
+    "regen_block": "重新生成本段",
+    "insert_table": "表格",
+    "insert_pagebreak": "分隔/分页"
   },
   "drafting": {
     "canvas": "生成画布",

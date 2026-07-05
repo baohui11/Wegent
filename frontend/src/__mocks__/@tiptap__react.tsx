@@ -34,6 +34,29 @@ export const __mockEditor: any = {
   off: jest.fn(),
   destroy: jest.fn(),
   state: { selection: { $from: { index: (depth: number) => (depth === 0 ? 0 : 0) } } },
+  // chain() records command names so insert-toolbar tests can assert calls.
+  // All chain() invocations share one persistent __chainCalls log; each method
+  // access returns a callable that records its name and returns the builder.
+  __chainCalls: [] as string[],
+  chain: function () {
+    const calls = __mockEditor.__chainCalls as string[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: any = new Proxy(
+      function () {
+        return builder
+      },
+      {
+        get(_t, prop: string) {
+          if (prop === 'run') return () => true
+          // Every other method: record the name and stay chainable. Calling
+          // it (with any args) also returns builder.
+          calls.push(prop)
+          return (..._args: unknown[]) => builder
+        },
+      }
+    )
+    return builder
+  },
 }
 
 export function useEditor(config: EditorConfig) {
