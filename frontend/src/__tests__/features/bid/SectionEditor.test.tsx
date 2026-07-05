@@ -113,3 +113,28 @@ test('SectionEditor reports focus and exposes its editor/flush via onReady', () 
     expect.objectContaining({ flush: expect.any(Function) })
   )
 })
+
+test('editable SectionEditor renders a drag handle; read-only does not', () => {
+  const { rerender } = render(
+    <SectionEditor
+      projectId={1}
+      sectionId="s1"
+      content="x"
+      version="v1"
+      readOnly={false}
+      onSaved={() => {}}
+    />
+  )
+  expect(screen.getByTestId('bid-drag-handle')).toBeInTheDocument()
+  rerender(
+    <SectionEditor
+      projectId={1}
+      sectionId="s1"
+      content="x"
+      version="v1"
+      readOnly
+      onSaved={() => {}}
+    />
+  )
+  expect(screen.queryByTestId('bid-drag-handle')).not.toBeInTheDocument()
+})

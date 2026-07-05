@@ -424,3 +424,33 @@
 .bid-prose .bubble-btn:hover {
   background: var(--bid-primary-soft);
 }
+
+/* ==========================================================================
+   Bid Workbench — block drag/add handle (DragHandle child, inside .bid-prose).
+   Small, muted ⠿ / + affordance. The real DragHandle positions this element
+   beside the hovered block; we just keep it subtle per the calm-UI aesthetic.
+   ========================================================================== */
+.bid-prose .bid-drag-handle-inner {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--bid-muted-2);
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
+}
+
+.bid-prose .bid-drag-handle-inner button {
+  background: transparent;
+  border: none;
+  color: var(--bid-muted-2);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color 0.12s ease;
+}
+
+.bid-prose .bid-drag-handle-inner button:hover {
+  color: var(--bid-primary);
+}

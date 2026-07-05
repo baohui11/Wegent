@@ -320,6 +320,7 @@
     "insert_pagebreak": "Divider",
     "mode_read": "Read",
     "mode_edit": "Edit",
+    "block_add": "Add block",
     "bubble": {
       "h2": "H2",
       "h3": "H3"

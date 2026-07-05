@@ -11,6 +11,7 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import { Markdown } from 'tiptap-markdown'
+import DragHandle from '@tiptap/extension-drag-handle-react'
 import { useEffect } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useSectionAutosave } from '../hooks/useSectionAutosave'
@@ -108,6 +109,29 @@ export function SectionEditor({
   return (
     <div className="bid-prose">
       {!readOnly && editor && <SectionBubbleMenu editor={editor} />}
+      {!readOnly && editor && (
+        // Notion-style block handle: ⠿ drags the hovered block, + inserts an
+        // empty paragraph after it. nested={false} keeps it to top-level blocks
+        // and avoids the yjs/collaboration peer deps.
+        <DragHandle editor={editor} nested={false}>
+          <div className="bid-drag-handle-inner" data-testid="bid-drag-handle-inner">
+            <button
+              type="button"
+              title={t('editor.block_add')}
+              onClick={() =>
+                editor
+                  .chain()
+                  .focus()
+                  .insertContentAt(editor.state.selection.to, { type: 'paragraph' })
+                  .run()
+              }
+            >
+              +
+            </button>
+            <span aria-hidden>⠿</span>
+          </div>
+        </DragHandle>
+      )}
       {!readOnly && editor && (
         <div className="mb-2 flex gap-2" data-testid="bid-editor-toolbar">
           <button
