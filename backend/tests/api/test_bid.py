@@ -730,3 +730,38 @@ def test_scoring_context_empty_when_no_tender(
     r = test_client.get(f"/api/bid/projects/{pid}/scoring-context", headers=h)
     assert r.status_code == 200
     assert r.json() == {"scoring": [], "clauses": []}
+
+
+def test_get_grounding_maps_nodes_to_covered_items(tmp_path, monkeypatch):
+    # Service-level: drive the endpoint function directly with a stubbed project.
+    from app.api.endpoints import bid as bid_ep
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("grounding-1", root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": [{"id": "T1", "item": "方案", "weight": 20}],
+            "mandatory_clauses": [{"id": "M1", "veto": True, "clause": "有效期"}],
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json",
+        {
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "总述",
+                    "covers": ["T1"],
+                    "children": [{"id": "s1.1", "covers": ["M1"]}],
+                },
+                {"id": "s2", "title": "空节", "covers": []},
+            ]
+        },
+    )
+
+    items = bid_ep._grounding_items(ws)  # helper extracted in Step 3
+
+    assert set(items.keys()) == {"s1", "s1.1"}  # s2 has no grounding -> omitted
+    assert [s["id"] for s in items["s1"]["scoring"]] == ["T1"]
+    assert [c["id"] for c in items["s1.1"]["clauses"]] == ["M1"]
