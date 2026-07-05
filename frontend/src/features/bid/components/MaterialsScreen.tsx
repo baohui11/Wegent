@@ -10,13 +10,7 @@ import {
   type OutlineDoc,
   type ScoringItem,
 } from '@/apis/bid'
-import {
-  dfsOrder,
-  flattenOutline,
-  isVisible,
-  leavesOf,
-  type FlatNode,
-} from '../canvas/outlineGraph'
+import { dfsOrder, flattenOutline, isVisible, type FlatNode } from '../canvas/outlineGraph'
 import { ConfirmDialog } from './ConfirmDialog'
 
 interface NodeConfig {
@@ -69,7 +63,6 @@ export function MaterialsScreen({
 }) {
   const { t } = useTranslation('bidWorkbench')
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
-  const leaves = useMemo(() => leavesOf(flat), [flat])
   const rows = useMemo(() => dfsOrder(flat), [flat])
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -86,10 +79,13 @@ export function MaterialsScreen({
   const [confirmBatch, setConfirmBatch] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
-  // Select the first leaf once the outline is available.
+  // Auto-select the first content leaf (a sensible starting point); chapters
+  // stay selectable/configurable, this just avoids landing on a container.
   useEffect(() => {
-    if (!selectedId && leaves.length) setSelectedId(leaves[0].id)
-  }, [leaves, selectedId])
+    if (selectedId || !rows.length) return
+    const firstLeaf = rows.find(n => !flat.some(x => x.parentId === n.id))
+    setSelectedId((firstLeaf ?? rows[0]).id)
+  }, [rows, flat, selectedId])
 
   // Load persisted briefs once per project.
   useEffect(() => {
@@ -189,23 +185,18 @@ export function MaterialsScreen({
     return Math.round((((files > 0 ? 1 : 0) + (req ? 1 : 0)) / 2) * 100)
   }
 
-  // Per-leaf config state (requirements is the gate; materials are optional):
+  // Per-node config state — every node (chapters included) is a drafted section
+  // (backend flatten_sections drafts them all), so each is judged by its OWN
+  // config, not aggregated from children. Requirements is the gate; materials
+  // are optional:
   //   2 configured  = has specific requirements
   //   1 in progress = touched (materials or emphasis) but no requirements yet
   //   0 pending     = untouched
-  const leafState = (id: string): 0 | 1 | 2 => {
+  const nodeConfigState = (id: string): 0 | 1 | 2 => {
     if ((requirements[id] ?? '').trim().length > 0) return 2
     const hasMat = materials.some(m => m.linkedNodeIds.includes(id))
     const hasEmph = (getConfig(id).emphasis ?? '').trim().length > 0
     return hasMat || hasEmph ? 1 : 0
-  }
-  const nodeState = (n: FlatNode): 0 | 1 | 2 => {
-    const hasKids = flat.some(x => x.parentId === n.id)
-    if (!hasKids) return leafState(n.id)
-    const ls = leaves.filter(l => descendantOf(flat, n.id, l.id)).map(l => leafState(l.id))
-    if (!ls.length) return 0
-    if (ls.every(s => s === 2)) return 2
-    return ls.some(s => s >= 1) ? 1 : 0
   }
 
   const toggleCollapse = (id: string) =>
@@ -260,16 +251,18 @@ export function MaterialsScreen({
       )
     )
 
-  // Following leaves within the current node's parent branch ("this level") —
-  // not across sibling chapters. Empty when there is nothing after it at level.
+  // Following sections at the current node's level — nodes after it (DFS) that
+  // share its parent branch, excluding the current node's own subtree. Empty
+  // when there is nothing after it at this level.
   const followingAtLevel = (): FlatNode[] => {
     if (!selectedId) return []
-    const idx = leaves.findIndex(l => l.id === selectedId)
+    const idx = rows.findIndex(n => n.id === selectedId)
     if (idx < 0) return []
     const parentId = flat.find(n => n.id === selectedId)?.parentId ?? null
-    return leaves
-      .slice(idx + 1)
-      .filter(l => (parentId != null ? descendantOf(flat, parentId, l.id) : l.parentId == null))
+    return rows.slice(idx + 1).filter(n => {
+      const underParent = parentId != null ? descendantOf(flat, parentId, n.id) : true
+      return underParent && !descendantOf(flat, selectedId, n.id)
+    })
   }
   // Batch: apply the current node's writing config + requirements to every
   // following leaf at this level (overwrites). Priority is excluded — it derives
@@ -305,8 +298,8 @@ export function MaterialsScreen({
     setSavingWhich('next')
     const ok = await persist()
     if (!ok) return // failed save keeps the user on this node (error shown)
-    const idx = leaves.findIndex(l => l.id === selectedId)
-    if (idx >= 0 && idx < leaves.length - 1) setSelectedId(leaves[idx + 1].id)
+    const idx = rows.findIndex(n => n.id === selectedId)
+    if (idx >= 0 && idx < rows.length - 1) setSelectedId(rows[idx + 1].id)
   }
 
   // Label/color for a save button, reflecting saveState only for the action the
@@ -375,7 +368,7 @@ export function MaterialsScreen({
             .filter(n => isVisible(flat, n, collapsed))
             .map(n => {
               const hasKids = flat.some(x => x.parentId === n.id)
-              const st = nodeState(n)
+              const st = nodeConfigState(n.id)
               const status =
                 st === 2
                   ? { label: t('phase2.status_configured'), color: 'var(--bid-success)' }

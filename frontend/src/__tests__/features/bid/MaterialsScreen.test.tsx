@@ -87,7 +87,9 @@ it('marks a leaf configured once it has requirements (materials optional)', asyn
 
 it('batch-applies the current node requirements to following leaves', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
+  await screen.findByTestId('bid-materials-tree')
+  fireEvent.click(screen.getByText('Leaf A')) // select the leaf (auto-select is the chapter)
+  fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
     target: { value: 'BATCH_REQ' },
   })
   fireEvent.click(screen.getByText('phase2.apply_following'))
@@ -120,8 +122,9 @@ it('batch scope stays within the current parent branch (not sibling chapters)', 
     ],
   }
   render(<MaterialsScreen projectId={7} outline={TWO_CHAPTERS} onComplete={jest.fn()} />)
-  // c1a auto-selected; fill it, then batch-apply within chapter 1.
-  fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
+  await screen.findByTestId('bid-materials-tree')
+  fireEvent.click(screen.getByText('Leaf A')) // select the leaf under chapter 1
+  fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
     target: { value: 'SCOPED' },
   })
   fireEvent.click(screen.getByText('phase2.apply_following'))
@@ -137,6 +140,19 @@ it('disables batch-apply when there are no following sections at this level', as
   await screen.findByTestId('bid-materials-tree')
   fireEvent.click(screen.getByText('Leaf B')) // last leaf under the chapter
   expect(screen.getByText('phase2.apply_following').closest('button')).toBeDisabled()
+})
+
+it('save & next advances off a chapter node (not stuck) since chapters are sections too', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-tree')
+  fireEvent.click(screen.getByText('Chapter 1')) // select the chapter explicitly
+  const req = () => screen.getByTestId('bid-materials-requirement') as HTMLTextAreaElement
+  fireEvent.change(req(), { target: { value: 'CHAPTER_REQ' } })
+  expect(req().value).toBe('CHAPTER_REQ')
+  fireEvent.click(screen.getByTestId('bid-materials-save-next'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  // Advanced to the chapter's first child (c1a, empty) — the textarea clears.
+  await waitFor(() => expect(req().value).toBe(''))
 })
 
 it('shows save feedback on the Save & next button, not the first', async () => {
