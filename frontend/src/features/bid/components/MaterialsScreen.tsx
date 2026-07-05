@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
-import { bidApis, type BriefsDoc, type NodeBrief, type OutlineDoc } from '@/apis/bid'
+import {
+  bidApis,
+  type BriefsDoc,
+  type ClauseItem,
+  type NodeBrief,
+  type OutlineDoc,
+  type ScoringItem,
+} from '@/apis/bid'
 import {
   dfsOrder,
   flattenOutline,
@@ -51,7 +58,7 @@ function descendantOf(flat: FlatNode[], ancestorId: string, id: string): boolean
 export function MaterialsScreen({
   projectId,
   outline,
-  onComplete,
+  onComplete: _onComplete,
 }: {
   projectId: number | null
   outline?: OutlineDoc
@@ -67,7 +74,8 @@ export function MaterialsScreen({
   const [configs, setConfigs] = useState<Record<string, NodeConfig>>({})
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
-  const [company, setCompany] = useState('')
+  const [scoring, setScoring] = useState<ScoringItem[]>([])
+  const [clauses, setClauses] = useState<ClauseItem[]>([])
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   // Select the first leaf once the outline is available.
@@ -75,7 +83,7 @@ export function MaterialsScreen({
     if (!selectedId && leaves.length) setSelectedId(leaves[0].id)
   }, [leaves, selectedId])
 
-  // Load persisted briefs + bidder info once per project.
+  // Load persisted briefs once per project.
   useEffect(() => {
     if (projectId == null) return
     let alive = true
@@ -97,13 +105,24 @@ export function MaterialsScreen({
       .catch(() => {
         /* first visit: nothing persisted yet */
       })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
+  // Load scoring/clauses context for covers resolution + priority derivation.
+  useEffect(() => {
+    if (projectId == null) return
+    let alive = true
     bidApis
-      .getQualifications(projectId)
-      .then(q => {
-        if (alive) setCompany(String((q.qualifications as { company?: unknown }).company ?? ''))
+      .getScoringContext(projectId)
+      .then(sc => {
+        if (!alive) return
+        setScoring(sc.scoring ?? [])
+        setClauses(sc.clauses ?? [])
       })
       .catch(() => {
-        /* not prefilled yet */
+        /* no tender normalized yet -> neutral defaults */
       })
     return () => {
       alive = false
@@ -168,6 +187,7 @@ export function MaterialsScreen({
           name: info.name,
           size: info.size,
           linkedNodeIds: [selectedId],
+          stats: info.stats ?? null,
         })
       } catch {
         /* skip failed upload; user can retry */
@@ -178,30 +198,6 @@ export function MaterialsScreen({
       setMaterials(next)
       void persist(next)
     }
-  }
-
-  const saveBidder = async () => {
-    if (projectId == null) return
-    const trimmed = company.trim()
-    let quals: Record<string, unknown> = { items: [] }
-    try {
-      quals = (await bidApis.getQualifications(projectId)).qualifications
-    } catch {
-      /* not prefilled yet */
-    }
-    if (!Array.isArray(quals.items)) quals.items = []
-    await bidApis.saveQualifications(projectId, { ...quals, company: trimmed })
-    let inner: Record<string, unknown> = {}
-    try {
-      const kb = (await bidApis.getKnowledgeBase(projectId)).knowledge_base
-      const existing = kb.bidder_knowledge_base
-      if (existing && typeof existing === 'object') inner = existing as Record<string, unknown>
-    } catch {
-      /* kb not set yet */
-    }
-    await bidApis.saveKnowledgeBase(projectId, {
-      bidder_knowledge_base: { ...inner, company: trimmed },
-    })
   }
 
   const removeMaterial = (mid: string, nodeId: string) =>
@@ -259,9 +255,34 @@ export function MaterialsScreen({
   const reqText = selectedId ? (requirements[selectedId] ?? '') : ''
   const comp = selectedId ? completion(selectedId) : 0
 
+  // Resolve outline covers (internal ids) to user-facing scoring/clause text.
+  const coverText = (cid: string): { text: string; veto: boolean; weight?: number } | null => {
+    const c = clauses.find(x => x.id === cid)
+    if (c) return { text: c.text || cid, veto: !!c.veto }
+    const s = scoring.find(x => x.id === cid)
+    if (s) return { text: s.item || cid, veto: false, weight: s.weight }
+    return null
+  }
+  const resolvedCovers = (selected?.covers ?? [])
+    .map(coverText)
+    .filter((x): x is { text: string; veto: boolean; weight?: number } => x != null)
+  const derivedPriority = (): string => {
+    if (resolvedCovers.some(c => c.veto)) return '高'
+    const w = resolvedCovers.reduce((a, c) => a + (c.weight ?? 0), 0)
+    if (w >= 20) return '高'
+    if (w > 0) return '中'
+    return '中'
+  }
+  const priorityValue = cfg.priority || derivedPriority()
+
   const figureOpts = [
     [t('phase2.yes'), '是'],
     [t('phase2.no'), '否'],
+  ] as const
+  const priorityOpts = [
+    [t('phase2.priority_high'), '高'],
+    [t('phase2.priority_mid'), '中'],
+    [t('phase2.priority_low'), '低'],
   ] as const
 
   return (
@@ -503,76 +524,71 @@ export function MaterialsScreen({
         {selected && (
           <>
             <div>
-              <SectionLabel>{t('phase2.bidder_info')}</SectionLabel>
-              <InfoCard>
-                <div className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                  {t('phase2.bidder_company')}
-                </div>
-                <input
-                  value={company}
-                  onChange={e => setCompany(e.target.value)}
-                  placeholder={t('phase2.bidder_company_placeholder')}
-                  data-testid="bid-bidder-company"
-                  className="w-full rounded-[7px] px-2 py-1.5 text-xs outline-none"
-                  style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void saveBidder()}
-                  data-testid="bid-bidder-save"
-                  className="rounded-[7px] px-2 py-1.5 text-[11px] font-bold"
-                  style={{
-                    background: 'var(--bid-primary-soft)',
-                    border: '1px solid var(--bid-primary)',
-                    color: 'var(--bid-primary)',
-                  }}
-                >
-                  {t('phase2.bidder_save')}
-                </button>
-                <div className="text-[10px]" style={{ color: 'var(--bid-muted-3)' }}>
-                  {t('phase2.bidder_hint')}
-                </div>
-              </InfoCard>
-            </div>
-
-            <div>
               <SectionLabel>{t('phase2.node_info')}</SectionLabel>
               <InfoCard>
-                <InfoRow k={t('phase2.suggested_words')} v={`${cfg.wordMin} - ${cfg.wordMax} 字`} />
-                <InfoRow
-                  k={t('phase2.priority')}
-                  v={<span style={{ color: '#E8A93C' }}>★★★★☆</span>}
-                />
-                <InfoRow k={t('phase2.scoring_ref')} v={selected.covers?.join('/') || '—'} />
+                <div className="flex justify-between">
+                  <span className="text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
+                    {t('phase2.priority')}
+                  </span>
+                  <select
+                    value={priorityValue}
+                    onChange={e => patchConfig(selected.id, { priority: e.target.value })}
+                    data-testid="bid-materials-priority"
+                    className="rounded-[7px] px-1.5 py-1 text-[11px] outline-none"
+                    style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
+                  >
+                    {priorityOpts.map(([label, val]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {resolvedCovers.length ? (
+                  resolvedCovers.map((c, i) => (
+                    <InfoRow
+                      key={i}
+                      k={c.veto ? t('phase2.veto_clause') : t('phase2.scoring_item')}
+                      v={
+                        <span>
+                          {c.text}
+                          {c.weight != null ? ` · ${c.weight}${t('phase2.points')}` : ''}
+                        </span>
+                      }
+                    />
+                  ))
+                ) : (
+                  <InfoRow k={t('phase2.scoring_ref')} v="—" />
+                )}
               </InfoCard>
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between">
-                <SectionLabel className="mb-0">{t('phase2.parse_result')}</SectionLabel>
-                <span
-                  className="rounded-md px-1.5 py-0.5 text-[10px]"
-                  style={{ background: 'var(--bid-primary-soft)', color: 'var(--bid-primary)' }}
-                >
-                  {t('phase2.ai_extract')}
-                </span>
-              </div>
+              <SectionLabel>{t('phase2.node_materials')}</SectionLabel>
               <InfoCard>
-                <InfoRow
-                  k={t('phase2.keypoints')}
-                  v={t('phase2.unit_items', { n: files.length * 3 + (reqText.length > 0 ? 2 : 0) })}
-                  bold
-                />
-                <InfoRow
-                  k={t('phase2.images')}
-                  v={t('phase2.unit_images', { n: Math.min(files.length, 6) })}
-                  bold
-                />
-                <InfoRow
-                  k={t('phase2.tables')}
-                  v={t('phase2.unit_tables', { n: Math.min(files.length, 3) })}
-                  bold
-                />
+                {files.length === 0 ? (
+                  <div className="text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
+                    {t('phase2.no_materials')}
+                  </div>
+                ) : (
+                  files.map(f => (
+                    <div key={f.id} className="flex flex-col gap-0.5">
+                      <div className="truncate text-[11.5px]" style={{ color: 'var(--bid-ink-2)' }}>
+                        📄 {f.name}
+                      </div>
+                      <div className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
+                        {f.stats
+                          ? t('phase2.stats_line', {
+                              chars: f.stats.chars,
+                              pages: f.stats.pages,
+                              tables: f.stats.tables,
+                              images: f.stats.images,
+                            })
+                          : t('phase2.stats_unavailable')}
+                      </div>
+                    </div>
+                  ))
+                )}
               </InfoCard>
             </div>
 
@@ -620,22 +636,6 @@ export function MaterialsScreen({
               <div className="flex flex-col gap-2">
                 <QuickAction onClick={inheritPrev}>{t('phase2.inherit_prev')}</QuickAction>
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await persist()
-                    onComplete()
-                  }}
-                  data-testid="bid-materials-complete-button"
-                  className="rounded-[9px] px-3 py-2 text-left text-[11.5px] font-bold"
-                  style={{
-                    background: 'var(--bid-primary-soft)',
-                    border: '1px solid var(--bid-primary)',
-                    color: 'var(--bid-primary)',
-                  }}
-                >
-                  {t('phase2.enter_generation')}
-                </button>
               </div>
             </div>
           </>

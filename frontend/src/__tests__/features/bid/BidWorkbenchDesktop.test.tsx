@@ -22,6 +22,10 @@ beforeEach(() => {
   jest.clearAllMocks()
   ;(bidApis.getLlmLog as jest.Mock).mockResolvedValue({ items: [] })
   ;(bidApis.getParseStage as jest.Mock).mockResolvedValue({ stage: 'extracting' })
+  ;(bidApis.getScoringContext as jest.Mock).mockResolvedValue({
+    scoring: [],
+    clauses: [],
+  })
 })
 
 // Helper: land on the list, click "new", reach the standalone new-project screen.
@@ -219,8 +223,8 @@ it('runs the full chain new -> ... -> export download', async () => {
   await screen.findByTestId('outline-next-button')
   fireEvent.click(screen.getByTestId('outline-next-button'))
   await screen.findByTestId('bid-materials-screen')
-  // Confirm dialog gates the jump to Stage 3 (no intermediate interstitial).
-  fireEvent.click(await screen.findByTestId('bid-materials-complete-button'))
+  // Confirm dialog gates the jump to Stage 3 (header owns the single entry).
+  fireEvent.click(await screen.findByTestId('materials-next-button'))
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await screen.findByTestId('bid-drafting-screen')
   // Advance action lives in the shell header once generation finished.
