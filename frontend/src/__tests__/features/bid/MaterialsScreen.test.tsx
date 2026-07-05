@@ -73,6 +73,50 @@ it('calls onComplete when entering content generation', async () => {
   expect(screen.queryByTestId('bid-materials-complete-button')).toBeNull()
 })
 
+it('marks a leaf configured once it has requirements (materials optional)', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const tree = await screen.findByTestId('bid-materials-tree')
+  // First leaf auto-selected; nothing filled yet -> no node is "configured".
+  expect(tree.textContent).not.toContain('phase2.status_configured')
+  fireEvent.change(screen.getByTestId('bid-materials-requirement'), {
+    target: { value: '本节要求' },
+  })
+  // Requirements alone (no materials) flips the node to configured.
+  await waitFor(() => expect(tree.textContent).toContain('phase2.status_configured'))
+})
+
+it('batch-applies the current node requirements to following leaves', async () => {
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
+    target: { value: 'BATCH_REQ' },
+  })
+  fireEvent.click(screen.getByText('phase2.apply_following'))
+  await waitFor(() =>
+    expect(bidApis.saveBriefs).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        briefs: expect.objectContaining({
+          c1b: expect.objectContaining({ requirements: 'BATCH_REQ' }),
+        }),
+      })
+    )
+  )
+  confirmSpy.mockRestore()
+})
+
+it('shows save feedback on the Save & next button, not the first', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  const next = await screen.findByTestId('bid-materials-save-next')
+  fireEvent.click(next)
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(screen.getByTestId('bid-materials-save-next').textContent).toBe('phase2.saved')
+  )
+  // The "Save this node" button keeps its default label (feedback is not on it).
+  expect(screen.getByTestId('bid-materials-save').textContent).toBe('phase2.save')
+})
+
 it('loads persisted briefs on mount', async () => {
   ;(bidApis.getBriefs as jest.Mock).mockResolvedValueOnce({
     briefs: { c1a: { style: '专业', requirements: '已保存的要求' } },

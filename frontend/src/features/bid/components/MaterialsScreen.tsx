@@ -79,6 +79,9 @@ export function MaterialsScreen({
   const [scoring, setScoring] = useState<ScoringItem[]>([])
   const [clauses, setClauses] = useState<ClauseItem[]>([])
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  // Which save action is currently reflecting saveState, so the feedback shows
+  // on the button the user actually clicked (not always the first one).
+  const [savingWhich, setSavingWhich] = useState<'this' | 'next' | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   // Select the first leaf once the outline is available.
@@ -136,30 +139,46 @@ export function MaterialsScreen({
   const patchConfig = (id: string, patch: Partial<NodeConfig>) =>
     setConfigs(prev => ({ ...prev, [id]: { ...getConfig(id), ...patch } }))
 
-  const buildDoc = (mats: Material[] = materials): BriefsDoc => {
-    const ids = new Set([...Object.keys(configs), ...Object.keys(requirements)])
+  const buildDoc = (
+    mats: Material[] = materials,
+    cfgs: Record<string, NodeConfig> = configs,
+    reqs: Record<string, string> = requirements
+  ): BriefsDoc => {
+    const ids = new Set([...Object.keys(cfgs), ...Object.keys(reqs)])
     const briefs: Record<string, NodeBrief> = {}
     ids.forEach(id => {
-      briefs[id] = { ...getConfig(id), requirements: requirements[id] ?? '' }
+      briefs[id] = { ...(cfgs[id] ?? defaultConfig()), requirements: reqs[id] ?? '' }
     })
     return { briefs, materials: mats }
   }
-  const persist = async (mats?: Material[]) => {
-    if (projectId == null) return
+  const persist = async (
+    mats?: Material[],
+    cfgs?: Record<string, NodeConfig>,
+    reqs?: Record<string, string>
+  ): Promise<boolean> => {
+    if (projectId == null) return false
     setSaveState('saving')
     try {
-      await bidApis.saveBriefs(projectId, buildDoc(mats))
+      await bidApis.saveBriefs(projectId, buildDoc(mats, cfgs, reqs))
       setSaveState('saved')
-      window.setTimeout(() => setSaveState('idle'), 1500)
+      window.setTimeout(() => {
+        setSaveState('idle')
+        setSavingWhich(null)
+      }, 1500)
+      return true
     } catch {
       setSaveState('error')
+      return false
     }
   }
 
   // Expose the persist callback so the shell header can save before opening the
   // drafting confirm dialog (single entry point that always persists first).
   useEffect(() => {
-    if (persistRef) persistRef.current = () => persist()
+    if (persistRef)
+      persistRef.current = async () => {
+        await persist()
+      }
   })
 
   const completion = (id: string): number => {
@@ -168,13 +187,23 @@ export function MaterialsScreen({
     return Math.round((((files > 0 ? 1 : 0) + (req ? 1 : 0)) / 2) * 100)
   }
 
-  const nodeStatus = (n: FlatNode): number => {
+  // Per-leaf config state (requirements is the gate; materials are optional):
+  //   2 configured  = has specific requirements
+  //   1 in progress = touched (materials or emphasis) but no requirements yet
+  //   0 pending     = untouched
+  const leafState = (id: string): 0 | 1 | 2 => {
+    if ((requirements[id] ?? '').trim().length > 0) return 2
+    const hasMat = materials.some(m => m.linkedNodeIds.includes(id))
+    const hasEmph = (getConfig(id).emphasis ?? '').trim().length > 0
+    return hasMat || hasEmph ? 1 : 0
+  }
+  const nodeState = (n: FlatNode): 0 | 1 | 2 => {
     const hasKids = flat.some(x => x.parentId === n.id)
-    if (!hasKids) return completion(n.id)
-    const leafDesc = leaves.filter(l => descendantOf(flat, n.id, l.id))
-    return leafDesc.length
-      ? leafDesc.reduce((a, l) => a + completion(l.id), 0) / leafDesc.length
-      : 0
+    if (!hasKids) return leafState(n.id)
+    const ls = leaves.filter(l => descendantOf(flat, n.id, l.id)).map(l => leafState(l.id))
+    if (!ls.length) return 0
+    if (ls.every(s => s === 2)) return 2
+    return ls.some(s => s >= 1) ? 1 : 0
   }
 
   const toggleCollapse = (id: string) =>
@@ -229,16 +258,30 @@ export function MaterialsScreen({
       )
     )
 
-  const inheritPrev = () => {
+  // Batch: apply the current node's writing config + requirements to every
+  // following leaf (overwrites them). Priority is excluded — it derives per-node
+  // from that node's own covered scoring/veto clauses.
+  const applyFollowing = () => {
     if (!selectedId) return
     const idx = leaves.findIndex(l => l.id === selectedId)
-    if (idx <= 0) return
-    const prev = leaves[idx - 1]
-    setConfigs(p => ({
-      ...p,
-      [selectedId]: { ...getConfig(prev.id) },
-    }))
-    setRequirements(p => ({ ...p, [selectedId]: requirements[prev.id] ?? '' }))
+    if (idx < 0) return
+    const following = leaves.slice(idx + 1)
+    if (!following.length) {
+      window.alert(t('phase2.apply_following_none'))
+      return
+    }
+    if (!window.confirm(t('phase2.apply_following_confirm', { count: following.length }))) return
+    const { priority: _priority, ...srcCfg } = getConfig(selectedId)
+    const srcReq = requirements[selectedId] ?? ''
+    const nextConfigs = { ...configs }
+    const nextReqs = { ...requirements }
+    following.forEach(l => {
+      nextConfigs[l.id] = { ...getConfig(l.id), ...srcCfg }
+      nextReqs[l.id] = srcReq
+    })
+    setConfigs(nextConfigs)
+    setRequirements(nextReqs)
+    void persist(undefined, nextConfigs, nextReqs)
   }
   const autoFill = () => {
     if (!selectedId) return
@@ -250,11 +293,23 @@ export function MaterialsScreen({
       }))
     }
   }
-  const saveNext = () => {
+  const saveNext = async () => {
     if (!selectedId) return
-    void persist()
+    setSavingWhich('next')
+    const ok = await persist()
+    if (!ok) return // failed save keeps the user on this node (error shown)
     const idx = leaves.findIndex(l => l.id === selectedId)
     if (idx >= 0 && idx < leaves.length - 1) setSelectedId(leaves[idx + 1].id)
+  }
+
+  // Label/color for a save button, reflecting saveState only for the action the
+  // user actually triggered.
+  const saveBtnLabel = (which: 'this' | 'next', dflt: string): string => {
+    if (savingWhich !== which) return dflt
+    if (saveState === 'saving') return t('phase2.saving')
+    if (saveState === 'saved') return t('phase2.saved')
+    if (saveState === 'error') return t('phase2.save_error')
+    return dflt
   }
 
   const selected = selectedId ? (flat.find(n => n.id === selectedId) ?? null) : null
@@ -313,11 +368,11 @@ export function MaterialsScreen({
             .filter(n => isVisible(flat, n, collapsed))
             .map(n => {
               const hasKids = flat.some(x => x.parentId === n.id)
-              const avg = nodeStatus(n)
+              const st = nodeState(n)
               const status =
-                avg >= 100
+                st === 2
                   ? { label: t('phase2.status_configured'), color: 'var(--bid-success)' }
-                  : avg > 0
+                  : st === 1
                     ? { label: t('phase2.status_progress'), color: '#C77700' }
                     : { label: t('phase2.status_todo'), color: 'var(--bid-muted-2)' }
               const isSel = selectedId === n.id
@@ -492,27 +547,24 @@ export function MaterialsScreen({
             <div className="mt-5 flex gap-2.5">
               <button
                 type="button"
-                onClick={() => void persist()}
+                onClick={() => {
+                  setSavingWhich('this')
+                  void persist()
+                }}
                 data-testid="bid-materials-save"
                 className="flex-1 rounded-[9px] py-2.5 text-[13px] font-bold"
                 style={{
                   background: '#fff',
                   border: '1px solid var(--bid-primary)',
                   color:
-                    saveState === 'error'
+                    savingWhich === 'this' && saveState === 'error'
                       ? '#B3453D'
-                      : saveState === 'saved'
+                      : savingWhich === 'this' && saveState === 'saved'
                         ? 'var(--bid-success)'
                         : 'var(--bid-primary)',
                 }}
               >
-                {saveState === 'saving'
-                  ? t('phase2.saving')
-                  : saveState === 'saved'
-                    ? t('phase2.saved')
-                    : saveState === 'error'
-                      ? t('phase2.save_error')
-                      : t('phase2.save')}
+                {saveBtnLabel('this', t('phase2.save'))}
               </button>
               <button
                 type="button"
@@ -521,7 +573,7 @@ export function MaterialsScreen({
                 className="flex-1 rounded-[9px] py-2.5 text-[13px] font-bold text-white"
                 style={{ background: 'var(--bid-primary)' }}
               >
-                {t('phase2.save_next')}
+                {saveBtnLabel('next', t('phase2.save_next'))}
               </button>
             </div>
           </>
@@ -657,7 +709,7 @@ export function MaterialsScreen({
             <div>
               <SectionLabel>{t('phase2.quick_actions')}</SectionLabel>
               <div className="flex flex-col gap-2">
-                <QuickAction onClick={inheritPrev}>{t('phase2.inherit_prev')}</QuickAction>
+                <QuickAction onClick={applyFollowing}>{t('phase2.apply_following')}</QuickAction>
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
               </div>
             </div>
