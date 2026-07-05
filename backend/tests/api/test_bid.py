@@ -546,6 +546,12 @@ def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
     r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
     assert r.status_code == 200 and r.json() == {"briefs": {}, "materials": []}
 
+    # Backing file must exist on disk or the read-time reconcile drops the entry.
+    test_client.post(
+        f"/api/bid/projects/{pid}/materials/attachments",
+        files={"file": ("a.pdf", b"PDF", "application/pdf")},
+        headers=h,
+    )
     doc = {
         "briefs": {"s1": {"style": "专业", "requirements": "写清楚", "tags": ["核心"]}},
         "materials": [
@@ -555,9 +561,13 @@ def test_briefs_roundtrip_api(test_client, test_token, tmp_path, monkeypatch):
     r = test_client.put(
         f"/api/bid/projects/{pid}/materials/briefs", json=doc, headers=h
     )
+    # PUT writes the doc verbatim (no reconcile on write — only read aligns).
     assert r.status_code == 200 and r.json() == doc
     r = test_client.get(f"/api/bid/projects/{pid}/materials/briefs", headers=h)
-    assert r.json() == doc
+    # GET reconciles against on-disk attachments: a.pdf exists, so it survives.
+    got = r.json()
+    assert got["briefs"] == doc["briefs"]
+    assert [m["name"] for m in got["materials"]] == ["a.pdf"]
 
     # invalid shape -> 400
     r = test_client.put(
