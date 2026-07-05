@@ -10,6 +10,7 @@ per-section path (``call_ghostwriter``) is retained only for single-section
 redraft (deferred from the sandbox migration)."""
 
 import asyncio
+import json
 import logging
 import time
 
@@ -94,6 +95,28 @@ async def _seed_corpus(rt: SandboxRuntime, envd: str, ws: BidWorkspace) -> None:
                     f.read_bytes(),
                     f.name,
                 )
+    # Per-section grounding (scoring/veto clauses each node must cover), resolved
+    # once by the backend so the agent doesn't re-derive coverage from raw covers
+    # (R2). Written as grounding.json; the prompt points the agent at it.
+    if ws.path("workspace/outline.json").exists():
+        from app.services.bid.coverage import resolve_section_grounding
+
+        tender_norm = ws.read_json(ensure_normalized_tender(ws))
+        outline = ws.read_json("workspace/outline.json")
+        grounding: dict = {}
+        for n in flatten_sections(outline):
+            nid = n.get("id")
+            if nid is None:
+                continue
+            g = resolve_section_grounding(n, tender_norm)
+            if g["scoring"] or g["clauses"]:
+                grounding[str(nid)] = g
+        await rt.seed_file(
+            envd,
+            "/home/user/grounding.json",
+            json.dumps(grounding, ensure_ascii=False).encode("utf-8"),
+            "grounding.json",
+        )
 
 
 def _drafting_prompt(outline: dict) -> tuple[str, str]:
@@ -108,6 +131,8 @@ def _drafting_prompt(outline: dict) -> tuple[str, str]:
         "the relevant materials under /home/user/ (tender.json, outline.json, "
         "node_briefs.json, bidder_knowledge_base.json, qualifications.json, and "
         "corpus/attachments/*) and read what you need."
+        " /home/user/grounding.json 给出每个 section id 必须覆盖的评分项(scoring)"
+        "与否决条款(clauses)；撰写该节时逐条覆盖、不得遗漏。"
         " 每个章节在 node_briefs.json 里可能有对应 id 的编写要求（writing_brief："
         f"{materials_service.NODE_BRIEF_FIELDS_ZH}）。若存在，本节正文必须遵守这些"
         "要求；如与评分项覆盖冲突，以覆盖评分项为先。"
