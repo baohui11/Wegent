@@ -1,31 +1,14 @@
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { GenerateRefineScreen } from '@/features/bid/components/GenerateRefineScreen'
 import { bidApis } from '@/apis/bid'
+// @tiptap/react + tiptap-markdown + extension packages are mocked globally via
+// jest.config.ts moduleNameMapper. The shared mock exposes the last editor
+// config on __lastEditorConfig so a test can fire onUpdate (autosave path).
+import { __lastEditorConfig } from '@tiptap/react'
 
 jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
-}))
-
-// Shared Tiptap mock: the focused done section mounts SectionEditor, whose
-// useEditor we stub. We expose the last config so a test can fire onUpdate and
-// simulate an edit (driving the autosave path).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let lastEditorConfig: any = null
-jest.mock('@tiptap/react', () => ({
-  useEditor: (config: typeof lastEditorConfig) => {
-    lastEditorConfig = config
-    return {
-      isEditable: true,
-      setEditable: jest.fn(),
-      commands: { setContent: jest.fn() },
-      storage: { markdown: { getMarkdown: () => '正文段落。' } },
-      on: jest.fn(),
-      off: jest.fn(),
-      destroy: jest.fn(),
-    }
-  },
-  EditorContent: () => <div data-testid="bid-section-editor" />,
 }))
 
 const OUTLINE = {
@@ -37,7 +20,7 @@ const OUTLINE = {
 
 beforeEach(() => {
   jest.clearAllMocks()
-  lastEditorConfig = null
+  __lastEditorConfig.current = null
   ;(bidApis.getReviewStatus as jest.Mock).mockResolvedValue({ accepted: {} })
   ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
     content: '正文段落。',
@@ -198,7 +181,7 @@ test('editing the focused done section autosaves via saveSection', async () => {
   await screen.findByTestId('bid-section-editor')
   // Fire the mocked editor's onUpdate to simulate an edit.
   act(() =>
-    lastEditorConfig.onUpdate({
+    __lastEditorConfig.current?.onUpdate({
       editor: { storage: { markdown: { getMarkdown: () => '改过的正文' } } },
     })
   )

@@ -31,6 +31,8 @@ const config: Config = {
     // component tests, so extensions only need to be constructable objects.
     '^@tiptap/starter-kit$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
     '^@tiptap/extension-(.*)$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
+    // Mock @tiptap/react globally — ProseMirror can't run under jsdom.
+    '^@tiptap/react$': '<rootDir>/src/__mocks__/@tiptap__react.tsx',
     '^micromark-util-combine-extensions$': '<rootDir>/src/__mocks__/micromark-stub.ts',
     '^micromark-extension-.*$': '<rootDir>/src/__mocks__/micromark-stub.ts',
     '^mdast-util-.*$': '<rootDir>/src/__mocks__/micromark-stub.ts',
