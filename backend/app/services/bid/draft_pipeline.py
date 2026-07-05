@@ -67,6 +67,17 @@ def find_section(outline: dict, section_id: str) -> dict | None:
     return None
 
 
+def _section_importance_key(node: dict, tender_norm: dict) -> tuple[int, float]:
+    """Draft-order key: sections covering a veto clause first, then by
+    descending covered-scoring weight. Ordering only — never gates coverage."""
+    from app.services.bid.coverage import resolve_section_grounding
+
+    g = resolve_section_grounding(node, tender_norm)
+    has_veto = any(c.get("veto") for c in g["clauses"])
+    weight = sum(float(s.get("weight") or 0) for s in g["scoring"])
+    return (0 if has_veto else 1, -weight)
+
+
 # ---- sandbox drafting (full draft) ------------------------------------------
 
 

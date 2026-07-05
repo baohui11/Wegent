@@ -364,3 +364,23 @@ async def test_seed_corpus_seeds_grounding(tmp_path):
     assert [s["id"] for s in g["s1"]["scoring"]] == ["T1"]
     assert [c["id"] for c in g["s1"]["clauses"]] == ["M1"]
     assert "s2" not in g  # nodes with no grounding are omitted
+
+
+def test_section_importance_key_veto_first_then_weight():
+    from app.services.bid.draft_pipeline import _section_importance_key
+
+    tender = {
+        "scoring": [{"id": "T1", "weight": 20}, {"id": "T2", "weight": 5}],
+        "mandatory_clauses": [{"id": "M1", "veto": True}],
+    }
+    veto_node = {"id": "a", "covers": ["M1"]}
+    heavy_node = {"id": "b", "covers": ["T1"]}
+    light_node = {"id": "c", "covers": ["T2"]}
+    plain_node = {"id": "d", "covers": []}
+
+    keys = {
+        n["id"]: _section_importance_key(n, tender)
+        for n in (veto_node, heavy_node, light_node, plain_node)
+    }
+    ordered = sorted(keys, key=lambda i: keys[i])
+    assert ordered == ["a", "b", "c", "d"]  # veto → heavy → light → none
