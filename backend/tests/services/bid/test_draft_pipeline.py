@@ -313,3 +313,14 @@ async def test_redraft_one_feeds_normalized_tender(tmp_path):
     passed_tender = gw.await_args.kwargs["tender"]
     assert isinstance(passed_tender["scoring"], list)  # normalized, not bucketed dict
     assert ws.path("workspace/tender_normalized.json").exists()
+
+
+def test_drafting_prompt_uses_canonical_brief_fields():
+    from app.services.bid import materials_service
+    from app.services.bid.draft_pipeline import _drafting_prompt
+
+    _, instructions = _drafting_prompt({"sections": [{"id": "s1", "title": "方案"}]})
+    assert materials_service.NODE_BRIEF_FIELDS_ZH in instructions
+    # stale fields removed from the vocabulary
+    for stale in ("模板 template", "标签 tags", "深度 depth"):
+        assert stale not in instructions

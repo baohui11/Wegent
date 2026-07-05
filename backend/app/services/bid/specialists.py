@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from app.services.bid import llm_log
+from app.services.bid import llm_log, materials_service
 from app.services.chat_shell_model_service import (
     create_response,
     extract_response_text,
@@ -365,8 +365,7 @@ async def call_ghostwriter(
         instructions += (
             "\n\n## 本节人工编写要求（writing_brief，必须遵守）\n"
             "输入 JSON 中的 writing_brief 是用户在素材阶段为本节填写的编写要求"
-            "（风格 style、字数 wordMin-wordMax、深度 depth、模板 template、"
-            "重点 emphasis、是否配图 needFigure、具体要求 requirements、标签 tags）。"
+            f"（{materials_service.NODE_BRIEF_FIELDS_ZH}）。"
             "正文必须遵守这些要求；如与评分项覆盖冲突，以覆盖评分项为先。"
         )
     if instruction:

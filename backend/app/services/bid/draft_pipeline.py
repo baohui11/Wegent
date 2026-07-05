@@ -109,9 +109,8 @@ def _drafting_prompt(outline: dict) -> tuple[str, str]:
         "node_briefs.json, bidder_knowledge_base.json, qualifications.json, and "
         "corpus/attachments/*) and read what you need."
         " 每个章节在 node_briefs.json 里可能有对应 id 的编写要求（writing_brief："
-        "具体要求 requirements、重点 emphasis、字数 wordMin-wordMax、优先级 priority、"
-        "是否配图 needFigure）。若存在，本节正文必须遵守这些要求；如与评分项覆盖冲突，"
-        "以覆盖评分项为先。"
+        f"{materials_service.NODE_BRIEF_FIELDS_ZH}）。若存在，本节正文必须遵守这些"
+        "要求；如与评分项覆盖冲突，以覆盖评分项为先。"
     )
     prompt = (
         f"Draft every outline section listed below into Markdown, one file per "

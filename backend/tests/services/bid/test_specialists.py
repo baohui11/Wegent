@@ -346,3 +346,26 @@ async def test_call_ghostwriter_grounds_via_resolve_section_grounding():
     ctx = mock_ctx.await_args.kwargs["ctx"]
     assert [s["id"] for s in ctx["scoring_to_cover"]] == ["T1"]
     assert [c["id"] for c in ctx["mandatory_clauses"]] == ["M1"]  # only covered veto
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_uses_canonical_brief_fields():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import materials_service, specialists
+
+    with patch.object(
+        specialists, "_complete_ctx", new=AsyncMock(return_value="正文")
+    ) as mock_ctx:
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section={"id": "s1", "title": "方案", "covers": []},
+            tender={"scoring": [], "mandatory_clauses": []},
+            knowledge_base={},
+            brief={"requirements": "写详细点"},
+        )
+    instructions = mock_ctx.await_args.kwargs["instructions"]
+    assert materials_service.NODE_BRIEF_FIELDS_ZH in instructions
+    for stale in ("模板 template", "标签 tags", "深度 depth", "风格 style"):
+        assert stale not in instructions
