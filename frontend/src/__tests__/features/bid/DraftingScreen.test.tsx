@@ -7,7 +7,13 @@ import { bidApis, type OutlineDoc } from '@/apis/bid'
 jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
   useTranslation: () => ({
-    t: (k: string, o?: Record<string, unknown>) => (o?.name ?? k) as string,
+    t: (k: string, o?: Record<string, unknown>) => {
+      // Real translations are exercised elsewhere; here we surface the error
+      // strings verbatim so per-section error rendering can be asserted on text.
+      if (k === 'phase4.section_error') return '本节生成失败——可在审阅阶段重写。'
+      if (k === 'drafting.log_error') return `${o?.name ?? ''} 生成失败`
+      return (o?.name ?? k) as string
+    },
   }),
 }))
 
@@ -100,4 +106,26 @@ it('renders the sandbox-flow sequential completion (sections done one-by-one the
     expect(screen.getByTestId('bid-draft-section-s1')).toHaveTextContent('s1 正文。')
   )
   expect(screen.getByTestId('bid-draft-section-s2')).toHaveTextContent('s2 正文。')
+})
+
+it('renders an error note for a failed section', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 2,
+    sections: { s1: 'done', s2: 'error' },
+    finished: true,
+    error: null,
+  })
+  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({ id: 's1', content: '正文' })
+  render(
+    <DraftingScreen
+      projectId={1}
+      outline={{
+        sections: [
+          { id: 's1', title: '一' },
+          { id: 's2', title: '二' },
+        ],
+      }}
+    />
+  )
+  expect((await screen.findAllByText(/生成失败|generation failed/i)).length).toBeGreaterThan(0)
 })

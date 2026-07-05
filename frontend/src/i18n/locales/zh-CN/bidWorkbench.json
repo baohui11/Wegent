@@ -323,6 +323,7 @@
     "empty_log": "等待智能体生成…",
     "log_done": "{{name}} 起草完成",
     "log_drafting": "正在起草 {{name}}…",
+    "log_error": "{{name}} 生成失败",
     "ghostwriter": "标书枪手",
     "doc_subtitle": "技术文件 · 智能生成中",
     "gen_log": "生成日志",
@@ -345,7 +346,8 @@
     "status_pending": "待起草",
     "status_drafting": "起草中",
     "status_done": "已完成",
-    "status_error": "失败"
+    "status_error": "失败",
+    "section_error": "本节生成失败——可在审阅阶段重写。"
   },
   "phase5": {
     "title": "审阅",
