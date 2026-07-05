@@ -482,7 +482,9 @@ def get_briefs(
     db: Session = Depends(get_db),
 ):
     ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
-    return NodeBriefsPayload(**materials.read_briefs(ws))
+    return NodeBriefsPayload(
+        **materials.reconcile_briefs(ws, materials.read_briefs(ws))
+    )
 
 
 @router.put("/projects/{project_id}/materials/briefs", response_model=NodeBriefsPayload)
