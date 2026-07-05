@@ -17,6 +17,7 @@ import {
   leavesOf,
   type FlatNode,
 } from '../canvas/outlineGraph'
+import { ConfirmDialog } from './ConfirmDialog'
 
 interface NodeConfig {
   wordMin: string
@@ -82,6 +83,7 @@ export function MaterialsScreen({
   // Which save action is currently reflecting saveState, so the feedback shows
   // on the button the user actually clicked (not always the first one).
   const [savingWhich, setSavingWhich] = useState<'this' | 'next' | null>(null)
+  const [confirmBatch, setConfirmBatch] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   // Select the first leaf once the outline is available.
@@ -258,23 +260,24 @@ export function MaterialsScreen({
       )
     )
 
-  // Batch: apply the current node's writing config + requirements to the
-  // following leaves *within the same parent branch* ("this level") — not across
-  // sibling chapters. Priority is excluded — it derives per-node from that node's
-  // own covered scoring/veto clauses.
-  const applyFollowing = () => {
-    if (!selectedId) return
+  // Following leaves within the current node's parent branch ("this level") —
+  // not across sibling chapters. Empty when there is nothing after it at level.
+  const followingAtLevel = (): FlatNode[] => {
+    if (!selectedId) return []
     const idx = leaves.findIndex(l => l.id === selectedId)
-    if (idx < 0) return
+    if (idx < 0) return []
     const parentId = flat.find(n => n.id === selectedId)?.parentId ?? null
-    const following = leaves
+    return leaves
       .slice(idx + 1)
       .filter(l => (parentId != null ? descendantOf(flat, parentId, l.id) : l.parentId == null))
-    if (!following.length) {
-      window.alert(t('phase2.apply_following_none'))
-      return
-    }
-    if (!window.confirm(t('phase2.apply_following_confirm', { count: following.length }))) return
+  }
+  // Batch: apply the current node's writing config + requirements to every
+  // following leaf at this level (overwrites). Priority is excluded — it derives
+  // per-node from that node's own covered scoring/veto clauses.
+  const doApplyFollowing = () => {
+    if (!selectedId) return
+    const following = followingAtLevel()
+    if (!following.length) return
     const { priority: _priority, ...srcCfg } = getConfig(selectedId)
     const srcReq = requirements[selectedId] ?? ''
     const nextConfigs = { ...configs }
@@ -713,13 +716,34 @@ export function MaterialsScreen({
             <div>
               <SectionLabel>{t('phase2.quick_actions')}</SectionLabel>
               <div className="flex flex-col gap-2">
-                <QuickAction onClick={applyFollowing}>{t('phase2.apply_following')}</QuickAction>
+                <QuickAction
+                  onClick={() => setConfirmBatch(true)}
+                  disabled={followingAtLevel().length === 0}
+                  title={
+                    followingAtLevel().length === 0 ? t('phase2.apply_following_none') : undefined
+                  }
+                >
+                  {t('phase2.apply_following')}
+                </QuickAction>
                 <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
               </div>
             </div>
           </>
         )}
       </div>
+      {confirmBatch && (
+        <ConfirmDialog
+          title={t('phase2.apply_following')}
+          desc={t('phase2.apply_following_confirm', { count: followingAtLevel().length })}
+          cancel={t('outline.delete_cancel')}
+          confirm={t('phase2.apply_following_ok')}
+          onCancel={() => setConfirmBatch(false)}
+          onConfirm={() => {
+            setConfirmBatch(false)
+            doApplyFollowing()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -809,13 +833,31 @@ function InfoRow({ k, v, bold }: { k: string; v: ReactNode; bold?: boolean }) {
   )
 }
 
-function QuickAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function QuickAction({
+  onClick,
+  children,
+  disabled = false,
+  title,
+}: {
+  onClick: () => void
+  children: ReactNode
+  disabled?: boolean
+  title?: string
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      title={title}
       className="rounded-[9px] px-3 py-2 text-left text-[11.5px]"
-      style={{ background: '#fff', border: '1px solid var(--bid-border)', color: 'var(--bid-sub)' }}
+      style={{
+        background: '#fff',
+        border: '1px solid var(--bid-border)',
+        color: disabled ? 'var(--bid-muted-3)' : 'var(--bid-sub)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+      }}
     >
       {children}
     </button>

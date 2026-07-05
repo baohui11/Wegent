@@ -15,6 +15,7 @@ import { MaterialsScreen } from '@/features/bid/components/MaterialsScreen'
 import { DraftingScreen } from '@/features/bid/components/DraftingScreen'
 import { ReviewScreen } from '@/features/bid/components/ReviewScreen'
 import { AuditScreen } from '@/features/bid/components/AuditScreen'
+import { ConfirmDialog } from '@/features/bid/components/ConfirmDialog'
 
 const SAMPLE_TENDER = `XX市政务数据中心信息化系统采购项目 招标文件
 
@@ -363,62 +364,5 @@ function HeaderGhostButton({
     >
       {children}
     </button>
-  )
-}
-
-function ConfirmDialog({
-  title,
-  desc,
-  cancel,
-  confirm,
-  onCancel,
-  onConfirm,
-}: {
-  title: string
-  desc: string
-  cancel: string
-  confirm: string
-  onCancel: () => void
-  onConfirm: () => void
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[200] flex items-center justify-center"
-      style={{ background: 'rgba(30,26,24,.25)' }}
-      onClick={onCancel}
-      data-testid="bid-confirm-dialog"
-    >
-      <div
-        className="w-[340px] rounded-[14px] p-6"
-        style={{ background: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="mb-2 text-[14.5px] font-bold" style={{ color: 'var(--bid-ink)' }}>
-          {title}
-        </div>
-        <div className="mb-[18px] text-[12.5px]" style={{ color: 'var(--bid-muted)' }}>
-          {desc}
-        </div>
-        <div className="flex justify-end gap-2.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg px-4 py-2 text-[12.5px]"
-            style={{ background: 'var(--bid-paper)', color: 'var(--bid-sub)' }}
-          >
-            {cancel}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            data-testid="bid-confirm-ok"
-            className="rounded-lg px-4 py-2 text-[12.5px] font-bold text-white"
-            style={{ background: 'var(--bid-primary)' }}
-          >
-            {confirm}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }

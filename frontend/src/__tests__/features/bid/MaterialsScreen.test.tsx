@@ -86,12 +86,13 @@ it('marks a leaf configured once it has requirements (materials optional)', asyn
 })
 
 it('batch-applies the current node requirements to following leaves', async () => {
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
     target: { value: 'BATCH_REQ' },
   })
   fireEvent.click(screen.getByText('phase2.apply_following'))
+  // In-app confirm dialog (not native window.confirm) -> click its OK.
+  fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await waitFor(() =>
     expect(bidApis.saveBriefs).toHaveBeenCalledWith(
       7,
@@ -102,11 +103,9 @@ it('batch-applies the current node requirements to following leaves', async () =
       })
     )
   )
-  confirmSpy.mockRestore()
 })
 
 it('batch scope stays within the current parent branch (not sibling chapters)', async () => {
-  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
   const TWO_CHAPTERS: OutlineDoc = {
     sections: [
       {
@@ -126,11 +125,18 @@ it('batch scope stays within the current parent branch (not sibling chapters)', 
     target: { value: 'SCOPED' },
   })
   fireEvent.click(screen.getByText('phase2.apply_following'))
+  fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
   expect(doc.briefs.c1b.requirements).toBe('SCOPED') // same-parent sibling: applied
   expect(doc.briefs.c2a?.requirements ?? '').toBe('') // other chapter: untouched
-  confirmSpy.mockRestore()
+})
+
+it('disables batch-apply when there are no following sections at this level', async () => {
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-tree')
+  fireEvent.click(screen.getByText('Leaf B')) // last leaf under the chapter
+  expect(screen.getByText('phase2.apply_following').closest('button')).toBeDisabled()
 })
 
 it('shows save feedback on the Save & next button, not the first', async () => {
