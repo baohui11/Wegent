@@ -6,7 +6,7 @@ import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
-import Table from '@tiptap/extension-table'
+import { Table } from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
@@ -58,7 +58,7 @@ export function SectionEditor({ content, readOnly, onChange, onEditorReady }: Se
   // Re-seed when a redraft replaces the content or the focused section changes.
   useEffect(() => {
     if (!editor) return
-    if (content !== markdownOf(editor)) editor.commands.setContent(content, false)
+    if (content !== markdownOf(editor)) editor.commands.setContent(content, { emitUpdate: false })
   }, [content, editor])
 
   useEffect(() => {

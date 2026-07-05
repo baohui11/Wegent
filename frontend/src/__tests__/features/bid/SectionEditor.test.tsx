@@ -5,7 +5,7 @@ import { SectionEditor } from '@/features/bid/components/SectionEditor'
 // via jest.config.ts moduleNameMapper (ProseMirror can't run under jsdom). The
 // shared @tiptap/react mock exposes the last editor config on __lastEditorConfig
 // and the editor instance on __mockEditor (its chain() records command names).
-import { __lastEditorConfig, __mockEditor } from '@tiptap/react'
+import { __lastEditorConfig, __mockEditor } from '@/__mocks__/@tiptap__react'
 
 beforeEach(() => {
   __lastEditorConfig.current = null

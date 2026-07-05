@@ -4,7 +4,7 @@ import { bidApis } from '@/apis/bid'
 // @tiptap/react + tiptap-markdown + extension packages are mocked globally via
 // jest.config.ts moduleNameMapper. The shared mock exposes the last editor
 // config on __lastEditorConfig so a test can fire onUpdate (autosave path).
-import { __lastEditorConfig, __mockEditor } from '@tiptap/react'
+import { __lastEditorConfig, __mockEditor } from '@/__mocks__/@tiptap__react'
 
 jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
@@ -181,7 +181,7 @@ test('editing the focused done section autosaves via saveSection', async () => {
   await screen.findByTestId('bid-section-editor')
   // Fire the mocked editor's onUpdate to simulate an edit.
   act(() =>
-    __lastEditorConfig.current?.onUpdate({
+    __lastEditorConfig.current?.onUpdate?.({
       editor: { storage: { markdown: { getMarkdown: () => '改过的正文' } } },
     })
   )
@@ -215,7 +215,7 @@ test('regenerate-this-block flushes then calls redraftRange with mapped range', 
   // Queue an edit so flush() actually persists (bumping v1 -> v2); this is the
   // "save-before-regen" ordering the spec guarantees for line-range alignment.
   act(() =>
-    __lastEditorConfig.current?.onUpdate({
+    __lastEditorConfig.current?.onUpdate?.({
       editor: { storage: { markdown: { getMarkdown: () => '第一段。\n\n第二段。' } } },
     })
   )
