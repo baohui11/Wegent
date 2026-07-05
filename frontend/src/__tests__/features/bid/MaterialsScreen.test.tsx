@@ -105,6 +105,34 @@ it('batch-applies the current node requirements to following leaves', async () =
   confirmSpy.mockRestore()
 })
 
+it('batch scope stays within the current parent branch (not sibling chapters)', async () => {
+  const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+  const TWO_CHAPTERS: OutlineDoc = {
+    sections: [
+      {
+        id: 'c1',
+        title: 'Chapter 1',
+        children: [
+          { id: 'c1a', title: 'Leaf A' },
+          { id: 'c1b', title: 'Leaf B' },
+        ],
+      },
+      { id: 'c2', title: 'Chapter 2', children: [{ id: 'c2a', title: 'Leaf C' }] },
+    ],
+  }
+  render(<MaterialsScreen projectId={7} outline={TWO_CHAPTERS} onComplete={jest.fn()} />)
+  // c1a auto-selected; fill it, then batch-apply within chapter 1.
+  fireEvent.change(await screen.findByTestId('bid-materials-requirement'), {
+    target: { value: 'SCOPED' },
+  })
+  fireEvent.click(screen.getByText('phase2.apply_following'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.briefs.c1b.requirements).toBe('SCOPED') // same-parent sibling: applied
+  expect(doc.briefs.c2a?.requirements ?? '').toBe('') // other chapter: untouched
+  confirmSpy.mockRestore()
+})
+
 it('shows save feedback on the Save & next button, not the first', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
   const next = await screen.findByTestId('bid-materials-save-next')

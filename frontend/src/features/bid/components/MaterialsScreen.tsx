@@ -258,14 +258,18 @@ export function MaterialsScreen({
       )
     )
 
-  // Batch: apply the current node's writing config + requirements to every
-  // following leaf (overwrites them). Priority is excluded — it derives per-node
-  // from that node's own covered scoring/veto clauses.
+  // Batch: apply the current node's writing config + requirements to the
+  // following leaves *within the same parent branch* ("this level") — not across
+  // sibling chapters. Priority is excluded — it derives per-node from that node's
+  // own covered scoring/veto clauses.
   const applyFollowing = () => {
     if (!selectedId) return
     const idx = leaves.findIndex(l => l.id === selectedId)
     if (idx < 0) return
-    const following = leaves.slice(idx + 1)
+    const parentId = flat.find(n => n.id === selectedId)?.parentId ?? null
+    const following = leaves
+      .slice(idx + 1)
+      .filter(l => (parentId != null ? descendantOf(flat, parentId, l.id) : l.parentId == null))
     if (!following.length) {
       window.alert(t('phase2.apply_following_none'))
       return
