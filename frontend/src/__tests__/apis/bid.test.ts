@@ -215,4 +215,23 @@ describe('bidApis', () => {
     })
     expect(res.briefs.s1.requirements).toBe('AI要点')
   })
+
+  it('autoGenerateBriefs POSTs to /materials/briefs/auto-generate', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValueOnce({ status: 'generating' })
+    const res = await bidApis.autoGenerateBriefs(9)
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/9/materials/briefs/auto-generate')
+    expect(res.status).toBe('generating')
+  })
+
+  it('getBriefStatus GETs /materials/briefs/status', async () => {
+    ;(apiClient.get as jest.Mock).mockResolvedValueOnce({
+      total: 2,
+      nodes: { s1: 'done', s2: 'generating' },
+      finished: false,
+      error: null,
+    })
+    const res = await bidApis.getBriefStatus(4)
+    expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/4/materials/briefs/status')
+    expect(res.nodes.s2).toBe('generating')
+  })
 })

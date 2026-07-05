@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import {
   bidApis,
@@ -85,32 +85,103 @@ export function MaterialsScreen({
     setSelectedId((firstLeaf ?? rows[0]).id)
   }, [rows, flat, selectedId])
 
+  // Load persisted briefs. `onlyEmpty` keeps user-edited local entries (edit
+  // always wins): when set, only nodes whose local requirements are still empty
+  // get the loaded value merged in.
+  const loadBriefs = useCallback(
+    (opts?: { onlyEmpty?: boolean }) => {
+      if (projectId == null) return
+      bidApis
+        .getBriefs(projectId)
+        .then(doc => {
+          const cfgs: Record<string, NodeConfig> = {}
+          const reqs: Record<string, string> = {}
+          Object.entries(doc.briefs ?? {}).forEach(([id, b]) => {
+            const { requirements: r, ...rest } = b as Record<string, unknown>
+            cfgs[id] = { ...defaultConfig(), ...(rest as Partial<NodeConfig>) }
+            if (typeof r === 'string') reqs[id] = r
+          })
+          if (opts?.onlyEmpty) {
+            setConfigs(prev => {
+              const next = { ...prev }
+              Object.entries(cfgs).forEach(([id, c]) => {
+                if (!next[id]) next[id] = c
+              })
+              return next
+            })
+            setRequirements(prev => {
+              const next = { ...prev }
+              Object.entries(reqs).forEach(([id, r]) => {
+                // preserve any non-empty local value (incl. unsaved edits)
+                if (!(next[id] ?? '').trim()) next[id] = r
+              })
+              return next
+            })
+          } else {
+            setConfigs(cfgs)
+            setRequirements(reqs)
+            // Full reload (first visit) also refreshes materials; the autogen
+            // `onlyEmpty` reload deliberately leaves materials untouched so a
+            // background refresh can't drop freshly-added local materials.
+            setMaterials((doc.materials ?? []) as Material[])
+          }
+        })
+        .catch(() => {
+          /* first visit: nothing persisted yet */
+        })
+    },
+    [projectId]
+  )
+
   // Load persisted briefs once per project.
+  useEffect(() => {
+    loadBriefs()
+  }, [loadBriefs])
+
+  // Background autogen: trigger once on mount, poll status, then reload briefs
+  // with `onlyEmpty` so the user's edits are never overwritten.
+  const [briefStatus, setBriefStatus] = useState<{
+    total: number
+    nodes: Record<string, string>
+    finished: boolean
+    error: string | null
+  } | null>(null)
   useEffect(() => {
     if (projectId == null) return
     let alive = true
+    // Hoisted so the cleanup can clear a poll started inside the async `.finally`
+    // — otherwise unmounting mid-poll leaks the interval (unbounded status GETs).
+    let handle: ReturnType<typeof setInterval> | undefined
     bidApis
-      .getBriefs(projectId)
-      .then(doc => {
-        if (!alive) return
-        const cfgs: Record<string, NodeConfig> = {}
-        const reqs: Record<string, string> = {}
-        Object.entries(doc.briefs ?? {}).forEach(([id, b]) => {
-          const { requirements: r, ...rest } = b as Record<string, unknown>
-          cfgs[id] = { ...defaultConfig(), ...(rest as Partial<NodeConfig>) }
-          if (typeof r === 'string') reqs[id] = r
-        })
-        setConfigs(cfgs)
-        setRequirements(reqs)
-        setMaterials((doc.materials ?? []) as Material[])
-      })
+      .autoGenerateBriefs(projectId)
       .catch(() => {
-        /* first visit: nothing persisted yet */
+        /* no outline / already running -> ignore */
+      })
+      .finally(() => {
+        if (!alive) return
+        const tick = () => {
+          bidApis
+            .getBriefStatus(projectId)
+            .then(st => {
+              if (!alive) return
+              setBriefStatus(st)
+              if (st.finished) {
+                if (handle) clearInterval(handle)
+                loadBriefs({ onlyEmpty: true })
+              }
+            })
+            .catch(() => {
+              /* transient poll error -> keep polling */
+            })
+        }
+        handle = setInterval(tick, 2500)
+        tick()
       })
     return () => {
       alive = false
+      if (handle) clearInterval(handle)
     }
-  }, [projectId])
+  }, [projectId, loadBriefs])
 
   // Per-node grounding (scoring/veto clauses each node covers), resolved by the
   // backend from the canonical tender — no client-side id->text join.
@@ -437,6 +508,15 @@ export function MaterialsScreen({
                   >
                     {n.name}
                   </span>
+                  {briefStatus?.nodes[n.id] === 'generating' && (
+                    <span
+                      data-testid={`bid-materials-node-gen-${n.id}`}
+                      className="flex-shrink-0 text-[10px] italic"
+                      style={{ color: 'var(--bid-primary)' }}
+                    >
+                      {t('phase2.brief_generating')}
+                    </span>
+                  )}
                   <span
                     className="flex-shrink-0 rounded-md px-1.5 py-px text-[10px]"
                     style={{ background: `${status.color}1F`, color: status.color }}

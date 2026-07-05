@@ -244,6 +244,22 @@ const realBidApis = {
       `/bid/projects/${id}/materials/briefs/generate`,
       { node_ids: nodeIds }
     ),
+  autoGenerateBriefs: (id: number): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>(`/bid/projects/${id}/materials/briefs/auto-generate`),
+  getBriefStatus: (
+    id: number
+  ): Promise<{
+    total: number
+    nodes: Record<string, string>
+    finished: boolean
+    error: string | null
+  }> =>
+    apiClient.get<{
+      total: number
+      nodes: Record<string, string>
+      finished: boolean
+      error: string | null
+    }>(`/bid/projects/${id}/materials/briefs/status`),
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     apiClient.get(`/bid/projects/${id}/materials/attachments`),
   uploadAttachment: async (id: number, file: File): Promise<AttachmentInfo> => {
