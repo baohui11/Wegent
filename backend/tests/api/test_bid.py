@@ -696,3 +696,35 @@ def test_get_grounding_maps_nodes_to_covered_items(tmp_path, monkeypatch):
     assert set(items.keys()) == {"s1", "s1.1"}  # s2 has no grounding -> omitted
     assert [s["id"] for s in items["s1"]["scoring"]] == ["T1"]
     assert [c["id"] for c in items["s1.1"]["clauses"]] == ["M1"]
+
+
+@pytest.mark.asyncio
+async def test_generate_briefs_endpoint_returns_briefs(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from app.api.endpoints import bid as bid_ep
+
+    async def fake_gen(ws, **kw):
+        return {
+            "s1": {
+                "requirements": "写详细",
+                "emphasis": "亮点",
+                "wordMin": "800",
+                "wordMax": "1500",
+                "needFigure": "否",
+                "importance": "中",
+            }
+        }
+
+    monkeypatch.setattr(
+        bid_ep.brief_pipeline, "generate_briefs", AsyncMock(side_effect=fake_gen)
+    )
+    out = await bid_ep._generate_briefs_impl(
+        ws=bid_ep.BidWorkspace("gen-ep", root=tmp_path),
+        model="m",
+        model_config=None,
+        node_ids=["s1"],
+        project_id=1,
+        user_id=2,
+    )
+    assert out["s1"]["requirements"] == "写详细"

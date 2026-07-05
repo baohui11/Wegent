@@ -87,6 +87,14 @@ class NodeBriefsPayload(BaseModel):
     materials: list = []
 
 
+class GenerateBriefsRequest(BaseModel):
+    node_ids: list[str]
+
+
+class GenerateBriefsResponse(BaseModel):
+    briefs: dict
+
+
 class QualificationsResponse(BaseModel):
     qualifications: dict
 

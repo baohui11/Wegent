@@ -21,6 +21,8 @@ from app.schemas.bid import (
     CoverageResponse,
     DraftStatusResponse,
     ExtractTextResponse,
+    GenerateBriefsRequest,
+    GenerateBriefsResponse,
     GroundingResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
@@ -44,7 +46,7 @@ from app.schemas.bid import (
     SimpleStatusResponse,
     TenderDocResponse,
 )
-from app.services.bid import assemble_service, audit_service
+from app.services.bid import assemble_service, audit_service, brief_pipeline
 from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
 from app.services.bid import review_service as review
@@ -493,6 +495,48 @@ def put_briefs(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return NodeBriefsPayload(**materials.read_briefs(ws))
+
+
+async def _generate_briefs_impl(
+    *, ws, model, model_config, node_ids, project_id, user_id
+):
+    return await brief_pipeline.generate_briefs(
+        ws,
+        model=model,
+        model_config=model_config,
+        node_ids=node_ids,
+        project_id=project_id,
+        user_id=user_id,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/materials/briefs/generate",
+    response_model=GenerateBriefsResponse,
+)
+async def generate_briefs_endpoint(
+    project_id: int,
+    body: GenerateBriefsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    if not ws.path("workspace/outline.json").exists():
+        raise HTTPException(status_code=409, detail="outline not built yet")
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
+    try:
+        briefs = await _generate_briefs_impl(
+            ws=ws,
+            model=model,
+            model_config=model_config,
+            node_ids=body.node_ids,
+            project_id=project.id,
+            user_id=current_user.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"brief generation failed: {e}")
+    return GenerateBriefsResponse(briefs=briefs)
 
 
 @router.post(
