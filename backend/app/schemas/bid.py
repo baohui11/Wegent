@@ -95,6 +95,10 @@ class GenerateBriefsResponse(BaseModel):
     briefs: dict
 
 
+class IngestResponse(BaseModel):
+    results: dict
+
+
 class BriefStatusResponse(BaseModel):
     total: int
     nodes: dict

@@ -25,6 +25,7 @@ from app.schemas.bid import (
     GenerateBriefsRequest,
     GenerateBriefsResponse,
     GroundingResponse,
+    IngestResponse,
     KnowledgeBaseResponse,
     KnowledgeBaseSaveRequest,
     LlmCallInfo,
@@ -50,6 +51,7 @@ from app.schemas.bid import (
 from app.services.bid import assemble_service, audit_service, brief_pipeline
 from app.services.bid import drafting_service as drafting
 from app.services.bid import materials_service as materials
+from app.services.bid import materials_store
 from app.services.bid import review_service as review
 from app.services.bid.coverage import compute_coverage, resolve_section_grounding
 from app.services.bid.draft_pipeline import (
@@ -450,10 +452,25 @@ async def upload_attachment(
         info = materials.save_attachment(ws, file.filename or "", content)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    try:
+        materials_store.ingest_attachment(ws, info["name"])
+    except Exception:  # extraction is best-effort; upload already succeeded
+        pass
     from app.services.bid.tender_extract import extract_stats
 
     info["stats"] = extract_stats(file.filename or "", content)
     return AttachmentInfo(**info)
+
+
+@router.post("/projects/{project_id}/materials/ingest", response_model=IngestResponse)
+def ingest_materials(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    return IngestResponse(results=materials_store.ingest_all(ws))
 
 
 @router.get(

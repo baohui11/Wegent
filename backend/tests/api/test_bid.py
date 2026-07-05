@@ -742,3 +742,19 @@ def test_brief_status_endpoint_reads_status(tmp_path):
     # endpoints must be registered
     assert hasattr(bid_ep, "auto_generate_briefs")
     assert hasattr(bid_ep, "brief_status")
+
+
+def test_ingest_endpoint_reingests_all(tmp_path, monkeypatch):
+    from app.api.endpoints import bid as bid_ep
+    from app.services.bid.workspace import BidWorkspace
+
+    assert hasattr(bid_ep, "ingest_materials")
+
+    ws = BidWorkspace("ingest-ep", root=tmp_path)
+    ws.path("corpus/attachments/a.txt").parent.mkdir(parents=True, exist_ok=True)
+    ws.path("corpus/attachments/a.txt").write_bytes(b"hello world")
+    monkeypatch.setattr(
+        bid_ep.materials_store, "extract_text", lambda n, c: "hello world"
+    )
+    out = bid_ep.materials_store.ingest_all(ws)
+    assert out == {"a.txt": "ok"}
