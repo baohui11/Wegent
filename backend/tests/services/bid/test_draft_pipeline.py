@@ -195,14 +195,14 @@ async def test_run_drafting_parallel_drafts_all_and_isolates_failure(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_draft_section_passes_scoped_materials(tmp_path):
+async def test_draft_section_passes_retrieved_materials(tmp_path):
     import asyncio
     from unittest.mock import AsyncMock, patch
 
     from app.services.bid import draft_pipeline as dp
     from app.services.bid.workspace import BidWorkspace
 
-    ws = BidWorkspace("draft-mat", root=tmp_path)
+    ws = BidWorkspace("draft-retr", root=tmp_path)
     ws.write_json("workspace/tender.json", {"scoring": [], "mandatory_clauses": []})
     ws.write_json("corpus/node_briefs.json", {"briefs": {}, "materials": []})
 
@@ -212,13 +212,10 @@ async def test_draft_section_passes_scoped_materials(tmp_path):
         captured.update(kw)
         return "正文"
 
+    hits = [{"name": "q.md", "scope": "global", "summary": "命中片段"}]
     with (
         patch.object(dp, "call_ghostwriter", new=AsyncMock(side_effect=fake_gw)),
-        patch.object(
-            dp.materials_store,
-            "materials_for",
-            return_value=[{"name": "c.txt", "scope": "global", "summary": "s"}],
-        ),
+        patch.object(dp.section_retrieval, "retrieve_for_section", return_value=hits),
     ):
         await dp._draft_section(
             asyncio.Semaphore(1),
@@ -231,6 +228,4 @@ async def test_draft_section_passes_scoped_materials(tmp_path):
             project_id=1,
             user_id=2,
         )
-    assert captured["materials"] == [
-        {"name": "c.txt", "scope": "global", "summary": "s"}
-    ]
+    assert captured["materials"] == hits
