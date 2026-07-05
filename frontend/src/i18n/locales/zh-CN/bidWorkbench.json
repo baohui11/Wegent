@@ -319,7 +319,11 @@
     "insert_table": "表格",
     "insert_pagebreak": "分隔/分页",
     "mode_read": "阅读",
-    "mode_edit": "编辑"
+    "mode_edit": "编辑",
+    "bubble": {
+      "h2": "标题2",
+      "h3": "标题3"
+    }
   },
   "drafting": {
     "canvas": "生成画布",

@@ -412,3 +412,15 @@
   height: 0;
   pointer-events: none;
 }
+
+/* ==========================================================================
+   Bid Workbench — BubbleMenu formatting toolbar (inside .bid-prose). Buttons
+   get a subtle government-crimson soft fill on hover, matching the calm UI.
+   ========================================================================== */
+.bid-prose .bubble-btn {
+  transition: background-color 0.12s ease;
+}
+
+.bid-prose .bubble-btn:hover {
+  background: var(--bid-primary-soft);
+}

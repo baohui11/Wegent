@@ -319,7 +319,11 @@
     "insert_table": "Table",
     "insert_pagebreak": "Divider",
     "mode_read": "Read",
-    "mode_edit": "Edit"
+    "mode_edit": "Edit",
+    "bubble": {
+      "h2": "H2",
+      "h3": "H3"
+    }
   },
   "drafting": {
     "canvas": "Generation canvas",

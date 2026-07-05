@@ -14,6 +14,7 @@ import { Markdown } from 'tiptap-markdown'
 import { useEffect } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useSectionAutosave } from '../hooks/useSectionAutosave'
+import { SectionBubbleMenu } from './SectionBubbleMenu'
 
 // API exposed to the parent (GenerateRefineScreen): the live editor instance
 // (for paragraph-level block targeting) and a flush that resolves to the
@@ -106,6 +107,7 @@ export function SectionEditor({
 
   return (
     <div className="bid-prose">
+      {!readOnly && editor && <SectionBubbleMenu editor={editor} />}
       {!readOnly && editor && (
         <div className="mb-2 flex gap-2" data-testid="bid-editor-toolbar">
           <button
