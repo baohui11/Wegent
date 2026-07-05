@@ -36,6 +36,7 @@ from app.schemas.bid import (
     QualificationsSaveRequest,
     RedraftRequest,
     ReviewStatusResponse,
+    ScoringContextResponse,
     SectionContentResponse,
     SectionListResponse,
     SectionStatus,
@@ -346,6 +347,28 @@ def get_coverage(
     if not ws.path("workspace/outline.json").exists():
         raise HTTPException(status_code=409, detail="outline not built yet")
     return _coverage(ws)
+
+
+@router.get(
+    "/projects/{project_id}/scoring-context",
+    response_model=ScoringContextResponse,
+)
+def get_scoring_context(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ws = BidWorkspace(_require(db, current_user, project_id).workspace_ref)
+    if (
+        not ws.path("workspace/tender.json").exists()
+        and not ws.path("workspace/tender_normalized.json").exists()
+    ):
+        return ScoringContextResponse(scoring=[], clauses=[])
+    tender = _read_tender_for_coverage(ws)
+    return ScoringContextResponse(
+        scoring=tender.get("scoring", []) or [],
+        clauses=tender.get("mandatory_clauses", []) or [],
+    )
 
 
 @router.get(

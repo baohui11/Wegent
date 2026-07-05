@@ -675,3 +675,48 @@ def test_upload_attachment_returns_stats(
     assert body["name"] == "cap.docx"
     assert body["stats"]["tables"] == 1
     assert body["stats"]["chars"] >= 30
+
+
+def test_scoring_context_resolves_normalized(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "SC"}, headers=h).json()[
+        "id"
+    ]
+    ws_ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()[
+        "workspace_ref"
+    ]
+    ws = BidWorkspace(ws_ref, root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": [
+                {"id": "S1", "item": "技术方案", "weight": 30, "category": "技术"}
+            ],
+            "mandatory_clauses": [
+                {"id": "MC-002", "text": "投标保证金", "is_veto": True}
+            ],
+        },
+    )
+
+    r = test_client.get(f"/api/bid/projects/{pid}/scoring-context", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["scoring"][0]["item"] == "技术方案"
+    assert body["scoring"][0]["weight"] == 30
+    assert body["clauses"][0]["veto"] is True  # is_veto normalized to veto
+
+
+def test_scoring_context_empty_when_no_tender(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post(
+        "/api/bid/projects", json={"title": "SC2"}, headers=h
+    ).json()["id"]
+    r = test_client.get(f"/api/bid/projects/{pid}/scoring-context", headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"scoring": [], "clauses": []}
