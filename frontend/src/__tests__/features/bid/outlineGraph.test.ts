@@ -10,6 +10,7 @@ import {
   marqueeSelect,
   outlineFromFlat,
   resolveDrop,
+  rootChapterId,
 } from '@/features/bid/canvas/outlineGraph'
 import type { OutlineDoc } from '@/apis/bid'
 
@@ -212,5 +213,14 @@ describe('helpers', () => {
     const f = flat()
     expect(chapterColor(f, 'c1a')).toBe(chapterColor(f, 'c1'))
     expect(chapterColor(f, 'c1')).not.toBe(chapterColor(f, 'c2'))
+  })
+
+  it('rootChapterId walks the parent chain back to the top-level chapter', () => {
+    const f = flat()
+    // A leaf resolves to its enclosing chapter; a chapter resolves to itself.
+    expect(rootChapterId(f, 'c1a')).toBe('c1')
+    expect(rootChapterId(f, 'c1')).toBe('c1')
+    // Unknown id falls back to itself (no parent chain to walk).
+    expect(rootChapterId(f, 'nope')).toBe('nope')
   })
 })

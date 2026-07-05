@@ -216,17 +216,29 @@ export function isVisible(flat: FlatNode[], node: FlatNode, collapsed: Set<strin
 }
 
 export function chapterColor(flat: FlatNode[], id: string): string {
+  const root = rootChapterId(flat, id)
+  const chapters = childrenOf(flat, null)
+  const idx = chapters.findIndex(c => c.id === root)
+  return CHAPTER_PALETTE[(idx >= 0 ? idx : 0) % CHAPTER_PALETTE.length]
+}
+
+/**
+ * Walk the parent chain from `id` up to its top-level (root) chapter and return
+ * that chapter's id. Single source for "which root chapter does this node belong
+ * to?" — shared by `chapterColor` (palette index) and DraftingScreen's
+ * per-section status inheritance. Falls back to `id` itself when the node is a
+ * root chapter or its id is not in the flat tree.
+ */
+export function rootChapterId(flat: FlatNode[], id: string): string {
   const map = new Map(flat.map(n => [n.id, n]))
   let cur = map.get(id)
-  if (!cur) return CHAPTER_PALETTE[0]
+  if (!cur) return id
   while (cur.parentId) {
     const next = map.get(cur.parentId)
     if (!next) break
     cur = next
   }
-  const chapters = childrenOf(flat, null)
-  const idx = chapters.findIndex(c => c.id === cur!.id)
-  return CHAPTER_PALETTE[(idx >= 0 ? idx : 0) % CHAPTER_PALETTE.length]
+  return cur.id
 }
 
 // ---- drag / marquee reducers (pure) -------------------------------------------
