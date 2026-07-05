@@ -316,6 +316,20 @@ const realBidApis = {
     apiClient.post(`/bid/projects/${id}/sections/${sectionId}/redraft`, {
       instruction: instruction ?? null,
     }),
+  redraftRange: (
+    id: number,
+    sectionId: string,
+    startLine: number,
+    endLine: number,
+    instruction: string | undefined,
+    baseVersion: string
+  ): Promise<{ status: string }> =>
+    apiClient.post(`/bid/projects/${id}/sections/${sectionId}/redraft-range`, {
+      start_line: startLine,
+      end_line: endLine,
+      instruction: instruction ?? null,
+      base_version: baseVersion,
+    }),
   saveSection: (
     id: number,
     sectionId: string,

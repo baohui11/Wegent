@@ -314,7 +314,10 @@
   "editor": {
     "save_saving": "Saving…",
     "save_saved": "Saved",
-    "save_error": "Save failed"
+    "save_error": "Save failed",
+    "regen_block": "Regenerate this paragraph",
+    "insert_table": "Table",
+    "insert_pagebreak": "Divider"
   },
   "drafting": {
     "canvas": "Generation canvas",

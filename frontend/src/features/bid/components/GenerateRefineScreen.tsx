@@ -14,6 +14,7 @@ import {
 import { EnhancedMarkdown } from '@/components/common/EnhancedMarkdown'
 import { SectionEditor } from './SectionEditor'
 import { useSectionAutosave } from '../hooks/useSectionAutosave'
+import { blockLineRange, topBlockIndexOf } from '../canvas/blockRange'
 
 type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
 
@@ -46,6 +47,8 @@ export function GenerateRefineScreen({
   const [instruction, setInstruction] = useState('')
   const docRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set())
+  // The focused section's Tiptap editor (for paragraph-level block targeting).
+  const editorRef = useRef<unknown>(null)
 
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
   const rows = useMemo(() => dfsOrder(flat), [flat])
@@ -137,6 +140,31 @@ export function GenerateRefineScreen({
     },
     [projectId, autosave]
   )
+
+  // Regenerate the cursor's top-level block only: flush the pending edit so the
+  // on-disk bytes match the editor, map the block to a markdown line range, then
+  // call redraft-range with the (post-flush) version. Line numbers are stable
+  // only against the just-saved bytes, so flush-then-map ordering matters.
+  // Declared before the early `if (!status) return` to respect the Rules of Hooks.
+  const regenBlock = useCallback(async () => {
+    if (!focusId) return
+    // flush() returns the post-save version; reading versions[focusId] here
+    // would be stale (React state hasn't re-rendered yet).
+    const baseVersion = await autosave.flush()
+    const md = contents[focusId] ?? ''
+    const idx = topBlockIndexOf(editorRef.current)
+    const { startLine, endLine } = blockLineRange(md, idx)
+    loadedRef.current.delete(focusId) // force re-fetch after the range redrafts
+    await bidApis.redraftRange(
+      projectId,
+      focusId,
+      startLine,
+      endLine,
+      instruction || undefined,
+      baseVersion
+    )
+    setInstruction('')
+  }, [focusId, contents, instruction, projectId, autosave])
 
   if (!status) return null
 
@@ -346,6 +374,9 @@ export function GenerateRefineScreen({
                         content={contents[id] ?? ''}
                         readOnly={status.sections[id] === 'drafting'}
                         onChange={autosave.queueSave}
+                        onEditorReady={e => {
+                          editorRef.current = e
+                        }}
                       />
                     ) : (
                       <div className="bid-prose">
@@ -491,6 +522,16 @@ export function GenerateRefineScreen({
             style={{ border: '1px solid var(--bid-primary)', color: 'var(--bid-primary)' }}
           >
             {t('review.redraft')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void regenBlock()}
+            disabled={!focusDone}
+            data-testid="bid-regen-block-button"
+            className="mt-2 w-full rounded-lg py-2 text-xs font-semibold disabled:cursor-not-allowed"
+            style={{ border: '1px solid var(--bid-border-2)', color: 'var(--bid-sub)' }}
+          >
+            {t('editor.regen_block')}
           </button>
           <button
             type="button"

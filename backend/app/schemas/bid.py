@@ -165,6 +165,13 @@ class SaveSectionResponse(BaseModel):
     version: str
 
 
+class RedraftRangeRequest(BaseModel):
+    start_line: int
+    end_line: int
+    instruction: str | None = None
+    base_version: str
+
+
 class ReviewStatusResponse(BaseModel):
     accepted: dict
 

@@ -39,6 +39,7 @@ from app.schemas.bid import (
     ParseTriggerResponse,
     QualificationsResponse,
     QualificationsSaveRequest,
+    RedraftRangeRequest,
     RedraftRequest,
     ReviewStatusResponse,
     SaveSectionRequest,
@@ -61,6 +62,7 @@ from app.services.bid.draft_pipeline import (
     flatten_sections,
     launch_drafting,
     launch_redraft,
+    launch_redraft_range,
 )
 from app.services.bid.model_resolver import (
     resolve_project_model,
@@ -733,6 +735,39 @@ async def redraft_section(
     model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_redraft(
         project.id, current_user.id, section_id, body.instruction, model, model_config
+    )
+    return SimpleStatusResponse(status="drafting")
+
+
+@router.post(
+    "/projects/{project_id}/sections/{section_id}/redraft-range",
+    response_model=SimpleStatusResponse,
+)
+async def redraft_section_range(
+    project_id: int,
+    section_id: str,
+    body: RedraftRangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # async: launch_redraft_range uses asyncio.create_task (needs a running loop).
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    # CAS on the on-disk version so the line range maps to real bytes (the
+    # client must flush any pending edit before calling -> disk == editor).
+    if drafting.section_version(ws, section_id) != body.base_version:
+        raise HTTPException(status_code=409, detail="stale version")
+    drafting.set_section_status(ws, section_id, "drafting")
+    model, model_config = _resolve_and_validate_model(db, current_user, project)
+    launch_redraft_range(
+        project.id,
+        current_user.id,
+        section_id,
+        body.start_line,
+        body.end_line,
+        body.instruction,
+        model,
+        model_config,
     )
     return SimpleStatusResponse(status="drafting")
 

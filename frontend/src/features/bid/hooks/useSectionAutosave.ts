@@ -26,8 +26,8 @@ export function useSectionAutosave({
   const versionRef = useRef(version)
   versionRef.current = version
 
-  const doSave = useCallback(async () => {
-    if (pending.current === null || !sectionId) return
+  const doSave = useCallback(async (): Promise<string | null> => {
+    if (pending.current === null || !sectionId) return null
     const content = pending.current
     pending.current = null
     setState('saving')
@@ -36,8 +36,10 @@ export function useSectionAutosave({
       versionRef.current = r.version
       onSaved(sectionId, r.version)
       setState('saved')
+      return r.version
     } catch {
       setState('error')
+      return null
     }
   }, [projectId, sectionId, onSaved])
 
@@ -52,9 +54,12 @@ export function useSectionAutosave({
 
   // Force any pending save to complete now — used before focus switch / redraft
   // / accept / block regen so disk == editor before downstream line mapping.
-  const flush = useCallback(async () => {
+  // Resolves to the post-save version (the latest on-disk version), so callers
+  // that need the fresh CAS token (e.g. block regen) don't read stale React state.
+  const flush = useCallback(async (): Promise<string> => {
     if (timer.current) clearTimeout(timer.current)
-    await doSave()
+    const saved = await doSave()
+    return saved ?? versionRef.current
   }, [doSave])
 
   useEffect(

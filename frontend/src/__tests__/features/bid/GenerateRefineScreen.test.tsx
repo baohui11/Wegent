@@ -4,7 +4,7 @@ import { bidApis } from '@/apis/bid'
 // @tiptap/react + tiptap-markdown + extension packages are mocked globally via
 // jest.config.ts moduleNameMapper. The shared mock exposes the last editor
 // config on __lastEditorConfig so a test can fire onUpdate (autosave path).
-import { __lastEditorConfig } from '@tiptap/react'
+import { __lastEditorConfig, __mockEditor } from '@tiptap/react'
 
 jest.mock('@/apis/bid')
 jest.mock('@/hooks/useTranslation', () => ({
@@ -188,4 +188,40 @@ test('editing the focused done section autosaves via saveSection', async () => {
   act(() => jest.advanceTimersByTime(1600))
   await waitFor(() => expect(bidApis.saveSection).toHaveBeenCalledWith(1, 's1', '改过的正文', 'v1'))
   jest.useRealTimers()
+})
+
+test('regenerate-this-block flushes then calls redraftRange with mapped range', async () => {
+  // Section has two top-level paragraphs; cursor in the 2nd block (index 1).
+  // blockLineRange('第一段。\n\n第二段。', 1) -> {3,3}. After flush the version
+  // bumps to v2, which must be the base_version redraftRange is called with.
+  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
+    id: 's1',
+    content: '第一段。\n\n第二段。',
+    version: 'v1',
+  })
+  ;(bidApis.saveSection as jest.Mock).mockResolvedValue({ version: 'v2' })
+  ;(bidApis.redraftRange as jest.Mock).mockResolvedValue({ status: 'drafting' })
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  __mockEditor.storage.markdown.getMarkdown = () => '第一段。\n\n第二段。'
+  __mockEditor.state.selection.$from.index = () => 1
+
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-section-editor')
+  // Queue an edit so flush() actually persists (bumping v1 -> v2); this is the
+  // "save-before-regen" ordering the spec guarantees for line-range alignment.
+  act(() =>
+    __lastEditorConfig.current?.onUpdate({
+      editor: { storage: { markdown: { getMarkdown: () => '第一段。\n\n第二段。' } } },
+    })
+  )
+  fireEvent.click(await screen.findByTestId('bid-regen-block-button'))
+  await waitFor(() => expect(bidApis.saveSection).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(bidApis.redraftRange).toHaveBeenCalledWith(1, 's1', 3, 3, undefined, 'v2')
+  )
 })

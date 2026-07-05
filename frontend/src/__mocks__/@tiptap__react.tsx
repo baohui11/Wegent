@@ -5,8 +5,10 @@
 // via jest.config.ts moduleNameMapper so individual test files don't each have
 // to declare it.
 //
-// Tests that need to drive the editor (e.g. autosave) read the last config off
-// the module export `__lastEditorConfig` and fire its onUpdate.
+// Tests can drive the editor by mutating `__mockEditor` (the current instance)
+// — e.g. set `__mockEditor.storage.markdown.getMarkdown` to a fixture string,
+// or `__mockEditor.state.selection.$from.index` to a top-level block index —
+// then fire `__lastEditorConfig.current.onUpdate(...)`.
 import React from 'react'
 
 interface EditorConfig {
@@ -21,21 +23,49 @@ interface EditorConfig {
 
 export const __lastEditorConfig: { current: EditorConfig | null } = { current: null }
 
+// The single mock editor instance tests can mutate to drive behavior.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const __mockEditor: any = {
+  isEditable: true,
+  setEditable: jest.fn(),
+  commands: { setContent: jest.fn() },
+  storage: { markdown: { getMarkdown: () => '' } },
+  on: jest.fn(),
+  off: jest.fn(),
+  destroy: jest.fn(),
+  state: { selection: { $from: { index: (depth: number) => (depth === 0 ? 0 : 0) } } },
+  // chain() records command names so insert-toolbar tests can assert calls.
+  // All chain() invocations share one persistent __chainCalls log; each method
+  // access returns a callable that records its name and returns the builder.
+  __chainCalls: [] as string[],
+  chain: function () {
+    const calls = __mockEditor.__chainCalls as string[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: any = new Proxy(
+      function () {
+        return builder
+      },
+      {
+        get(_t, prop: string) {
+          if (prop === 'run') return () => true
+          // Every other method: record the name and stay chainable. Calling
+          // it (with any args) also returns builder.
+          calls.push(prop)
+          return (..._args: unknown[]) => builder
+        },
+      }
+    )
+    return builder
+  },
+}
+
 export function useEditor(config: EditorConfig) {
   __lastEditorConfig.current = config
-  return {
-    isEditable: config.editable !== false,
-    setEditable: jest.fn(),
-    commands: { setContent: jest.fn() },
-    storage: { markdown: { getMarkdown: () => '' } },
-    on: jest.fn(),
-    off: jest.fn(),
-    destroy: jest.fn(),
-  }
+  return __mockEditor
 }
 
 export function EditorContent() {
   return React.createElement('div', { 'data-testid': 'bid-section-editor' })
 }
 
-export default { useEditor, EditorContent }
+export default { useEditor, EditorContent, __mockEditor, __lastEditorConfig }

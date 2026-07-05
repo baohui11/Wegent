@@ -615,6 +615,7 @@ export const bidMockApis = {
     p._redraftAt = { ...(p._redraftAt ?? {}), [sectionId]: Date.now() }
     return delay({ status: 'drafting' }, 80)
   },
+  redraftRange: (): Promise<{ status: string }> => delay({ status: 'drafting' }, 80),
   saveSection: (_id: number, sectionId: string, content: string): Promise<{ version: string }> => {
     // mock store: overwrite the section body and return its new version
     sectionContentOverrides[sectionId] = content
