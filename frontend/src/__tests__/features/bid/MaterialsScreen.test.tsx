@@ -22,6 +22,7 @@ jest.mock('@/apis/bid', () => ({
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
     getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
     listAttachments: jest.fn(() => Promise.resolve({ items: [] })),
+    generateBriefs: jest.fn(() => Promise.resolve({ briefs: {} })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -310,6 +311,26 @@ it('importance "restore auto" clears a previously-set manual override', async ()
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
   expect(doc.briefs.c1a.importance ?? '').toBe('')
+})
+
+it('autoFill pulls LLM-generated requirements/emphasis into the form', async () => {
+  ;(bidApis.generateBriefs as jest.Mock).mockResolvedValueOnce({
+    briefs: {
+      c1a: {
+        requirements: 'AI要点',
+        emphasis: 'AI亮点',
+        wordMin: '1500',
+        wordMax: '2500',
+        needFigure: '是',
+        importance: '高',
+      },
+    },
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-requirement')
+  fireEvent.click(screen.getByText('phase2.auto_fill'))
+  const req = (await screen.findByTestId('bid-materials-requirement')) as HTMLTextAreaElement
+  await waitFor(() => expect(req.value).toBe('AI要点'))
 })
 
 it('shows deterministic stats from uploaded attachment', async () => {

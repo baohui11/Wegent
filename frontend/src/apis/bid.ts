@@ -239,6 +239,11 @@ const realBidApis = {
     apiClient.get<BriefsDoc>(`/bid/projects/${id}/materials/briefs`),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> =>
     apiClient.put<BriefsDoc>(`/bid/projects/${id}/materials/briefs`, doc),
+  generateBriefs: (id: number, nodeIds: string[]): Promise<{ briefs: Record<string, NodeBrief> }> =>
+    apiClient.post<{ briefs: Record<string, NodeBrief> }>(
+      `/bid/projects/${id}/materials/briefs/generate`,
+      { node_ids: nodeIds }
+    ),
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     apiClient.get(`/bid/projects/${id}/materials/attachments`),
   uploadAttachment: async (id: number, file: File): Promise<AttachmentInfo> => {

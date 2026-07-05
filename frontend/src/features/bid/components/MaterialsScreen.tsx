@@ -297,14 +297,26 @@ export function MaterialsScreen({
     setRequirements(nextReqs)
     void persist(undefined, nextConfigs, nextReqs)
   }
-  const autoFill = () => {
-    if (!selectedId) return
-    const node = flat.find(n => n.id === selectedId)
-    if (!(requirements[selectedId] ?? '').trim()) {
-      setRequirements(p => ({
-        ...p,
-        [selectedId]: t('phase2.auto_fill_text', { name: node?.name ?? '' }),
-      }))
+  const [autoFilling, setAutoFilling] = useState(false)
+  const autoFill = async () => {
+    if (!selectedId || projectId == null) return
+    setAutoFilling(true)
+    try {
+      const { briefs } = await bidApis.generateBriefs(projectId, [selectedId])
+      const b = briefs[selectedId]
+      if (b) {
+        if (b.requirements) setRequirements(p => ({ ...p, [selectedId]: b.requirements as string }))
+        patchConfig(selectedId, {
+          emphasis: b.emphasis ?? getConfig(selectedId).emphasis,
+          wordMin: b.wordMin ?? getConfig(selectedId).wordMin,
+          wordMax: b.wordMax ?? getConfig(selectedId).wordMax,
+          importance: b.importance ?? getConfig(selectedId).importance,
+        })
+      }
+    } catch {
+      /* leave fields as-is on failure */
+    } finally {
+      setAutoFilling(false)
     }
   }
   const saveNext = async () => {
@@ -736,7 +748,9 @@ export function MaterialsScreen({
                 >
                   {t('phase2.apply_children')}
                 </QuickAction>
-                <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
+                <QuickAction onClick={autoFill}>
+                  {autoFilling ? t('phase2.auto_filling') : t('phase2.auto_fill')}
+                </QuickAction>
               </div>
             </div>
           </>
