@@ -17,6 +17,7 @@ import type {
   LlmCall,
   OutlineDoc,
   OutlineResponse,
+  ScoringContext,
   TenderDoc,
 } from './bid'
 
@@ -240,6 +241,7 @@ interface MockProject extends BidProject {
   quals?: Record<string, unknown>
   attachments?: AttachmentInfo[]
   briefsDoc?: BriefsDoc
+  scoringContext?: ScoringContext
   accepted?: Record<string, boolean>
   audit?: AuditReport
 }
@@ -481,6 +483,8 @@ export const bidMockApis = {
     }),
   getBriefs: (id: number): Promise<BriefsDoc> =>
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
+  getScoringContext: (id: number): Promise<ScoringContext> =>
+    delay(need(id).scoringContext ?? { scoring: [], clauses: [] }),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {
     need(id).briefsDoc = doc
     return delay(doc)

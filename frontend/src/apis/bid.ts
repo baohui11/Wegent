@@ -78,13 +78,46 @@ export interface OutlineResponse {
   coverage: CoverageReport
 }
 
+export interface AttachmentStats {
+  chars: number
+  pages: number
+  tables: number
+  images: number
+}
+
 export interface AttachmentInfo {
   name: string
   size: number
+  stats?: AttachmentStats | null
+}
+
+export interface ScoringItem {
+  id: string
+  item?: string
+  weight?: number
+  category?: string
+  [k: string]: unknown
+}
+
+export interface ClauseItem {
+  id: string
+  text?: string
+  veto?: boolean
+  [k: string]: unknown
+}
+
+export interface ScoringContext {
+  scoring: ScoringItem[]
+  clauses: ClauseItem[]
 }
 
 export interface NodeBrief {
-  [k: string]: unknown
+  requirements?: string
+  emphasis?: string
+  wordMin?: string
+  wordMax?: string
+  needFigure?: string
+  priority?: string
 }
 
 export interface MaterialEntry {
@@ -92,6 +125,7 @@ export interface MaterialEntry {
   name: string
   size: number
   linkedNodeIds: string[]
+  stats?: AttachmentStats | null
 }
 
 export interface BriefsDoc {
@@ -181,6 +215,8 @@ const realBidApis = {
     apiClient.put<OutlineResponse>(`/bid/projects/${id}/outline`, { outline }),
   getCoverage: (id: number): Promise<CoverageReport> =>
     apiClient.get<CoverageReport>(`/bid/projects/${id}/coverage`),
+  getScoringContext: (id: number): Promise<ScoringContext> =>
+    apiClient.get<ScoringContext>(`/bid/projects/${id}/scoring-context`),
   declarePackage: (id: number, pkg: string): Promise<{ status: string }> =>
     apiClient.post<{ status: string }>(`/bid/projects/${id}/package`, { package: pkg }),
   getKnowledgeBase: (id: number): Promise<{ knowledge_base: Record<string, unknown> }> =>
