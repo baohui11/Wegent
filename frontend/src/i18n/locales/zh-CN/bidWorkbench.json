@@ -266,6 +266,8 @@
     "auto_fill": "✦ 一键补全",
     "auto_filling": "生成中…",
     "brief_generating": "生成中…",
+    "scope_global": "全局",
+    "scope_linked": "按章节",
     "status_configured": "已配置",
     "status_progress": "进行中",
     "status_todo": "待配置",
