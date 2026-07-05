@@ -317,3 +317,32 @@ async def test_ghostwriter_no_brief_keeps_ctx_clean():
             knowledge_base={},
         )
     assert "writing_brief" not in json.loads(seen["content"])
+
+
+@pytest.mark.asyncio
+async def test_call_ghostwriter_grounds_via_resolve_section_grounding():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import specialists
+
+    section = {"id": "s1", "title": "方案", "covers": ["T1", "M1"]}
+    tender = {
+        "scoring": [{"id": "T1", "item": "方案", "weight": 20}, {"id": "T2"}],
+        "mandatory_clauses": [
+            {"id": "M1", "veto": True, "text": "有效期"},
+            {"id": "M2", "veto": True, "text": "无关"},
+        ],
+    }
+    with patch.object(
+        specialists, "_complete_ctx", new=AsyncMock(return_value="正文")
+    ) as mock_ctx:
+        await specialists.call_ghostwriter(
+            model="m",
+            model_config=None,
+            section=section,
+            tender=tender,
+            knowledge_base={},
+        )
+    ctx = mock_ctx.await_args.kwargs["ctx"]
+    assert [s["id"] for s in ctx["scoring_to_cover"]] == ["T1"]
+    assert [c["id"] for c in ctx["mandatory_clauses"]] == ["M1"]  # only covered veto
