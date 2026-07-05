@@ -317,7 +317,9 @@
     "save_error": "保存失败",
     "regen_block": "重新生成本段",
     "insert_table": "表格",
-    "insert_pagebreak": "分隔/分页"
+    "insert_pagebreak": "分隔/分页",
+    "mode_read": "阅读",
+    "mode_edit": "编辑"
   },
   "drafting": {
     "canvas": "生成画布",

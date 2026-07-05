@@ -103,8 +103,11 @@ test('renders full markdown (table + code fence) via EnhancedMarkdown, not parse
   // every render with `data-testid="react-markdown-mock"`. The old parseBody()
   // renderer emits raw <p>/<div> and would NOT produce this marker — so its
   // presence proves the renderer swap, while the text checks prove the table +
-  // code-fence lines survive intact.
-  await waitFor(() => expect(screen.getByTestId('react-markdown-mock')).toBeInTheDocument())
+  // code-fence lines survive intact. Read mode renders every done section via
+  // EnhancedMarkdown, so multiple markers are expected.
+  await waitFor(() =>
+    expect(screen.getAllByTestId('react-markdown-mock').length).toBeGreaterThanOrEqual(1)
+  )
   expect(screen.getByText(/报价 \| 100/)).toBeInTheDocument()
   expect(screen.getByText('x = 1')).toBeInTheDocument()
 })
@@ -163,6 +166,21 @@ test('reports done state to the shell header', async () => {
   await waitFor(() => expect(onState).toHaveBeenCalledWith('done'))
 })
 
+test('read mode renders sections read-only; toggling to edit mounts editors', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-generate-document')
+  // default read mode: no editor mounted
+  expect(screen.queryByTestId('bid-section-editor')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
+  expect(await screen.findByTestId('bid-section-editor')).toBeInTheDocument()
+})
+
 test('editing the focused done section autosaves via saveSection', async () => {
   jest.useFakeTimers()
   ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
@@ -178,6 +196,9 @@ test('editing the focused done section autosaves via saveSection', async () => {
     sections: { s1: 'done' },
   })
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-generate-document')
+  // Default is read mode; switch to edit so the section editor mounts.
+  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
   await screen.findByTestId('bid-section-editor')
   // Fire the mocked editor's onUpdate to simulate an edit.
   act(() =>
@@ -211,6 +232,9 @@ test('regenerate-this-block flushes then calls redraftRange with mapped range', 
   __mockEditor.state.selection.$from.index = () => 1
 
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-generate-document')
+  // Default is read mode; switch to edit so the section editor mounts.
+  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
   await screen.findByTestId('bid-section-editor')
   // Queue an edit so flush() actually persists (bumping v1 -> v2); this is the
   // "save-before-regen" ordering the spec guarantees for line-range alignment.

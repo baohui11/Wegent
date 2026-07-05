@@ -43,6 +43,9 @@ export function GenerateRefineScreen({
   const [accepted, setAccepted] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
+  // Document-wide Edit/Read mode. Read (default) renders the whole document via
+  // EnhancedMarkdown; Edit mounts a block editor per done section.
+  const [mode, setMode] = useState<'read' | 'edit'>('read')
   const [instruction, setInstruction] = useState('')
   const docRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set())
@@ -171,6 +174,12 @@ export function GenerateRefineScreen({
     )
     setInstruction('')
   }, [activeId, focusId, contents, instruction, projectId, flushActive])
+
+  // Leaving Edit mode unmounts every section editor; drop their registered APIs
+  // so the right panel / regen don't hold stale editor references.
+  useEffect(() => {
+    if (mode === 'read') apisRef.current.clear()
+  }, [mode])
 
   if (!status) return null
 
@@ -311,6 +320,22 @@ export function GenerateRefineScreen({
             </div>
           </div>
 
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              data-testid="bid-mode-toggle"
+              onClick={() => setMode(m => (m === 'read' ? 'edit' : 'read'))}
+              className="rounded-md px-3 py-1 text-[11px] font-semibold"
+              style={{
+                border: '1px solid var(--bid-border-2)',
+                color: 'var(--bid-sub)',
+                fontFamily: "'Noto Sans SC', sans-serif",
+              }}
+            >
+              {t(mode === 'read' ? 'editor.mode_edit' : 'editor.mode_read')}
+            </button>
+          </div>
+
           {sectionIds.map(id => {
             const st = status.sections[id] as SecStatus
             const heading = nameOf.get(id) ?? id
@@ -363,12 +388,12 @@ export function GenerateRefineScreen({
 
                 {st === 'done' && (
                   <>
-                    {/* The focused section is editable in place (Tiptap); all
-                        other done sections stay as read-only EnhancedMarkdown.
-                        A section mid-redraft is read-only so async LLM rewrites
-                        never race an in-progress edit. SectionEditor owns its
-                        own autosave and registers its { editor, flush } API. */}
-                    {id === focusId ? (
+                    {/* Edit mode mounts a block editor for every done section;
+                        Read mode renders the whole document read-only. A section
+                        mid-redraft is read-only so async LLM rewrites never race
+                        an in-progress edit. SectionEditor owns its own autosave
+                        and registers its { editor, flush } API. */}
+                    {mode === 'edit' ? (
                       <SectionEditor
                         projectId={projectId}
                         sectionId={id}

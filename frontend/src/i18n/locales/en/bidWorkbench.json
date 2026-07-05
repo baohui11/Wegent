@@ -317,7 +317,9 @@
     "save_error": "Save failed",
     "regen_block": "Regenerate this paragraph",
     "insert_table": "Table",
-    "insert_pagebreak": "Divider"
+    "insert_pagebreak": "Divider",
+    "mode_read": "Read",
+    "mode_edit": "Edit"
   },
   "drafting": {
     "canvas": "Generation canvas",
