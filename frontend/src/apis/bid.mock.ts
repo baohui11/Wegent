@@ -17,6 +17,7 @@ import type {
   ExtractedFile,
   GroundingDoc,
   LlmCall,
+  NodeBrief,
   OutlineDoc,
   OutlineNode,
   OutlineResponse,
@@ -516,6 +517,25 @@ export const bidMockApis = {
     need(id).briefsDoc = doc
     return delay(doc)
   },
+  generateBriefs: (
+    _id: number,
+    nodeIds: string[]
+  ): Promise<{ briefs: Record<string, NodeBrief> }> =>
+    delay({
+      briefs: Object.fromEntries(
+        nodeIds.map(nid => [
+          nid,
+          {
+            requirements: '由 LLM 生成的编写要点（mock）',
+            emphasis: '差异化亮点（mock）',
+            wordMin: '800',
+            wordMax: '1500',
+            needFigure: '否',
+            importance: '中',
+          } as NodeBrief,
+        ])
+      ),
+    }),
   listAttachments: (id: number): Promise<{ items: AttachmentInfo[] }> =>
     delay({ items: need(id).attachments ?? [] }),
   uploadAttachment: (id: number, file: File): Promise<AttachmentInfo> => {

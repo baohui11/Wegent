@@ -391,3 +391,34 @@ async def test_call_ghostwriter_appends_style_card():
     instructions = mock_ctx.await_args.kwargs["instructions"]
     assert "项目一致性（全局，必须遵守）" in instructions
     assert "全篇一致性：术语统一。" in instructions
+
+
+def test_node_brief_fields_use_importance_not_priority():
+    from app.services.bid.materials_service import NODE_BRIEF_FIELDS_ZH
+
+    assert "重要性 importance" in NODE_BRIEF_FIELDS_ZH
+    assert "优先级 priority" not in NODE_BRIEF_FIELDS_ZH
+
+
+@pytest.mark.asyncio
+async def test_call_brief_writer_parses_json_briefs():
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import specialists
+
+    fake = '```json\n{"briefs": {"s1": {"requirements": "写详细", "emphasis": "重点A"}}}\n```'
+    with patch.object(specialists, "_complete_ctx", new=AsyncMock(return_value=fake)):
+        out = await specialists.call_brief_writer(
+            model="m",
+            model_config=None,
+            nodes_ctx=[
+                {
+                    "id": "s1",
+                    "title": "方案",
+                    "scoring_to_cover": [],
+                    "mandatory_clauses": [],
+                }
+            ],
+        )
+    assert out["s1"]["requirements"] == "写详细"
+    assert out["s1"]["emphasis"] == "重点A"

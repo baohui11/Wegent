@@ -22,6 +22,7 @@ jest.mock('@/apis/bid', () => ({
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
     getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
     listAttachments: jest.fn(() => Promise.resolve({ items: [] })),
+    generateBriefs: jest.fn(() => Promise.resolve({ briefs: {} })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -268,38 +269,38 @@ it('removes fake material-analysis card and shows honest section-materials', asy
   expect(screen.queryByText(/phase2\.keypoints/i)).toBeNull()
 })
 
-it('priority is editable and persists into the brief', async () => {
+it('importance is editable and persists into the brief', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  const select = await screen.findByTestId('bid-materials-priority')
+  const select = await screen.findByTestId('bid-materials-importance')
   fireEvent.change(select, { target: { value: '高' } })
   fireEvent.click(screen.getByTestId('bid-materials-save'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
-  expect(doc.briefs.c1a.priority).toBe('高')
+  expect(doc.briefs.c1a.importance).toBe('高')
 })
 
-it('priority defaults to auto (derived) and brief does not persist priority', async () => {
-  // No manual selection: priority select sits on the "auto" option; saving the
-  // brief must NOT write a priority (it stays derived at render time). Touch the
-  // node so it appears in the saved brief, then assert priority is empty/absent.
+it('importance defaults to auto (derived) and brief does not persist importance', async () => {
+  // No manual selection: importance select sits on the "auto" option; saving the
+  // brief must NOT write a importance (it stays derived at render time). Touch the
+  // node so it appears in the saved brief, then assert importance is empty/absent.
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  const select = await screen.findByTestId('bid-materials-priority')
+  const select = await screen.findByTestId('bid-materials-importance')
   // The "auto" option (empty value) is present and currently selected.
   const autoOpt = (select as HTMLSelectElement).querySelector('option[value=""]')!
   expect(autoOpt).toBeTruthy()
   expect((select as HTMLSelectElement).value).toBe('')
   const req = await screen.findByTestId('bid-materials-requirement')
-  fireEvent.change(req, { target: { value: 'auto-priority node' } })
+  fireEvent.change(req, { target: { value: 'auto-importance node' } })
   fireEvent.click(screen.getByTestId('bid-materials-save'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
-  // priority is absent (or empty) when the user never picked one manually.
-  expect(doc.briefs.c1a.priority ?? '').toBe('')
+  // importance is absent (or empty) when the user never picked one manually.
+  expect(doc.briefs.c1a.importance ?? '').toBe('')
 })
 
-it('priority "restore auto" clears a previously-set manual override', async () => {
+it('importance "restore auto" clears a previously-set manual override', async () => {
   render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
-  const select = await screen.findByTestId('bid-materials-priority')
+  const select = await screen.findByTestId('bid-materials-importance')
   // Pick a manual value first.
   fireEvent.change(select, { target: { value: '高' } })
   expect((select as HTMLSelectElement).value).toBe('高')
@@ -309,7 +310,27 @@ it('priority "restore auto" clears a previously-set manual override', async () =
   fireEvent.click(screen.getByTestId('bid-materials-save'))
   await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
   const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
-  expect(doc.briefs.c1a.priority ?? '').toBe('')
+  expect(doc.briefs.c1a.importance ?? '').toBe('')
+})
+
+it('autoFill pulls LLM-generated requirements/emphasis into the form', async () => {
+  ;(bidApis.generateBriefs as jest.Mock).mockResolvedValueOnce({
+    briefs: {
+      c1a: {
+        requirements: 'AI要点',
+        emphasis: 'AI亮点',
+        wordMin: '1500',
+        wordMax: '2500',
+        needFigure: '是',
+        importance: '高',
+      },
+    },
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  await screen.findByTestId('bid-materials-requirement')
+  fireEvent.click(screen.getByText('phase2.auto_fill'))
+  const req = (await screen.findByTestId('bid-materials-requirement')) as HTMLTextAreaElement
+  await waitFor(() => expect(req.value).toBe('AI要点'))
 })
 
 it('shows deterministic stats from uploaded attachment', async () => {

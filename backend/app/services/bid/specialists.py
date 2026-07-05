@@ -423,3 +423,54 @@ async def call_fact_checker(
     if isinstance(obj, dict):
         return obj.get("verdicts", [])
     return obj if isinstance(obj, list) else []
+
+
+_BRIEF_PROMPT = (
+    "你是标书规划助理。给定若干章节的结构化信息（标题、要覆盖的评分项 scoring_to_cover、"
+    "★否决条款 mandatory_clauses、已链接材料 materials、字数档 word_floor、重要性 importance），"
+    "为每节生成一段**面向枪手的编写要求**。只依据所给信息，不得自造招标义务、不得虚构材料，"
+    "**不得在文字里回显评分/条款 ID**（如「针对评分项 S3」「R019」）。requirements 用 3-6 条中文要点，"
+    "说清本节要论证什么、覆盖哪些得分锚点（用人话不用 ID）、用哪些材料、可核验数字缺则标『待填(来源:..)』；"
+    "emphasis 一句话点明本节最该突出的差异化亮点。"
+)
+
+
+async def call_brief_writer(
+    *,
+    model: str,
+    model_config: dict | None,
+    nodes_ctx: list[dict],
+    project_id: int | None = None,
+    user_id: int | None = None,
+) -> dict[str, dict]:
+    """Generate per-section writing briefs from code-assembled node context.
+    Returns {node_id: {"requirements": str, "emphasis": str}}. Deterministic
+    fields (word floors / importance / needFigure) are NOT set here."""
+    ctx = {"nodes": nodes_ctx}
+    instructions = (
+        _BRIEF_PROMPT
+        + '\n\n只返回严格 JSON：{"briefs": {"<node_id>": '
+        + '{"requirements": "...", "emphasis": "..."}}}，不要多余文字、不要代码围栏外内容。'
+    )
+    raw = await _complete_ctx(
+        model=model,
+        model_config=model_config,
+        ctx=ctx,
+        shrink_order=["nodes"],
+        instructions=instructions,
+        metadata={},
+        specialist="brief_writer",
+        label=f"{len(nodes_ctx)} nodes",
+        project_id=project_id,
+        user_id=user_id,
+    )
+    data = json.loads(_strip_fence(raw))
+    briefs = data.get("briefs", {})
+    return {
+        str(k): {
+            "requirements": str(v.get("requirements") or "").strip(),
+            "emphasis": str(v.get("emphasis") or "").strip(),
+        }
+        for k, v in briefs.items()
+        if isinstance(v, dict)
+    }

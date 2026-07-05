@@ -204,4 +204,15 @@ describe('bidApis', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/bid/projects/7/grounding')
     expect(res.items.s1.scoring[0].id).toBe('T1')
   })
+
+  it('generateBriefs POSTs to /materials/briefs/generate', async () => {
+    ;(apiClient.post as jest.Mock).mockResolvedValueOnce({
+      briefs: { s1: { requirements: 'AI要点', emphasis: 'AI亮点' } },
+    })
+    const res = await bidApis.generateBriefs(3, ['s1'])
+    expect(apiClient.post).toHaveBeenCalledWith('/bid/projects/3/materials/briefs/generate', {
+      node_ids: ['s1'],
+    })
+    expect(res.briefs.s1.requirements).toBe('AI要点')
+  })
 })

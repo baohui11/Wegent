@@ -24,7 +24,7 @@ interface NodeConfig {
   wordMax: string
   emphasis: string
   needFigure: string
-  priority: string
+  importance: string
 }
 
 interface Material {
@@ -38,7 +38,7 @@ const defaultConfig = (): NodeConfig => ({
   wordMax: '',
   emphasis: '',
   needFigure: '否',
-  priority: '',
+  importance: '',
 })
 
 let matSeq = 0
@@ -285,7 +285,7 @@ export function MaterialsScreen({
     if (!selectedId) return
     const targets = descendantNodes()
     if (!targets.length) return
-    const { priority: _priority, ...srcCfg } = getConfig(selectedId)
+    const { importance: _importance, ...srcCfg } = getConfig(selectedId)
     const srcReq = requirements[selectedId] ?? ''
     const nextConfigs = { ...configs }
     const nextReqs = { ...requirements }
@@ -297,14 +297,26 @@ export function MaterialsScreen({
     setRequirements(nextReqs)
     void persist(undefined, nextConfigs, nextReqs)
   }
-  const autoFill = () => {
-    if (!selectedId) return
-    const node = flat.find(n => n.id === selectedId)
-    if (!(requirements[selectedId] ?? '').trim()) {
-      setRequirements(p => ({
-        ...p,
-        [selectedId]: t('phase2.auto_fill_text', { name: node?.name ?? '' }),
-      }))
+  const [autoFilling, setAutoFilling] = useState(false)
+  const autoFill = async () => {
+    if (!selectedId || projectId == null) return
+    setAutoFilling(true)
+    try {
+      const { briefs } = await bidApis.generateBriefs(projectId, [selectedId])
+      const b = briefs[selectedId]
+      if (b) {
+        if (b.requirements) setRequirements(p => ({ ...p, [selectedId]: b.requirements as string }))
+        patchConfig(selectedId, {
+          emphasis: b.emphasis ?? getConfig(selectedId).emphasis,
+          wordMin: b.wordMin ?? getConfig(selectedId).wordMin,
+          wordMax: b.wordMax ?? getConfig(selectedId).wordMax,
+          importance: b.importance ?? getConfig(selectedId).importance,
+        })
+      }
+    } catch {
+      /* leave fields as-is on failure */
+    } finally {
+      setAutoFilling(false)
     }
   }
   const saveNext = async () => {
@@ -342,7 +354,7 @@ export function MaterialsScreen({
     ...(g?.clauses ?? []).map(c => ({ text: c.text || c.id, veto: !!c.veto })),
     ...(g?.scoring ?? []).map(s => ({ text: s.item || s.id, veto: false, weight: s.weight })),
   ]
-  const derivedPriority = (): string => {
+  const derivedImportance = (): string => {
     if (resolvedCovers.some(c => c.veto)) return '高'
     const w = resolvedCovers.reduce((a, c) => a + (c.weight ?? 0), 0)
     if (w >= 20) return '高'
@@ -354,15 +366,15 @@ export function MaterialsScreen({
     [t('phase2.yes'), '是'],
     [t('phase2.no'), '否'],
   ] as const
-  const priorityOpts = [
-    [t('phase2.priority_high'), '高'],
-    [t('phase2.priority_mid'), '中'],
-    [t('phase2.priority_low'), '低'],
+  const importanceOpts = [
+    [t('phase2.importance_high'), '高'],
+    [t('phase2.importance_mid'), '中'],
+    [t('phase2.importance_low'), '低'],
   ] as const
-  // The auto option carries an empty value: when selected, `cfg.priority` is
-  // cleared and the rendered priority falls back to the derived one. Its label
+  // The auto option carries an empty value: when selected, `cfg.importance` is
+  // cleared and the rendered importance falls back to the derived one. Its label
   // shows the currently-derived value so the user knows what "auto" resolves to.
-  const autoOptLabel = t('phase2.priority_auto', { value: derivedPriority() })
+  const autoOptLabel = t('phase2.importance_auto', { value: derivedImportance() })
 
   return (
     <div className="flex h-full overflow-x-auto" data-testid="bid-materials-screen">
@@ -615,19 +627,19 @@ export function MaterialsScreen({
               <InfoCard>
                 <div className="flex justify-between">
                   <span className="text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
-                    {t('phase2.priority')}
+                    {t('phase2.importance')}
                   </span>
                   <select
-                    value={cfg.priority}
-                    onChange={e => patchConfig(selected.id, { priority: e.target.value })}
-                    data-testid="bid-materials-priority"
+                    value={cfg.importance}
+                    onChange={e => patchConfig(selected.id, { importance: e.target.value })}
+                    data-testid="bid-materials-importance"
                     className="rounded-[7px] px-1.5 py-1 text-[11px] outline-none"
                     style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
                   >
                     {/* Auto option: empty value clears any manual override so the
-                        priority re-derives from covered scoring/veto clauses. */}
+                        importance re-derives from covered scoring/veto clauses. */}
                     <option value="">{autoOptLabel}</option>
-                    {priorityOpts.map(([label, val]) => (
+                    {importanceOpts.map(([label, val]) => (
                       <option key={val} value={val}>
                         {label}
                       </option>
@@ -736,7 +748,9 @@ export function MaterialsScreen({
                 >
                   {t('phase2.apply_children')}
                 </QuickAction>
-                <QuickAction onClick={autoFill}>{t('phase2.auto_fill')}</QuickAction>
+                <QuickAction onClick={autoFill}>
+                  {autoFilling ? t('phase2.auto_filling') : t('phase2.auto_fill')}
+                </QuickAction>
               </div>
             </div>
           </>
