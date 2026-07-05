@@ -4,7 +4,6 @@
 
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import { Table } from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
@@ -12,7 +11,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import { Markdown } from 'tiptap-markdown'
 import DragHandle from '@tiptap/extension-drag-handle-react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { useSectionAutosave } from '../hooks/useSectionAutosave'
 import { SectionBubbleMenu } from './SectionBubbleMenu'
@@ -67,12 +66,19 @@ export function SectionEditor({
   // independently (Edit mode can mount many editors at once).
   const autosave = useSectionAutosave({ projectId, sectionId, version, onSaved })
 
+  // Gate autosave so it only fires on a genuine user edit. tiptap-markdown
+  // re-normalizes content on mount, which emits an update; without this guard
+  // merely entering Edit mode would PUT every section (and clear its accepted
+  // flag). Flipped true on first focus, reset on each programmatic re-seed.
+  const userEditedRef = useRef(false)
+
   const editor = useEditor({
     editable: !readOnly,
     content,
     extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false }),
+      // StarterKit 3 already bundles Link; configure it here instead of adding
+      // a second Link extension (which warns "Duplicate extension names: link").
+      StarterKit.configure({ link: { openOnClick: false } }),
       Image,
       Table.configure({ resizable: false }),
       TableRow,
@@ -80,8 +86,14 @@ export function SectionEditor({
       TableCell,
       Markdown.configure({ html: false, transformPastedText: true }),
     ],
-    onUpdate: ({ editor }) => autosave.queueSave(markdownOf(editor)),
-    onFocus: () => onFocus?.(sectionId),
+    onUpdate: ({ editor }) => {
+      if (!userEditedRef.current) return
+      autosave.queueSave(markdownOf(editor))
+    },
+    onFocus: () => {
+      userEditedRef.current = true
+      onFocus?.(sectionId)
+    },
     // Flush any pending edit when the editor loses focus so the on-disk bytes
     // match the editor before downstream operations (focus switch / redraft).
     onBlur: () => {
@@ -94,7 +106,10 @@ export function SectionEditor({
   // Re-seed when a redraft replaces the content or the section changes.
   useEffect(() => {
     if (!editor) return
-    if (content !== markdownOf(editor)) editor.commands.setContent(content, { emitUpdate: false })
+    if (content !== markdownOf(editor)) {
+      userEditedRef.current = false // programmatic re-seed, not a user edit
+      editor.commands.setContent(content, { emitUpdate: false })
+    }
   }, [content, editor])
 
   useEffect(() => {

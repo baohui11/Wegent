@@ -200,7 +200,8 @@ test('editing the focused done section autosaves via saveSection', async () => {
   // Default is read mode; switch to edit so the section editor mounts.
   fireEvent.click(screen.getByTestId('bid-mode-toggle'))
   await screen.findByTestId('bid-section-editor')
-  // Fire the mocked editor's onUpdate to simulate an edit.
+  // A genuine edit is focus-then-type: onFocus arms autosave, onUpdate queues.
+  act(() => __lastEditorConfig.current?.onFocus?.())
   act(() =>
     __lastEditorConfig.current?.onUpdate?.({
       editor: { storage: { markdown: { getMarkdown: () => '改过的正文' } } },
@@ -238,6 +239,7 @@ test('regenerate-this-block flushes then calls redraftRange with mapped range', 
   await screen.findByTestId('bid-section-editor')
   // Queue an edit so flush() actually persists (bumping v1 -> v2); this is the
   // "save-before-regen" ordering the spec guarantees for line-range alignment.
+  act(() => __lastEditorConfig.current?.onFocus?.())
   act(() =>
     __lastEditorConfig.current?.onUpdate?.({
       editor: { storage: { markdown: { getMarkdown: () => '第一段。\n\n第二段。' } } },

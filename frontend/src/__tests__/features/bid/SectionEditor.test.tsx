@@ -76,8 +76,8 @@ test('SectionEditor autosaves its own section on edit', async () => {
       onSaved={() => {}}
     />
   )
-  // Fire the mocked editor's onUpdate to simulate an edit; SectionEditor owns
-  // its autosave now, so this must queue a saveSection call.
+  // A genuine edit is focus-then-type: onFocus arms autosave, onUpdate queues.
+  act(() => __lastEditorConfig.current?.onFocus?.())
   act(() =>
     __lastEditorConfig.current?.onUpdate?.({
       editor: { storage: { markdown: { getMarkdown: () => '改' } } },
@@ -85,6 +85,32 @@ test('SectionEditor autosaves its own section on edit', async () => {
   )
   act(() => jest.advanceTimersByTime(1600))
   await waitFor(() => expect(bidApis.saveSection).toHaveBeenCalledWith(1, 's1', '改', 'v1'))
+  jest.useRealTimers()
+})
+
+test('SectionEditor does NOT autosave on mount/re-seed (no user focus)', async () => {
+  // Regression guard: tiptap-markdown re-normalizes content on mount and emits
+  // an update; without a prior focus this must NOT persist (else entering Edit
+  // mode would PUT every section and clear its accepted flag).
+  jest.useFakeTimers()
+  render(
+    <SectionEditor
+      projectId={1}
+      sectionId="s1"
+      content="x"
+      version="v1"
+      readOnly={false}
+      onSaved={() => {}}
+    />
+  )
+  // onUpdate fires without any focus (mimics the on-mount normalization emit).
+  act(() =>
+    __lastEditorConfig.current?.onUpdate?.({
+      editor: { storage: { markdown: { getMarkdown: () => 'normalized' } } },
+    })
+  )
+  act(() => jest.advanceTimersByTime(1600))
+  expect(bidApis.saveSection).not.toHaveBeenCalled()
   jest.useRealTimers()
 })
 
