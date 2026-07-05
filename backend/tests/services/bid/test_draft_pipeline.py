@@ -313,3 +313,54 @@ async def test_redraft_one_feeds_normalized_tender(tmp_path):
     passed_tender = gw.await_args.kwargs["tender"]
     assert isinstance(passed_tender["scoring"], list)  # normalized, not bucketed dict
     assert ws.path("workspace/tender_normalized.json").exists()
+
+
+def test_drafting_prompt_uses_canonical_brief_fields():
+    from app.services.bid import materials_service
+    from app.services.bid.draft_pipeline import _drafting_prompt
+
+    _, instructions = _drafting_prompt({"sections": [{"id": "s1", "title": "方案"}]})
+    assert materials_service.NODE_BRIEF_FIELDS_ZH in instructions
+    # stale fields removed from the vocabulary
+    for stale in ("模板 template", "标签 tags", "深度 depth"):
+        assert stale not in instructions
+
+
+@pytest.mark.asyncio
+async def test_seed_corpus_seeds_grounding(tmp_path):
+    import json
+    from unittest.mock import AsyncMock
+
+    from app.services.bid.draft_pipeline import _seed_corpus
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("seed-grounding", root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": [{"id": "T1", "item": "方案", "weight": 20}],
+            "mandatory_clauses": [{"id": "M1", "veto": True, "text": "有效期"}],
+        },
+    )
+    ws.write_json(
+        "workspace/outline.json",
+        {
+            "sections": [
+                {"id": "s1", "covers": ["T1", "M1"]},
+                {"id": "s2", "covers": []},
+            ]
+        },
+    )
+
+    rt = type("RT", (), {})()
+    rt.seed_file = AsyncMock()
+    await _seed_corpus(rt, "envd", ws)
+
+    calls = [
+        c for c in rt.seed_file.await_args_list if c.args[1].endswith("/grounding.json")
+    ]
+    assert calls, "grounding.json was not seeded"
+    g = json.loads(calls[0].args[2].decode("utf-8"))
+    assert [s["id"] for s in g["s1"]["scoring"]] == ["T1"]
+    assert [c["id"] for c in g["s1"]["clauses"]] == ["M1"]
+    assert "s2" not in g  # nodes with no grounding are omitted
