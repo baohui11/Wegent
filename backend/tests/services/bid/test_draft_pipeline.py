@@ -283,3 +283,33 @@ async def test_seed_corpus_seeds_normalized_tender(tmp_path):
     # normalized: scoring flattened to a list, clause veto-aligned (not raw bucketed dict)
     assert isinstance(seeded["scoring"], list) and seeded["scoring"][0]["id"] == "T1"
     assert seeded["mandatory_clauses"][0]["veto"] is True
+
+
+@pytest.mark.asyncio
+async def test_redraft_one_feeds_normalized_tender(tmp_path):
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.bid import draft_pipeline
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("redraft-norm", root=tmp_path)
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "s1", "title": "方案", "covers": ["T1"]}]},
+    )
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [],
+        },
+    )
+    with patch.object(
+        draft_pipeline, "call_ghostwriter", new=AsyncMock(return_value="正文")
+    ) as gw:
+        await draft_pipeline.redraft_one(
+            ws, "s1", model="m", model_config=None, instruction=None
+        )
+    passed_tender = gw.await_args.kwargs["tender"]
+    assert isinstance(passed_tender["scoring"], list)  # normalized, not bucketed dict
+    assert ws.path("workspace/tender_normalized.json").exists()

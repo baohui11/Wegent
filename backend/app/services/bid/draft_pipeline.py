@@ -305,7 +305,7 @@ async def redraft_one(
     ds.set_section_status(ws, section_id, "drafting")
     try:
         outline = ws.read_json("workspace/outline.json")
-        tender = ws.read_json("workspace/tender.json")
+        tender = ws.read_json(ensure_normalized_tender(ws))
         try:
             kb = ws.read_json("corpus/bidder_knowledge_base.json")
         except FileNotFoundError:
