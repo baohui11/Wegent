@@ -81,3 +81,45 @@ def test_normalized_tender_full():
     assert isinstance(out["scoring"], list) and out["scoring"][0]["weight"] == 20
     assert out["mandatory_clauses"][0]["veto"] is True
     assert out["project"] == {"name": "X"}  # untouched passthrough
+
+
+def test_ensure_normalized_tender_generates_when_absent(tmp_path):
+    from app.services.bid.tender_normalize import ensure_normalized_tender
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("norm-gen", root=tmp_path)
+    ws.write_json(
+        "workspace/tender.json",
+        {
+            "scoring": {"tech_items": [{"id": "T1", "title": "方案", "max_score": 20}]},
+            "mandatory_clauses": [
+                {"id": "M1", "is_veto": True, "clause": "有效期90天"}
+            ],
+        },
+    )
+    assert not ws.path("workspace/tender_normalized.json").exists()
+
+    rel = ensure_normalized_tender(ws)
+
+    assert rel == "workspace/tender_normalized.json"
+    norm = ws.read_json(rel)
+    # scoring flattened to a list carrying canonical id/item; clause veto-aligned + text
+    assert isinstance(norm["scoring"], list) and norm["scoring"][0]["id"] == "T1"
+    assert norm["mandatory_clauses"][0]["veto"] is True
+    assert norm["mandatory_clauses"][0]["text"] == "有效期90天"
+    # raw tender.json is never mutated (scoring still the bucketed dict)
+    assert isinstance(ws.read_json("workspace/tender.json")["scoring"], dict)
+
+
+def test_ensure_normalized_tender_is_idempotent(tmp_path):
+    from app.services.bid.tender_normalize import ensure_normalized_tender
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("norm-idem", root=tmp_path)
+    ws.write_json("workspace/tender.json", {"scoring": []})
+    # pre-existing canonical file must NOT be regenerated/overwritten
+    ws.write_json("workspace/tender_normalized.json", {"scoring": [], "_sentinel": 1})
+
+    ensure_normalized_tender(ws)
+
+    assert ws.read_json("workspace/tender_normalized.json").get("_sentinel") == 1
