@@ -12,13 +12,14 @@ import {
   type FlatNode,
 } from '../canvas/outlineGraph'
 
-type SecStatus = 'pending' | 'drafting' | 'done' | 'error'
+type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
 
 const DOT: Record<string, string> = {
   pending: 'var(--bid-border-3)',
   drafting: 'var(--bid-warn)',
   done: 'var(--bid-success)',
   error: 'var(--bid-primary)',
+  needs_rework: 'var(--bid-warn)',
 }
 
 // Lightweight markdown -> renderable blocks for the serif preview.
@@ -185,6 +186,11 @@ export function DraftingScreen({
                 {st === 'drafting' && (
                   <span className="flex-shrink-0 text-[10px]" style={{ color: 'var(--bid-warn)' }}>
                     {t('drafting.status_running')}
+                  </span>
+                )}
+                {st === 'needs_rework' && (
+                  <span className="flex-shrink-0 text-[10px]" style={{ color: 'var(--bid-warn)' }}>
+                    {t('drafting.status_needs_rework')}
                   </span>
                 )}
               </div>

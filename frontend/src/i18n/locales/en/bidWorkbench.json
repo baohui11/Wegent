@@ -332,6 +332,7 @@
     "gen_log": "Generation log",
     "status_running": "Generating",
     "status_done": "Completed",
+    "status_needs_rework": "Needs rework",
     "drafting_now": "The ghostwriter is drafting this section…",
     "progress_title": "Outline · progress",
     "view_result": "View results →",
