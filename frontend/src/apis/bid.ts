@@ -132,9 +132,7 @@ export interface NodeBrief {
 export interface MaterialEntry {
   id: string
   name: string
-  size: number
   linkedNodeIds: string[]
-  stats?: AttachmentStats | null
 }
 
 export interface BriefsDoc {

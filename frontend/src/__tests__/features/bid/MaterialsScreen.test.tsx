@@ -21,6 +21,7 @@ jest.mock('@/apis/bid', () => ({
     getKnowledgeBase: jest.fn(() => Promise.reject(new Error('not set'))),
     saveKnowledgeBase: jest.fn(() => Promise.resolve({ knowledge_base: {} })),
     getGrounding: jest.fn(() => Promise.resolve({ items: {} })),
+    listAttachments: jest.fn(() => Promise.resolve({ items: [] })),
   },
 }))
 import { bidApis } from '@/apis/bid'
@@ -323,6 +324,28 @@ it('shows deterministic stats from uploaded attachment', async () => {
   fireEvent.change(input, { target: { files: [new File(['x'], 'cap.pdf')] } })
   // Real stats surface in the right panel.
   await waitFor(() => expect(bidApis.uploadAttachment).toHaveBeenCalled())
+})
+
+it('brief materials store only references; size shown from attachments list', async () => {
+  // The briefs doc persists only {id, name, linkedNodeIds}; size/stats are NOT
+  // duplicated into the brief — they are resolved from listAttachments at render.
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValueOnce({
+    briefs: {},
+    materials: [{ id: 'm1', name: 'a.pdf', linkedNodeIds: ['c1a'] }],
+  })
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValueOnce({
+    items: [{ name: 'a.pdf', size: 2048, stats: { chars: 10, pages: 1, tables: 0, images: 0 } }],
+  })
+  render(<MaterialsScreen projectId={7} outline={OUTLINE} onComplete={jest.fn()} />)
+  // c1a is auto-selected; its material area shows the size resolved from the
+  // attachments list (2048 bytes -> "2 KB").
+  expect(await screen.findByText(/2 KB/)).toBeInTheDocument()
+  // Saving must persist a reference-only material (no size/stats keys).
+  fireEvent.click(screen.getByTestId('bid-materials-save'))
+  await waitFor(() => expect(bidApis.saveBriefs).toHaveBeenCalled())
+  const doc = (bidApis.saveBriefs as jest.Mock).mock.calls.at(-1)![1]
+  expect(doc.materials[0]).toEqual({ id: 'm1', name: 'a.pdf', linkedNodeIds: ['c1a'] })
+  expect(Object.keys(doc.materials[0]).sort()).toEqual(['id', 'linkedNodeIds', 'name'])
 })
 
 it('surfaces save state feedback when saving the node', async () => {

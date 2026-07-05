@@ -10,6 +10,7 @@ import type {
   AuditReport,
   BidProject,
   BriefsDoc,
+  ClauseItem,
   CoverageReport,
   DraftSection,
   DraftStatus,
@@ -17,8 +18,10 @@ import type {
   GroundingDoc,
   LlmCall,
   OutlineDoc,
+  OutlineNode,
   OutlineResponse,
   ScoringContext,
+  ScoringItem,
   TenderDoc,
 } from './bid'
 
@@ -170,28 +173,26 @@ const MOCK_COVERAGE: CoverageReport = {
 // (scoring items + veto clauses). Mirrors the backend `_grounding_items` so the
 // mock mode renders the same per-section covered items as a live backend.
 const MOCK_GROUNDING: GroundingDoc = (() => {
-  const scoringById = new Map(MOCK_TENDER.scoring.map(s => [String(s.id), s]))
-  const vetoClauses = MOCK_TENDER.mandatory_clauses.filter(c => c.veto)
-  const clauseById = new Map(vetoClauses.map(c => [String(c.id), c]))
-  const items: Record<
-    string,
-    { scoring: typeof MOCK_TENDER.scoring; clauses: typeof vetoClauses }
-  > = {}
-  const walk = (node: OutlineDoc | undefined): void => {
+  const scoring: ScoringItem[] = (MOCK_TENDER.scoring ?? []).map(s => ({ ...s, id: String(s.id) }))
+  const clauses: ClauseItem[] = (MOCK_TENDER.mandatory_clauses ?? [])
+    .filter(c => c.veto)
+    .map(c => ({ ...c, id: String(c.id), veto: true }))
+  const scoringById = new Map(scoring.map(s => [s.id, s]))
+  const clauseById = new Map(clauses.map(c => [c.id, c]))
+  const items: GroundingDoc['items'] = {}
+  const walk = (node: OutlineNode | undefined): void => {
     if (!node) return
     const covers = (node.covers ?? []).map(String)
     if (covers.length) {
-      const scoring = covers
-        .map(id => scoringById.get(id))
-        .filter(Boolean) as typeof MOCK_TENDER.scoring
-      const clauses = covers.map(id => clauseById.get(id)).filter(Boolean) as typeof vetoClauses
-      if (scoring.length || clauses.length) {
-        items[String(node.id)] = { scoring, clauses }
+      const s = covers.map(id => scoringById.get(id)).filter((x): x is ScoringItem => !!x)
+      const c = covers.map(id => clauseById.get(id)).filter((x): x is ClauseItem => !!x)
+      if (s.length || c.length) {
+        items[String(node.id)] = { scoring: s, clauses: c }
       }
     }
-    for (const child of node.children ?? []) walk(child as OutlineDoc)
+    for (const child of node.children ?? []) walk(child)
   }
-  for (const sec of MOCK_OUTLINE.sections ?? []) walk(sec as OutlineDoc)
+  for (const sec of MOCK_OUTLINE.sections ?? []) walk(sec)
   return { items }
 })()
 

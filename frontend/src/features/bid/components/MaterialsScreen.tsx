@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import {
   bidApis,
+  type AttachmentStats,
   type BriefsDoc,
   type NodeBrief,
   type OutlineDoc,
@@ -29,9 +30,7 @@ interface NodeConfig {
 interface Material {
   id: string
   name: string
-  size: number
   linkedNodeIds: string[]
-  stats?: { chars: number; pages: number; tables: number; images: number } | null
 }
 
 const defaultConfig = (): NodeConfig => ({
@@ -65,6 +64,12 @@ export function MaterialsScreen({
   const [requirements, setRequirements] = useState<Record<string, string>>({})
   const [materials, setMaterials] = useState<Material[]>([])
   const [grounding, setGrounding] = useState<Record<string, SectionGrounding>>({})
+  // Display-only metadata (size/stats) for materials, resolved from the backend
+  // attachments list. The brief stores only references ({id, name, linkedNodeIds}),
+  // so size/stats are sourced from the single backend authority on each load.
+  const [attachMeta, setAttachMeta] = useState<
+    Record<string, { size: number; stats?: AttachmentStats | null }>
+  >({})
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   // Which save action is currently reflecting saveState, so the feedback shows
   // on the button the user actually clicked (not always the first one).
@@ -119,6 +124,28 @@ export function MaterialsScreen({
       })
       .catch(() => {
         /* no outline/tender yet -> empty grounding */
+      })
+    return () => {
+      alive = false
+    }
+  }, [projectId])
+
+  // Display-only material metadata (size/stats) comes from the attachments list;
+  // the brief itself stores only references, so this is the single source for
+  // size/stats at render time.
+  useEffect(() => {
+    if (projectId == null) return
+    let alive = true
+    bidApis
+      .listAttachments(projectId)
+      .then(res => {
+        if (!alive) return
+        const m: Record<string, { size: number; stats?: AttachmentStats | null }> = {}
+        for (const a of res.items) m[a.name] = { size: a.size, stats: a.stats ?? null }
+        setAttachMeta(m)
+      })
+      .catch(() => {
+        /* attachments not yet available -> neutral size/stats */
       })
     return () => {
       alive = false
@@ -208,13 +235,17 @@ export function MaterialsScreen({
     for (const f of picked) {
       try {
         const info = await bidApis.uploadAttachment(projectId, f)
+        // Brief stores only a reference; size/stats are sourced from the
+        // attachments list at render, so they are not duplicated here.
         added.push({
           id: `m${Date.now()}_${matSeq++}`,
           name: info.name,
-          size: info.size,
           linkedNodeIds: [selectedId],
-          stats: info.stats ?? null,
         })
+        setAttachMeta(prev => ({
+          ...prev,
+          [info.name]: { size: info.size, stats: info.stats ?? null },
+        }))
       } catch {
         /* skip failed upload; user can retry */
       }
@@ -442,7 +473,7 @@ export function MaterialsScreen({
                     <span>📄</span>
                     <span className="min-w-0 flex-1 truncate">{f.name}</span>
                     <span className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                      {Math.max(1, Math.round(f.size / 1024))} KB
+                      {Math.max(1, Math.round((attachMeta[f.name]?.size ?? 0) / 1024))} KB
                     </span>
                     <span
                       onClick={() => removeMaterial(f.id, selected.id)}
@@ -636,14 +667,17 @@ export function MaterialsScreen({
                         📄 {f.name}
                       </div>
                       <div className="text-[10.5px]" style={{ color: 'var(--bid-muted-2)' }}>
-                        {f.stats
-                          ? t('phase2.stats_line', {
-                              chars: f.stats.chars,
-                              pages: f.stats.pages,
-                              tables: f.stats.tables,
-                              images: f.stats.images,
-                            })
-                          : t('phase2.stats_unavailable')}
+                        {(() => {
+                          const st = attachMeta[f.name]?.stats
+                          return st
+                            ? t('phase2.stats_line', {
+                                chars: st.chars,
+                                pages: st.pages,
+                                tables: st.tables,
+                                images: st.images,
+                              })
+                            : t('phase2.stats_unavailable')
+                        })()}
                       </div>
                     </div>
                   ))
