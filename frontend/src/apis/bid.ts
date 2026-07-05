@@ -111,6 +111,15 @@ export interface ScoringContext {
   clauses: ClauseItem[]
 }
 
+export interface SectionGrounding {
+  scoring: ScoringItem[]
+  clauses: ClauseItem[]
+}
+
+export interface GroundingDoc {
+  items: Record<string, SectionGrounding>
+}
+
 export interface NodeBrief {
   requirements?: string
   emphasis?: string
@@ -217,6 +226,8 @@ const realBidApis = {
     apiClient.get<CoverageReport>(`/bid/projects/${id}/coverage`),
   getScoringContext: (id: number): Promise<ScoringContext> =>
     apiClient.get<ScoringContext>(`/bid/projects/${id}/scoring-context`),
+  getGrounding: (id: number): Promise<GroundingDoc> =>
+    apiClient.get<GroundingDoc>(`/bid/projects/${id}/grounding`),
   declarePackage: (id: number, pkg: string): Promise<{ status: string }> =>
     apiClient.post<{ status: string }>(`/bid/projects/${id}/package`, { package: pkg }),
   getKnowledgeBase: (id: number): Promise<{ knowledge_base: Record<string, unknown> }> =>

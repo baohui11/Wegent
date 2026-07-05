@@ -14,6 +14,7 @@ import type {
   DraftSection,
   DraftStatus,
   ExtractedFile,
+  GroundingDoc,
   LlmCall,
   OutlineDoc,
   OutlineResponse,
@@ -164,6 +165,35 @@ const MOCK_COVERAGE: CoverageReport = {
   uncovered_scoring: [{ id: 'B1', text: '投标报价（低价优先法）', target_section: '报价分册' }],
   uncovered_clauses: [],
 }
+
+// Derive per-node grounding from the mock outline's `covers` ∩ mock tender
+// (scoring items + veto clauses). Mirrors the backend `_grounding_items` so the
+// mock mode renders the same per-section covered items as a live backend.
+const MOCK_GROUNDING: GroundingDoc = (() => {
+  const scoringById = new Map(MOCK_TENDER.scoring.map(s => [String(s.id), s]))
+  const vetoClauses = MOCK_TENDER.mandatory_clauses.filter(c => c.veto)
+  const clauseById = new Map(vetoClauses.map(c => [String(c.id), c]))
+  const items: Record<
+    string,
+    { scoring: typeof MOCK_TENDER.scoring; clauses: typeof vetoClauses }
+  > = {}
+  const walk = (node: OutlineDoc | undefined): void => {
+    if (!node) return
+    const covers = (node.covers ?? []).map(String)
+    if (covers.length) {
+      const scoring = covers
+        .map(id => scoringById.get(id))
+        .filter(Boolean) as typeof MOCK_TENDER.scoring
+      const clauses = covers.map(id => clauseById.get(id)).filter(Boolean) as typeof vetoClauses
+      if (scoring.length || clauses.length) {
+        items[String(node.id)] = { scoring, clauses }
+      }
+    }
+    for (const child of node.children ?? []) walk(child as OutlineDoc)
+  }
+  for (const sec of MOCK_OUTLINE.sections ?? []) walk(sec as OutlineDoc)
+  return { items }
+})()
 
 // Draftable/reviewable sections (chapter level) with mock body content.
 const SECTION_IDS = ['s1', 's2', 's3', 's4', 's5']
@@ -485,6 +515,7 @@ export const bidMockApis = {
     delay(need(id).briefsDoc ?? { briefs: {}, materials: [] }),
   getScoringContext: (id: number): Promise<ScoringContext> =>
     delay(need(id).scoringContext ?? { scoring: [], clauses: [] }),
+  getGrounding: (_id: number): Promise<GroundingDoc> => delay(MOCK_GROUNDING),
   saveBriefs: (id: number, doc: BriefsDoc): Promise<BriefsDoc> => {
     need(id).briefsDoc = doc
     return delay(doc)
