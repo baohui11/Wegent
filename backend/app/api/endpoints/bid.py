@@ -431,6 +431,9 @@ async def upload_attachment(
         info = materials.save_attachment(ws, file.filename or "", content)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from app.services.bid.tender_extract import extract_stats
+
+    info["stats"] = extract_stats(file.filename or "", content)
     return AttachmentInfo(**info)
 
 

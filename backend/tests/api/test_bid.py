@@ -202,11 +202,15 @@ def test_materials_kb_quals_attachments_and_complete(
         files={"file": ("iso9001.pdf", b"PDFDATA", "application/pdf")},
         headers=h,
     )
-    assert r.status_code == 200 and r.json() == {"name": "iso9001.pdf", "size": 7}
+    assert r.status_code == 200 and r.json() == {
+        "name": "iso9001.pdf",
+        "size": 7,
+        "stats": None,
+    }
     lst = test_client.get(
         f"/api/bid/projects/{pid}/materials/attachments", headers=h
     ).json()
-    assert lst["items"] == [{"name": "iso9001.pdf", "size": 7}]
+    assert lst["items"] == [{"name": "iso9001.pdf", "size": 7, "stats": None}]
 
     # complete -> phase advances
     assert (
@@ -634,3 +638,40 @@ def test_parse_stage_endpoint(test_client, test_token, tmp_path, monkeypatch):
         ]
         == "idle"
     )
+
+
+def test_upload_attachment_returns_stats(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    import io
+
+    from docx import Document
+
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "M"}, headers=h).json()[
+        "id"
+    ]
+
+    doc = Document()
+    doc.add_paragraph("投标人具备完善能力。" * 8)
+    doc.add_table(rows=2, cols=2)
+    buf = io.BytesIO()
+    doc.save(buf)
+
+    r = test_client.post(
+        f"/api/bid/projects/{pid}/materials/attachments",
+        files={
+            "file": (
+                "cap.docx",
+                buf.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        headers=h,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "cap.docx"
+    assert body["stats"]["tables"] == 1
+    assert body["stats"]["chars"] >= 30
