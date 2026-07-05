@@ -63,3 +63,41 @@ def ingest_all(ws: BidWorkspace) -> dict:
     for a in materials_service.list_attachments(ws):
         result[a["name"]] = ingest_attachment(ws, a["name"])["status"]
     return result
+
+
+def _visible(entry: dict, node_id: str) -> bool:
+    if entry.get("scope") == "global":
+        return True
+    return node_id in (entry.get("linkedNodeIds") or [])
+
+
+def _summary(ws: BidWorkspace, name: str, limit: int = 800) -> str:
+    p = ws.path(_extracted_path(name))
+    if not p.exists():
+        return ""
+    return p.read_text(encoding="utf-8")[:limit]
+
+
+def materials_for(ws: BidWorkspace, node_id: str) -> list[dict]:
+    """Materials visible to one outline node, per scope, with an extracted-text
+    summary for code-anchored injection into the ghostwriter context. Scope is
+    read from node_briefs.json's MaterialEntry list (single source); summary is
+    read from the extracted corpus (may be empty if ingest hasn't run/failed)."""
+    from app.services.bid import materials_service
+
+    entries = materials_service.read_briefs(ws).get("materials", [])
+    out: list[dict] = []
+    for e in entries:
+        if not _visible(e, node_id):
+            continue
+        name = e.get("name")
+        if not name:
+            continue
+        out.append(
+            {
+                "name": name,
+                "scope": e.get("scope") or "linked",
+                "summary": _summary(ws, name),
+            }
+        )
+    return out

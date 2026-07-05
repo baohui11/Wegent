@@ -66,3 +66,42 @@ def test_ingest_all_processes_every_attachment(tmp_path):
 
 def test_read_manifest_missing_returns_empty(tmp_path):
     assert ms.read_manifest(_ws(tmp_path)) == {}
+
+
+def _seed_briefs_materials(ws, materials):
+    from app.services.bid import materials_service
+
+    materials_service.write_briefs(ws, {"briefs": {}, "materials": materials})
+
+
+def test_materials_for_global_visible_everywhere(tmp_path):
+    ws = _ws(tmp_path)
+    _seed_briefs_materials(
+        ws, [{"id": "m1", "name": "cert.txt", "linkedNodeIds": [], "scope": "global"}]
+    )
+    ws.path("corpus/materials/cert.txt.md").parent.mkdir(parents=True, exist_ok=True)
+    ws.path("corpus/materials/cert.txt.md").write_text(
+        "资质正文" * 500, encoding="utf-8"
+    )
+
+    got = ms.materials_for(ws, "any-node")
+    assert len(got) == 1
+    assert got[0]["name"] == "cert.txt" and got[0]["scope"] == "global"
+    assert 0 < len(got[0]["summary"]) <= 800
+
+
+def test_materials_for_linked_only_visible_to_its_nodes(tmp_path):
+    ws = _ws(tmp_path)
+    _seed_briefs_materials(
+        ws,
+        [{"id": "m2", "name": "case.txt", "linkedNodeIds": ["s1"], "scope": "linked"}],
+    )
+    assert [m["name"] for m in ms.materials_for(ws, "s1")] == ["case.txt"]
+    assert ms.materials_for(ws, "s2") == []
+
+
+def test_materials_for_missing_scope_defaults_linked(tmp_path):
+    ws = _ws(tmp_path)
+    _seed_briefs_materials(ws, [{"id": "m3", "name": "x.txt", "linkedNodeIds": ["s1"]}])
+    assert [m["name"] for m in ms.materials_for(ws, "s1")] == ["x.txt"]
+    assert ms.materials_for(ws, "s2") == []
