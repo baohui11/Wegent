@@ -305,6 +305,19 @@ export function DraftingScreen({
                 )}
 
                 {st === 'pending' && <Skeleton lines={3} />}
+
+                {st === 'error' && (
+                  <div
+                    className="text-[13px]"
+                    style={{
+                      color: 'var(--bid-primary)',
+                      fontFamily: "'Noto Sans SC', sans-serif",
+                    }}
+                    data-testid={`bid-draft-section-error-${id}`}
+                  >
+                    {t('phase4.section_error')}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -337,7 +350,12 @@ export function DraftingScreen({
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
           {sectionIds
-            .filter(id => status.sections[id] === 'done' || status.sections[id] === 'drafting')
+            .filter(
+              id =>
+                status.sections[id] === 'done' ||
+                status.sections[id] === 'drafting' ||
+                status.sections[id] === 'error'
+            )
             .map(id => {
               const st = status.sections[id]
               const name = nameOf.get(id) ?? id
@@ -350,7 +368,14 @@ export function DraftingScreen({
                     {t('drafting.ghostwriter')}
                   </span>
                   <div className="mt-1" style={{ color: 'var(--bid-ink-2)' }}>
-                    {t(st === 'done' ? 'drafting.log_done' : 'drafting.log_drafting', { name })}
+                    {t(
+                      st === 'done'
+                        ? 'drafting.log_done'
+                        : st === 'error'
+                          ? 'drafting.log_error'
+                          : 'drafting.log_drafting',
+                      { name }
+                    )}
                   </div>
                 </div>
               )

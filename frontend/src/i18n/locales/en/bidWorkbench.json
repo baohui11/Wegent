@@ -323,6 +323,7 @@
     "empty_log": "Waiting for agents to generate…",
     "log_done": "Finished drafting {{name}}",
     "log_drafting": "Drafting {{name}}…",
+    "log_error": "{{name}} — generation failed",
     "ghostwriter": "Ghostwriter",
     "doc_subtitle": "Technical document · generating",
     "gen_log": "Generation log",
@@ -345,7 +346,8 @@
     "status_pending": "Pending",
     "status_drafting": "Drafting",
     "status_done": "Done",
-    "status_error": "Failed"
+    "status_error": "Failed",
+    "section_error": "This section failed to generate — retry it in review."
   },
   "phase5": {
     "title": "Review",
