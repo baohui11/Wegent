@@ -25,6 +25,12 @@ const config: Config = {
     '^jspdf$': '<rootDir>/src/__mocks__/jspdf-stub.ts',
     '^rehype-katex$': '<rootDir>/src/__mocks__/rehype-stub.ts',
     '^rehype-raw$': '<rootDir>/src/__mocks__/rehype-stub.ts',
+    // Mock ESM-only tiptap-markdown extension (named export `Markdown`)
+    '^tiptap-markdown$': '<rootDir>/src/__mocks__/tiptap-markdown.ts',
+    // Mock Tiptap 3 extension packages (ESM). useEditor is mocked in the
+    // component tests, so extensions only need to be constructable objects.
+    '^@tiptap/starter-kit$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
+    '^@tiptap/extension-(.*)$': '<rootDir>/src/__mocks__/tiptap-extension-stub.ts',
     '^micromark-util-combine-extensions$': '<rootDir>/src/__mocks__/micromark-stub.ts',
     '^micromark-extension-.*$': '<rootDir>/src/__mocks__/micromark-stub.ts',
     '^mdast-util-.*$': '<rootDir>/src/__mocks__/micromark-stub.ts',
