@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from app.services.bid import drafting_service as ds
-from app.services.bid import materials_service, section_retrieval
+from app.services.bid import materials_service, post_gate, section_retrieval
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_ghostwriter
@@ -63,6 +63,39 @@ def _section_importance_key(node: dict, tender_norm: dict) -> tuple[int, float]:
     return (0 if has_veto else 1, -weight)
 
 
+async def _write_and_check(
+    ws,
+    node,
+    sid,
+    *,
+    brief,
+    tender,
+    kb,
+    model,
+    model_config,
+    project_id,
+    user_id,
+    instruction,
+):
+    md = await call_ghostwriter(
+        model=model,
+        model_config=model_config,
+        section=node,
+        tender=tender,
+        knowledge_base=kb,
+        brief=brief,
+        style_card=_STYLE_CARD,
+        materials=section_retrieval.retrieve_for_section(ws, node, brief),
+        instruction=instruction,
+        project_id=project_id,
+        user_id=user_id,
+    )
+    target = ws.path(f"workspace/sections/{sid}.md")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(md, encoding="utf-8")
+    return post_gate.check_section(ws, sid, node, brief)
+
+
 async def _draft_section(
     sem: asyncio.Semaphore,
     ws: BidWorkspace,
@@ -80,22 +113,30 @@ async def _draft_section(
         ds.set_section_status(ws, sid, "drafting")
         try:
             brief = materials_service.read_briefs(ws).get("briefs", {}).get(sid)
-            md = await call_ghostwriter(
+            kw = dict(
+                brief=brief,
+                tender=tender,
+                kb=kb,
                 model=model,
                 model_config=model_config,
-                section=node,
-                tender=tender,
-                knowledge_base=kb,
-                brief=brief,
-                style_card=_STYLE_CARD,
-                materials=section_retrieval.retrieve_for_section(ws, node, brief),
                 project_id=project_id,
                 user_id=user_id,
             )
-            target = ws.path(f"workspace/sections/{sid}.md")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(md, encoding="utf-8")
-            ds.set_section_status(ws, sid, "done")
+            result = await _write_and_check(ws, node, sid, instruction=None, **kw)
+            if not result["ok"]:
+                # one deterministic-guided auto-retry
+                result = await _write_and_check(
+                    ws,
+                    node,
+                    sid,
+                    instruction=post_gate.rework_instruction(result["issues"]),
+                    **kw,
+                )
+            if result["ok"]:
+                ds.set_section_status(ws, sid, "done")
+            else:
+                post_gate.record_issues(ws, sid, result["issues"])
+                ds.set_section_status(ws, sid, "needs_rework")
         except Exception as e:  # isolate per-section failure
             logger.warning("draft section %s failed: %s", sid, e)
             ds.set_section_status(ws, sid, "error")
