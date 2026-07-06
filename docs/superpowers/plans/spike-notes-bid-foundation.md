@@ -128,7 +128,39 @@ Reviewer constraint #2 required a real browser round-trip smoke because Jest moc
 - **Source-level serialization contract:** `serializeSection` delegates to `editor.storage.markdown.serializer.serialize(node)` which (prosemirror-markdown `renderContent`) emits only the node's children — confirmed by reading the installed `tiptap-markdown@0.9.0` and `prosemirror-markdown@1.13.1` source.
 - **Unit-level (Jest, mock editor mirroring the real API surface):** `bidSection.test.ts` asserts the `markdown.serialize` spec calls `state.renderContent(node)`; `serializeSection.test.ts` asserts per-section delegation + isolation; `useDocumentAutosave.test.ts` asserts per-section CAS + the `bidSeed` mount-time-PUT guard; `blockRange.test.ts` asserts the section-local block index.
 
-**NOT verifiable in this environment (requires a human in a real browser):**
-- A real TipTap editor **cannot be instantiated in Node or jsdom**: `prosemirror-view`'s `EditorView` calls `storeScrollPos` which reads `innerHeight` and does real layout math; jsdom has no layout, so the editor throws on mount. tiptap-markdown's parser also needs `window.DOMParser`. So a headless Node round-trip is structurally impossible — this is exactly why Jest mocks all of tiptap. The fidelity smoke therefore MUST be: open `http://localhost:3000/bid-workbench` (mock mode), open a project at Stage 3, toggle Edit, edit a section containing **multi-level headings + nested ordered/unordered lists + a GFM table + a fenced code block + a CJK-indented paragraph**, save, reload, and confirm both the rendered view and the persisted markdown are intact. The single-document foundation code path that fires on each of those edits is exactly `serializeSection` (spike path a), so a clean browser round-trip on that composite section closes the fidelity gate. **This check was not performed by the agent** (no browser control); it is the one item the reviewer should perform before approving.
+**Verified in a real browser (Playwright headless Chromium) — round-trip fidelity CONFIRMED:**
+- A real TipTap editor **cannot be instantiated in Node or jsdom** (`prosemirror-view`'s `EditorView` reads `innerHeight`/does layout math on mount; tiptap-markdown's parser needs `window.DOMParser`), so the fidelity gate MUST run in a real browser. The repo already depends on `@playwright/test@1.60.0`; `frontend/scripts/bid-roundtrip-smoke.spec.ts` + `frontend/playwright.smoke.config.ts` drive headless Chromium against the mock dev server.
+- **Flow:** start `NEXT_PUBLIC_BID_MOCK=1 next dev --port 3099` → open `/bid-workbench` → bypass the client auth guard (localStorage token + route-mock the session `/api` calls that 401 → `/login`) → open mock project 106 → Stage 3 → toggle Edit → inject a composite markdown body (multi-level `###`/`####` headings + nested unordered list + ordered list + GFM table + fenced ```python code + CJK paragraph + CJK blockquote) into section s1 via `editor.chain().deleteRange({s1 range}).insertContentAt(start, markdown).run()` (the real markdown parse path; `html:false` means setContent parses MARKDOWN not HTML) → wait for the 1.5s autosave → read the persisted s1 body via `serializeSection` (the live `editor.storage.markdown.serializer.serialize(node)`).
+- **Per-section CAS observed:** after the save, s1's `version` attr bumped (`v2990beab` → `v58467164`) while s2–s5 kept their original versions — only the edited section PUT. This is the regression-guard behavior verified live in a real browser.
+- **Round-trip result (lossless for all constructs):** the persisted s1 body is:
+  ```
+  ### 1.1 系统总体架构
 
-To run the browser smoke: `cd frontend && NEXT_PUBLIC_BID_MOCK=1 pnpm dev`, open the printed URL, navigate to a bid project at Stage 3, and edit a section with the constructs above.
+  平台层基于微服务架构设计，采用容器化部署与服务网格治理。
+
+  #### 1.1.1 关键技术选型
+
+  - 主项 A
+
+    - 嵌套子项 A1
+    - 嵌套子项 A2
+  - 主项 B
+
+  1. 第一步
+  2. 第二步
+  3. 第三步
+
+  | 项 | 值 |
+  | --- | --- |
+  | 报价 | 100 |
+  | 工期 | 180 天 |
+
+  ```python
+  def f(x):
+      return x + 1
+  ```
+
+  > 引用招标原文以论证响应。
+  ```
+  Every construct survived parse → bidSection → serialize: multi-level headings, nested unordered list, ordered list, GFM table (both rows), fenced code (incl. indentation), CJK paragraph, CJK blockquote. The only normalization is nested-list indentation (input 2-space → output 4-space), a cosmetic re-indentation by tiptap-markdown that is structurally identical. **NORM_EQUAL is false solely due to that indentation re-flow**; the construct-presence assertions all pass.
+- **Reproduce:** `cd frontend && node node_modules/@playwright/test/cli.js test --config=playwright.smoke.config.ts` (auto-starts the mock dev server via `webServer`).

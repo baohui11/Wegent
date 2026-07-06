@@ -34,7 +34,12 @@ export const BidSection = Node.create<BidSectionOptions>({
 
   addAttributes() {
     return {
-      sectionId: { default: '' },
+      sectionId: {
+        default: '',
+        // renderHTML writes data-bid-section; parse it back symmetrically so
+        // round-tripping the section (HTML -> PM -> HTML) preserves the id.
+        parseHTML: el => el.getAttribute('data-bid-section') ?? '',
+      },
       version: { default: '' },
       status: { default: 'pending' },
       accepted: { default: false },
