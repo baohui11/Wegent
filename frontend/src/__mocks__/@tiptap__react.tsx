@@ -73,7 +73,7 @@ export const __mockEditor: any = {
   }),
   off: jest.fn(function (this: typeof __mockEditor, ev: string, h: (p: unknown) => void) {
     const arr = this.__events[ev]
-    if (arr) this.__events[ev] = arr.filter(x => x !== h)
+    if (arr) this.__events[ev] = arr.filter((x: (p: unknown) => void) => x !== h)
   }),
   emit: function (this: typeof __mockEditor, ev: string, props?: unknown) {
     for (const h of this.__events[ev] ?? []) h(props)

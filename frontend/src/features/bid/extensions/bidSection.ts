@@ -2,8 +2,16 @@
 
 import { Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import type { MarkdownSerializerState } from '@tiptap/pm/markdown'
 import { BidSectionNodeView } from '../components/BidSectionNodeView'
+
+// Minimal shape of the tiptap-markdown serializer state we touch: it only
+// needs renderContent(node) to emit the section's children. Declared locally
+// because @tiptap/pm has no markdown subpath export.
+interface MarkdownSerializeState {
+  renderContent(node: {
+    forEach: (cb: (n: unknown, offset: number, index: number) => void) => void
+  }): void
+}
 
 export type BidSectionStatus = 'pending' | 'drafting' | 'done' | 'needs_rework'
 
@@ -60,7 +68,10 @@ export const BidSection = Node.create<BidSectionOptions>({
       // only the children (no wrapper / no title) is what makes per-section
       // serialization produce exactly the body markdown.
       markdown: {
-        serialize(state: MarkdownSerializerState, node) {
+        serialize(
+          state: MarkdownSerializeState,
+          node: Parameters<MarkdownSerializeState['renderContent']>[0]
+        ) {
           state.renderContent(node)
         },
       },

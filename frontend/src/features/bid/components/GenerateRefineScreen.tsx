@@ -167,8 +167,8 @@ export function GenerateRefineScreen({
     // Serialize the section's body (title-less) — the exact bytes the backend
     // now stores — and map the cursor block (section-local index) to its line
     // range within that body.
-    const sectionNode = findSectionNode(editor, sid)
-    const md = sectionNode ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
+    const sectionNode = editor ? findSectionNode(editor, sid) : null
+    const md = sectionNode && editor ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
     const idx = topBlockIndexOf(editor, sid)
     const { startLine, endLine } = blockLineRange(md, idx)
     loadedRef.current.delete(sid) // force re-fetch after the range redrafts
@@ -555,9 +555,10 @@ export function GenerateRefineScreen({
 // Find a top-level bidSection node by sectionId in the editor's doc, or null.
 // Used by regenBlock to serialize the active section's body for line mapping.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function findSectionNode(editor: any, sectionId: string): { attrs: { sectionId: string } } | null {
+function findSectionNode(editor: any, sectionId: string): any {
   if (!editor) return null
-  let found: { attrs: { sectionId: string } } | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let found: any = null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   editor.state.doc.forEach((node: any) => {
     if (found) return

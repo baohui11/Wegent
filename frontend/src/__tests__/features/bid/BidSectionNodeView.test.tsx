@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { render, screen } from '@testing-library/react'
+import type { ReactNodeViewProps } from '@tiptap/react'
 import { BidSectionNodeView } from '@/features/bid/components/BidSectionNodeView'
 
 // @tiptap/react's NodeView* primitives are plain passthrough wrappers in the
@@ -14,9 +15,14 @@ jest.mock('@/hooks/useTranslation', () => ({
 
 const view = (attrs: Record<string, unknown>, names: Record<string, string> = {}) =>
   render(
+    // The component only reads node.attrs + extension.options.sectionNames;
+    // spread-cast the partial props to ReactNodeViewProps so we don't fabricate
+    // the 10+ callbacks the full type requires.
     <BidSectionNodeView
-      node={{ attrs } as never}
-      extension={{ options: { sectionNames: names } } as never}
+      {...({
+        node: { attrs },
+        extension: { options: { sectionNames: names } },
+      } as unknown as ReactNodeViewProps)}
     />
   )
 
@@ -49,8 +55,10 @@ describe('BidSectionNodeView', () => {
 
     rerender(
       <BidSectionNodeView
-        node={{ attrs: { sectionId: 's1', status: 'done', accepted: false } } as never}
-        extension={{ options: { sectionNames: { s1: 'T' } } } as never}
+        {...({
+          node: { attrs: { sectionId: 's1', status: 'done', accepted: false } },
+          extension: { options: { sectionNames: { s1: 'T' } } },
+        } as unknown as ReactNodeViewProps)}
       />
     )
     expect(screen.getByTestId('bid-section-content-s1')).toHaveAttribute('contenteditable', 'true')
