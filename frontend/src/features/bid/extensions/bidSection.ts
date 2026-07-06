@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Node } from '@tiptap/core'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import type { MarkdownSerializerState } from '@tiptap/pm/markdown'
+import { BidSectionNodeView } from '../components/BidSectionNodeView'
 
 export type BidSectionStatus = 'pending' | 'drafting' | 'done' | 'needs_rework'
 
@@ -58,5 +60,9 @@ export const BidSection = Node.create<BidSectionOptions>({
         },
       },
     }
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(BidSectionNodeView)
   },
 })

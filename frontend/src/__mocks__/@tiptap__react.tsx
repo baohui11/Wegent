@@ -68,4 +68,44 @@ export function EditorContent() {
   return React.createElement('div', { 'data-testid': 'bid-section-editor' })
 }
 
-export default { useEditor, EditorContent, __mockEditor, __lastEditorConfig }
+// NodeView primitives used by React NodeViews (BidSectionNodeView). In tests
+// they are plain passthrough wrappers that forward props (incl. data-testid /
+// contentEditable) so a NodeView can be rendered directly against a hand-built
+// { node, extension } and asserted by testid.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function NodeViewWrapper(props: any) {
+  return React.createElement('div', props, props.children)
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function NodeViewContent(props: any) {
+  const { as = 'div', children, ...rest } = props
+  return React.createElement(as as string, rest, children)
+}
+// ReactNodeViewRenderer just wraps the component; under the mock it returns a
+// marker so addNodeView() is exercised without a real ProseMirror NodeView.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function ReactNodeViewRenderer(component: any) {
+  return { __nodeView: true, component }
+}
+// ReactNodeViewProps is a type-only export; re-declared here for the type
+// position used by component signatures. Erased at runtime.
+export type ReactNodeViewProps = {
+  node: { attrs: Record<string, unknown> }
+  extension: { options: Record<string, unknown> }
+  // Permissive index signature keeps the type compatible with extra fields.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any
+} & Record<string, unknown>
+
+// Assign to a variable before exporting as default (lint: no-anonymous-default-export).
+const tipTapReactMock = {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  NodeViewContent,
+  ReactNodeViewRenderer,
+  __mockEditor,
+  __lastEditorConfig,
+}
+
+export default tipTapReactMock
