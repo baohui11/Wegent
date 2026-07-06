@@ -28,12 +28,61 @@ export const __lastEditorConfig: { current: EditorConfig | null } = { current: n
 export const __mockEditor: any = {
   isEditable: true,
   setEditable: jest.fn(),
-  commands: { setContent: jest.fn() },
-  storage: { markdown: { getMarkdown: () => '' } },
-  on: jest.fn(),
-  off: jest.fn(),
+  commands: {
+    setContent: jest.fn(),
+    // `command(fn)` runs a raw ProseMirror command closure against
+    // { tr, state, dispatch }. Production code (document population, version
+    // write-back) uses this; the mock executes the closure against a minimal
+    // fake tr/state so the path runs under Jest.
+    command: jest.fn((fn: unknown) => {
+      const tr = {
+        setNodeAttribute: jest.fn(),
+        setMeta: jest.fn(),
+        replaceWith: jest.fn(),
+        doc: { content: { size: 0 } },
+      }
+      // Provide a schema stub that hands the JSON back wrapped as a node whose
+      // .content the production path reads. Real schema behavior is verified
+      // in the Task 9 browser smoke; here we only need the closure to run.
+      const schema = {
+        nodeFromJSON: (json: unknown) => ({
+          content: (json as { content?: unknown[] })?.content ?? [],
+        }),
+      }
+      const state = { doc: { forEach: (_cb: unknown) => {} }, schema }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (fn as any)({ tr, state, dispatch: () => {} })
+    }),
+  },
+  storage: {
+    markdown: {
+      getMarkdown: () => '',
+      // Per-section serializer (spike path a) + markdown parser used by the
+      // document-assembly layer. Tests override these to drive behavior.
+      serializer: { serialize: () => '' },
+      parser: {
+        parse: (_md: string) => ({ toJSON: () => ({ content: [{ type: 'paragraph' }] }) }),
+      },
+    },
+  },
+  // editor.on/off store handlers in __events keyed by event name so tests can
+  // fire them (the autosave hook subscribes via editor.on('update', ...)).
+  __events: {} as Record<string, Array<(props: unknown) => void>>,
+  on: jest.fn(function (this: typeof __mockEditor, ev: string, h: (p: unknown) => void) {
+    ;(this.__events[ev] ||= []).push(h)
+  }),
+  off: jest.fn(function (this: typeof __mockEditor, ev: string, h: (p: unknown) => void) {
+    const arr = this.__events[ev]
+    if (arr) this.__events[ev] = arr.filter(x => x !== h)
+  }),
+  emit: function (this: typeof __mockEditor, ev: string, props?: unknown) {
+    for (const h of this.__events[ev] ?? []) h(props)
+  },
   destroy: jest.fn(),
-  state: { selection: { $from: { index: (depth: number) => (depth === 0 ? 0 : 0) } } },
+  state: {
+    selection: { $from: { index: (depth: number) => (depth === 0 ? 0 : 0), depth: 0 } },
+    doc: { forEach: (_cb: unknown) => {} },
+  },
   // chain() records command names so insert-toolbar tests can assert calls.
   // All chain() invocations share one persistent __chainCalls log; each method
   // access returns a callable that records its name and returns the builder.
