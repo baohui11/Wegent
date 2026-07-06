@@ -372,6 +372,27 @@
   margin: 0.75em 0;
 }
 
+/* Code blocks: keep wide code from blowing out the section column. The single-
+   document foundation must not regress code overflow vs. the stacked editor
+   (spec §8); the fuller block-menu / overflow treatment is a later subproject. */
+.bid-prose pre {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 0.75em 0;
+  padding: 0.75em 1em;
+  background: var(--bid-paper);
+  border: 1px solid var(--bid-border-2);
+  border-radius: 6px;
+}
+
+.bid-prose pre code {
+  white-space: pre;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  background: none;
+  padding: 0;
+}
+
 .bid-prose table {
   border-collapse: collapse;
   width: 100%;
