@@ -39,14 +39,41 @@ export function blockLineRange(markdown: string, blockIndex: number): Range {
 }
 
 /**
- * Index of the top-level ProseMirror node holding the current selection.
- * depth 1 is the top-level block under doc; index(0) is its position among
- * the doc's children — which corresponds 1:1 to the top-level markdown block
- * after tiptap-markdown serialization.
+ * Index of the top-level block holding the current selection.
+ *
+ * Section-local mode (preferred, post bidSection refactor): pass the active
+ * `sectionId`. The cursor's ancestor bidSection is found by walking up
+ * `$from.node(depth)` until a bidSection whose `attrs.sectionId === sectionId`
+ * is reached, then `$from.index(thatDepth)` is its position among that
+ * section's children. Line numbers from `blockLineRange` are then relative to
+ * THAT section's body markdown (title-less, per spike-notes §6), which matches
+ * the bytes the backend stores — so redraft-range stays correctly addressed.
+ *
+ * Legacy/global mode (no sectionId): `$from.index(0)` — the position among the
+ * document's direct children. Kept for callers not yet on the bidSection tree.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function topBlockIndexOf(editor: any): number {
+export function topBlockIndexOf(editor: any, sectionId?: string): number {
   if (!editor) return 0
   const { $from } = editor.state.selection
-  return $from.index(0)
+  if (!sectionId) return $from.index(0)
+  // Walk ancestors from the cursor upward to find the owning bidSection. The
+  // bidSection sits one level above the cursor's textblock; its depth is at
+  // most $from.depth.
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const ancestor = $from.node(depth)
+    if (
+      ancestor &&
+      ancestor.type &&
+      ancestor.type.name === 'bidSection' &&
+      String(ancestor.attrs?.sectionId) === sectionId
+    ) {
+      // index(depth) is the cursor block's index among the bidSection's
+      // children — the section-local block number redraft-range needs.
+      return $from.index(depth)
+    }
+  }
+  // Cursor not inside the requested section: conservative 0 (the caller scopes
+  // the request to the active section, so this is a defensive guard).
+  return 0
 }
