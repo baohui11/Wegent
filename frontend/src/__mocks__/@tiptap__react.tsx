@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Shared Jest mock for @tiptap/react. ProseMirror cannot run under jsdom in our
 // test setup (Schema/Selection rely on real DOM layout), so every test that
-// transitively renders SectionEditor needs useEditor stubbed. Mapped globally
+// transitively renders the bid document editor needs useEditor stubbed. Mapped globally
 // via jest.config.ts moduleNameMapper so individual test files don't each have
 // to declare it.
 //

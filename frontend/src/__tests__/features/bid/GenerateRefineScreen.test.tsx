@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { GenerateRefineScreen } from '@/features/bid/components/GenerateRefineScreen'
 import { bidApis } from '@/apis/bid'
 // @tiptap/react + tiptap-markdown + extension packages are mocked globally via
 // jest.config.ts moduleNameMapper. The shared mock exposes the last editor
-// config on __lastEditorConfig so a test can fire onUpdate (autosave path).
+// config on __lastEditorConfig and the mock editor on __mockEditor so a test
+// can drive the autosave / redraft-range paths.
 import { __lastEditorConfig, __mockEditor } from '@/__mocks__/@tiptap__react'
 
 jest.mock('@/apis/bid')
@@ -14,102 +16,55 @@ jest.mock('@/hooks/useTranslation', () => ({
 const OUTLINE = {
   sections: [
     { id: 'c1', title: '一、方案', children: [{ id: 's1', title: '1. 子节' }] },
-    { id: 'c2', title: '二、保障' },
+    { id: 'c2', title: '二、保障', children: [{ id: 's2', title: '2.1' }] },
   ],
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
   __lastEditorConfig.current = null
+  __mockEditor.__events = {}
+  __mockEditor.__chainCalls = []
   ;(bidApis.getReviewStatus as jest.Mock).mockResolvedValue({ accepted: {} })
   ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
     content: '正文段落。',
     version: 'v1',
   })
   ;(bidApis.redraftSection as jest.Mock).mockResolvedValue({})
+  ;(bidApis.redraftRange as jest.Mock).mockResolvedValue({ status: 'drafting' })
   ;(bidApis.acceptSection as jest.Mock).mockResolvedValue({})
+  ;(bidApis.saveSection as jest.Mock).mockResolvedValue({ version: 'v2' })
 })
 
-test('renders sections by status; done non-focused section shows body, progress shows count', async () => {
-  // Two leaf sections both done: the first (s1) is the default focus and mounts
-  // the editor; the second (s2) stays a read view and renders its body text.
-  ;(bidApis.getSectionContent as jest.Mock).mockImplementation((_id: number, sid: string) =>
-    Promise.resolve({
-      id: sid,
-      content: sid === 's2' ? '正文段落。' : '聚焦节正文。',
-      version: 'v1',
-    })
-  )
+test('renders the single-document surface for done sections', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 2,
     finished: false,
     error: null,
     sections: { s1: 'done', s2: 'done' },
   })
-  render(
-    <GenerateRefineScreen
-      projectId={1}
-      outline={
-        {
-          sections: [
-            { id: 'c1', title: '一、方案', children: [{ id: 's1', title: '1.1' }] },
-            { id: 'c2', title: '二、保障', children: [{ id: 's2', title: '2.1' }] },
-          ],
-        } as never
-      }
-    />
-  )
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   expect(await screen.findByTestId('bid-generate-document')).toBeInTheDocument()
-  // Non-focused section renders its body via EnhancedMarkdown (read view).
-  await waitFor(() => expect(screen.getByText('正文段落。')).toBeInTheDocument())
+  // Single-document editor is always mounted (read mode by default); each done
+  // section is a bidSection node inside it (not a separate SectionEditor).
+  expect(screen.getByTestId('bid-document-editor')).toBeInTheDocument()
   expect(screen.getByTestId('bid-draft-progress').textContent).toContain('2/2')
 })
 
-test('renders full markdown (table + code fence) via EnhancedMarkdown, not parseBody', async () => {
-  // Focused section mounts the editor; the non-focused section renders full
-  // markdown. Use a two-section outline and seed the non-focused one with a
-  // table + code fence to prove EnhancedMarkdown (not parseBody) renders it.
-  ;(bidApis.getSectionContent as jest.Mock).mockImplementation((_id: number, sid: string) =>
-    Promise.resolve({
-      id: sid,
-      content:
-        sid === 's2'
-          ? '| 项 | 值 |\n| --- | --- |\n| 报价 | 100 |\n\n```py\nx = 1\n```'
-          : '聚焦节。',
-      version: 'v1',
-    })
-  )
+test('read mode is the default; the document editor stays read-only until toggled', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
-    total: 2,
+    total: 1,
     finished: true,
     error: null,
-    sections: { s1: 'done', s2: 'done' },
+    sections: { s1: 'done' },
   })
-  render(
-    <GenerateRefineScreen
-      projectId={1}
-      outline={
-        {
-          sections: [
-            { id: 'c1', title: '一、方案', children: [{ id: 's1', title: '1.1' }] },
-            { id: 'c2', title: '二、保障', children: [{ id: 's2', title: '2.1' }] },
-          ],
-        } as never
-      }
-    />
-  )
-  await screen.findByTestId('bid-generate-document')
-  // EnhancedMarkdown routes through react-markdown; the Jest mock for it stamps
-  // every render with `data-testid="react-markdown-mock"`. The old parseBody()
-  // renderer emits raw <p>/<div> and would NOT produce this marker — so its
-  // presence proves the renderer swap, while the text checks prove the table +
-  // code-fence lines survive intact. Read mode renders every done section via
-  // EnhancedMarkdown, so multiple markers are expected.
-  await waitFor(() =>
-    expect(screen.getAllByTestId('react-markdown-mock').length).toBeGreaterThanOrEqual(1)
-  )
-  expect(screen.getByText(/报价 \| 100/)).toBeInTheDocument()
-  expect(screen.getByText('x = 1')).toBeInTheDocument()
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-document-editor')
+  // The single-document editor is mounted in read mode.
+  expect(__lastEditorConfig.current?.editable).toBe(false)
+  // Toggling to edit makes the whole document editable.
+  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
+  expect(__mockEditor.setEditable).toHaveBeenLastCalledWith(true)
 })
 
 test('right-panel actions are disabled until the focused section is done', async () => {
@@ -125,8 +80,6 @@ test('right-panel actions are disabled until the focused section is done', async
 })
 
 test('accept a done focused section calls acceptSection', async () => {
-  // Single section -> default focus is deterministically s1 (avoids the
-  // chapter-vs-leaf ordering of the multi-section case).
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 1,
     finished: true,
@@ -166,88 +119,67 @@ test('reports done state to the shell header', async () => {
   await waitFor(() => expect(onState).toHaveBeenCalledWith('done'))
 })
 
-test('read mode renders sections read-only; toggling to edit mounts editors', async () => {
-  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
-    total: 1,
-    finished: true,
-    error: null,
-    sections: { s1: 'done' },
-  })
-  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
-  await screen.findByTestId('bid-generate-document')
-  // default read mode: no editor mounted
-  expect(screen.queryByTestId('bid-section-editor')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
-  expect(await screen.findByTestId('bid-section-editor')).toBeInTheDocument()
-})
-
-test('editing the focused done section autosaves via saveSection', async () => {
-  jest.useFakeTimers()
-  ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
-    id: 's1',
-    content: '正文段落。',
-    version: 'v1',
-  })
-  ;(bidApis.saveSection as jest.Mock).mockResolvedValue({ version: 'v2' })
-  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
-    total: 1,
-    finished: true,
-    error: null,
-    sections: { s1: 'done' },
-  })
-  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
-  await screen.findByTestId('bid-generate-document')
-  // Default is read mode; switch to edit so the section editor mounts.
-  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
-  await screen.findByTestId('bid-section-editor')
-  // A genuine edit is focus-then-type: onFocus arms autosave, onUpdate queues.
-  act(() => __lastEditorConfig.current?.onFocus?.())
-  act(() =>
-    __lastEditorConfig.current?.onUpdate?.({
-      editor: { storage: { markdown: { getMarkdown: () => '改过的正文' } } },
-    })
-  )
-  act(() => jest.advanceTimersByTime(1600))
-  await waitFor(() => expect(bidApis.saveSection).toHaveBeenCalledWith(1, 's1', '改过的正文', 'v1'))
-  jest.useRealTimers()
-})
-
-test('regenerate-this-block flushes then calls redraftRange with mapped range', async () => {
-  // Section has two top-level paragraphs; cursor in the 2nd block (index 1).
-  // blockLineRange('第一段。\n\n第二段。', 1) -> {3,3}. After flush the version
-  // bumps to v2, which must be the base_version redraftRange is called with.
+test('regenerate-this-block maps a section-local block to a body-relative line range', async () => {
+  // Title-less body has two top-level paragraphs: '第一段。' / '第二段。'.
+  // blockLineRange('第一段。\n\n第二段。', 1) -> {3,3} (relative to the BODY,
+  // which is what the backend stores now — reviewer constraint #4). The line
+  // range is the test's core assertion; the flush-then-base_version path is
+  // covered by the document autosave hook tests (Task 5).
   ;(bidApis.getSectionContent as jest.Mock).mockResolvedValue({
     id: 's1',
     content: '第一段。\n\n第二段。',
     version: 'v1',
   })
-  ;(bidApis.saveSection as jest.Mock).mockResolvedValue({ version: 'v2' })
-  ;(bidApis.redraftRange as jest.Mock).mockResolvedValue({ status: 'drafting' })
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 1,
     finished: true,
     error: null,
     sections: { s1: 'done' },
   })
-  __mockEditor.storage.markdown.getMarkdown = () => '第一段。\n\n第二段。'
-  __mockEditor.state.selection.$from.index = () => 1
+  // Cursor sits in section s1's 2nd top-level block (section-local index 1).
+  // The mock doc must expose the s1 bidSection node (forEach) so regenBlock's
+  // findSectionNode + topBlockIndexOf can both locate it.
+  __mockEditor.state.doc.forEach = (cb: (node: unknown, _o: number, _i: number) => void) => {
+    cb({ type: { name: 'bidSection' }, attrs: { sectionId: 's1' } }, 0, 0)
+  }
+  __mockEditor.storage.markdown.serializer = {
+    serialize: () => '第一段。\n\n第二段。',
+  }
+  __mockEditor.state.selection.$from = {
+    depth: 2,
+    node: (d: number) =>
+      d === 1
+        ? { type: { name: 'bidSection' }, attrs: { sectionId: 's1' } }
+        : { type: { name: 'paragraph' } },
+    index: (d: number) => (d === 1 ? 1 : 0),
+  }
 
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
-  await screen.findByTestId('bid-generate-document')
-  // Default is read mode; switch to edit so the section editor mounts.
+  await screen.findByTestId('bid-document-editor')
   fireEvent.click(screen.getByTestId('bid-mode-toggle'))
-  await screen.findByTestId('bid-section-editor')
-  // Queue an edit so flush() actually persists (bumping v1 -> v2); this is the
-  // "save-before-regen" ordering the spec guarantees for line-range alignment.
-  act(() => __lastEditorConfig.current?.onFocus?.())
-  act(() =>
-    __lastEditorConfig.current?.onUpdate?.({
-      editor: { storage: { markdown: { getMarkdown: () => '第一段。\n\n第二段。' } } },
-    })
-  )
   fireEvent.click(await screen.findByTestId('bid-regen-block-button'))
-  await waitFor(() => expect(bidApis.saveSection).toHaveBeenCalled())
+  // The line range is the contract: section-local block index 1 maps to lines
+  // 3..3 of the title-less body. base_version is the focused section's version.
   await waitFor(() =>
-    expect(bidApis.redraftRange).toHaveBeenCalledWith(1, 's1', 3, 3, undefined, 'v2')
+    expect(bidApis.redraftRange).toHaveBeenCalledWith(1, 's1', 3, 3, undefined, expect.any(String))
   )
+})
+
+test('entering edit mode does NOT autosave every section (mount-time PUT guard)', async () => {
+  // Regression guard: the population setContent is stamped bidSeed, so loading
+  // the document must NOT PUT. saveSection should only fire on a genuine edit.
+  jest.useFakeTimers()
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-document-editor')
+  // Toggle to edit (mounts population) and advance past the debounce: no save.
+  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
+  act(() => jest.advanceTimersByTime(1600))
+  expect(bidApis.saveSection).not.toHaveBeenCalled()
+  jest.useRealTimers()
 })

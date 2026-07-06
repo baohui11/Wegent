@@ -392,7 +392,7 @@
 }
 
 /* ==========================================================================
-   Bid Workbench — SectionEditor (Tiptap / ProseMirror) caret + focus styles.
+   Bid Workbench — BidDocumentEditor (Tiptap / ProseMirror) caret + focus styles.
    Keeps the editable surface visually identical to the read view (no outline,
    no native focus ring); inherits the .bid-prose serif typography above.
    ========================================================================== */

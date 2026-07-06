@@ -569,6 +569,13 @@ def main():
     for sec in outline.get("sections", []):
         f = final / f"{sec['id']}.md"
         if f.exists():
+            # The section body no longer carries its own heading (the heading
+            # now lives only in the outline — single-document foundation §6 /
+            # spike-notes Conclusion B). Inject the heading from the outline
+            # title before rendering the body so export keeps every heading.
+            title = str(sec.get("title") or "").strip()
+            if title:
+                doc.add_heading(clean(title), level=1)
             add_markdown(
                 doc,
                 f.read_text(encoding="utf-8"),
@@ -597,6 +604,11 @@ def main():
                 continue
             f = final / f"{sid}.md"
             if f.exists():
+                # Same title-dedup convention as main sections: bodies are
+                # title-less, so inject the heading from the outline title.
+                vtitle = str(sec.get("title") or "").strip()
+                if vtitle:
+                    doc.add_heading(clean(vtitle), level=2)
                 add_markdown(
                     doc,
                     f.read_text(encoding="utf-8"),

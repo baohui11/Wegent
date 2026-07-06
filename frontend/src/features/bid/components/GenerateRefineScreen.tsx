@@ -11,11 +11,13 @@ import {
   rootChapterId,
   type FlatNode,
 } from '../canvas/outlineGraph'
-import { EnhancedMarkdown } from '@/components/common/EnhancedMarkdown'
-import { SectionEditor, type SectionEditorApi } from './SectionEditor'
+import {
+  BidDocumentEditor,
+  type BidDocumentEditorApi,
+  type BidSectionStatus,
+} from './BidDocumentEditor'
 import { blockLineRange, topBlockIndexOf } from '../canvas/blockRange'
-
-type SecStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
+import { serializeSection } from '../canvas/serializeSection'
 
 const DOT: Record<string, string> = {
   pending: 'var(--bid-border-3)',
@@ -43,18 +45,20 @@ export function GenerateRefineScreen({
   const [accepted, setAccepted] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
-  // Document-wide Edit/Read mode. Read (default) renders the whole document via
-  // EnhancedMarkdown; Edit mounts a block editor per done section.
+  // Document-wide Edit/Read mode. Both modes render the single-document
+  // ProseMirror editor (Read = editable:false, Edit = editable:true); this is
+  // the single-renderer design (spec §7) that removes the Read/Edit drift.
   const [mode, setMode] = useState<'read' | 'edit'>('read')
   const [instruction, setInstruction] = useState('')
   const docRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set())
-  // Active editable section (the one with editor focus) + per-section editor
-  // APIs. In Edit mode many sections can be editable at once; the right panel
-  // and paragraph regen operate on the active one. SectionEditor registers its
-  // { editor, flush } here via onReady.
+  // Active section = the bidSection node the cursor currently sits in. Drives
+  // the right panel and the paragraph-regen address. The single-document
+  // editor reports it via onActiveSectionChange.
   const [activeId, setActiveId] = useState<string | null>(null)
-  const apisRef = useRef<Map<string, SectionEditorApi>>(new Map())
+  // The single document editor's API (live editor instance + per-section
+  // flush). Replaces the per-section apisRef Map from the stacked architecture.
+  const editorApiRef = useRef<BidDocumentEditorApi | null>(null)
 
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
   const rows = useMemo(() => dfsOrder(flat), [flat])
@@ -129,14 +133,14 @@ export function GenerateRefineScreen({
     }
   }, [focusId, sectionIds])
 
-  // Flush the active editable section's pending save and return its post-save
-  // version (the on-disk CAS token). SectionEditor now owns autosave, so the
-  // screen reaches it via the per-section API the editor registered on mount.
+  // Flush the active section's pending save and return its post-save version
+  // (the on-disk CAS token). The single-document editor owns per-section
+  // autosave; we reach it via the API it registered on mount.
   const flushActive = useCallback(async (): Promise<string> => {
     const sid = activeId ?? focusId
-    const api = sid ? apisRef.current.get(sid) : undefined
-    if (api) return api.flush()
-    return sid ? (versions[sid] ?? '') : ''
+    if (!sid) return ''
+    if (editorApiRef.current) return editorApiRef.current.flushSection(sid)
+    return versions[sid] ?? ''
   }, [activeId, focusId, versions])
 
   const redraft = useCallback(
@@ -152,16 +156,20 @@ export function GenerateRefineScreen({
 
   // Regenerate the active section's cursor block only: flush the pending edit
   // so the on-disk bytes match the editor, map the block to a markdown line
-  // range, then call redraft-range with the (post-flush) version. Line numbers
-  // are stable only against the just-saved bytes, so flush-then-map ordering
-  // matters. Declared before the early `if (!status) return` (Rules of Hooks).
+  // range RELATIVE TO THE SECTION BODY (title-less — spike §5/§6), then call
+  // redraft-range with the (post-flush) version. Line numbers are stable only
+  // against the just-saved bytes, so flush-then-map ordering matters.
   const regenBlock = useCallback(async () => {
     const sid = activeId ?? focusId
     if (!sid) return
-    const api = apisRef.current.get(sid)
+    const editor = editorApiRef.current?.editor ?? null
     const baseVersion = await flushActive()
-    const md = contents[sid] ?? ''
-    const idx = topBlockIndexOf(api?.editor ?? null)
+    // Serialize the section's body (title-less) — the exact bytes the backend
+    // now stores — and map the cursor block (section-local index) to its line
+    // range within that body.
+    const sectionNode = findSectionNode(editor, sid)
+    const md = sectionNode ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
+    const idx = topBlockIndexOf(editor, sid)
     const { startLine, endLine } = blockLineRange(md, idx)
     loadedRef.current.delete(sid) // force re-fetch after the range redrafts
     await bidApis.redraftRange(
@@ -175,12 +183,6 @@ export function GenerateRefineScreen({
     setInstruction('')
   }, [activeId, focusId, contents, instruction, projectId, flushActive])
 
-  // Leaving Edit mode unmounts every section editor; drop their registered APIs
-  // so the right panel / regen don't hold stale editor references.
-  useEffect(() => {
-    if (mode === 'read') apisRef.current.clear()
-  }, [mode])
-
   if (!status) return null
 
   const doneCount = sectionIds.filter(id => status.sections[id] === 'done').length
@@ -189,8 +191,10 @@ export function GenerateRefineScreen({
   const focusDone = focusStatus === 'done'
   const focusName = focusId ? (nameOf.get(focusId) ?? focusId) : ''
 
-  const statusFor = (n: FlatNode): SecStatus =>
-    (status.sections[n.id] ?? status.sections[rootChapterId(flat, n.id)] ?? 'pending') as SecStatus
+  const statusFor = (n: FlatNode): BidSectionStatus =>
+    (status.sections[n.id] ??
+      status.sections[rootChapterId(flat, n.id)] ??
+      'pending') as BidSectionStatus
   const scrollTo = (id: string) =>
     docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   const focus = (id: string) => {
@@ -217,6 +221,20 @@ export function GenerateRefineScreen({
     await bidApis.acceptSection(projectId, focusId)
     setAccepted((await bidApis.getReviewStatus(projectId)).accepted)
   }
+
+  // Build the per-section specs the single-document editor renders. Only done
+  // sections become bidSection nodes; mid-draft / pending sections render their
+  // chrome + skeleton beside the document editor (status-driven, locked).
+  const doneSections = sectionIds
+    .filter(id => status.sections[id] === 'done')
+    .map(id => ({
+      id,
+      content: contents[id] ?? '',
+      version: versions[id] ?? '',
+      status: status.sections[id] as BidSectionStatus,
+      accepted: Boolean(accepted[id]),
+    }))
+  const nonDoneSections = sectionIds.filter(id => status.sections[id] !== 'done')
 
   return (
     <div className="flex h-full" data-testid="bid-generate-refine-screen">
@@ -336,9 +354,26 @@ export function GenerateRefineScreen({
             </button>
           </div>
 
-          {sectionIds.map(id => {
-            const st = status.sections[id] as SecStatus
-            const heading = nameOf.get(id) ?? id
+          {/* Single-document editor: all done sections as bidSection nodes.
+              Both Read and Edit modes render this editor (same engine, spec §7);
+              only `editable` flips. Non-done sections render beside it as
+              locked chrome + skeleton so the doc still reads top-to-bottom. */}
+          {doneSections.length > 0 && (
+            <BidDocumentEditor
+              projectId={projectId}
+              sections={doneSections}
+              sectionNames={Object.fromEntries(nameOf)}
+              mode={mode}
+              onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
+              onActiveSectionChange={setActiveId}
+              onReady={api => {
+                editorApiRef.current = api
+              }}
+            />
+          )}
+
+          {nonDoneSections.map(id => {
+            const st = status.sections[id] as BidSectionStatus
             return (
               <div
                 key={id}
@@ -356,23 +391,9 @@ export function GenerateRefineScreen({
                     className="text-base font-bold"
                     style={{ color: 'var(--bid-ink)', fontFamily: "'Noto Sans SC', sans-serif" }}
                   >
-                    {heading}
+                    {nameOf.get(id) ?? id}
                   </div>
-                  {st === 'done' ? (
-                    <span
-                      onClick={() => {
-                        setFocusId(id)
-                        void redraft(id)
-                      }}
-                      className="flex-shrink-0 cursor-pointer whitespace-nowrap text-[11.5px]"
-                      style={{
-                        color: 'var(--bid-primary)',
-                        fontFamily: "'Noto Sans SC', sans-serif",
-                      }}
-                    >
-                      {t('review.regenerate_section')}
-                    </span>
-                  ) : (
+                  {st === 'drafting' && (
                     <span
                       className="flex-shrink-0 rounded-md px-2 py-0.5 text-[11px]"
                       style={{
@@ -385,69 +406,25 @@ export function GenerateRefineScreen({
                     </span>
                   )}
                 </div>
-
-                {st === 'done' && (
-                  <>
-                    {/* Edit mode mounts a block editor for every done section;
-                        Read mode renders the whole document read-only. A section
-                        mid-redraft is read-only so async LLM rewrites never race
-                        an in-progress edit. SectionEditor owns its own autosave
-                        and registers its { editor, flush } API. */}
-                    {mode === 'edit' ? (
-                      <SectionEditor
-                        projectId={projectId}
-                        sectionId={id}
-                        content={contents[id] ?? ''}
-                        version={versions[id] ?? ''}
-                        readOnly={status.sections[id] === 'drafting'}
-                        onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
-                        onFocus={setActiveId}
-                        onReady={(sid, api) => apisRef.current.set(sid, api)}
-                      />
-                    ) : (
-                      <div className="bid-prose">
-                        <EnhancedMarkdown source={contents[id] ?? ''} theme="light" />
-                      </div>
-                    )}
-                    {accepted[id] && (
-                      <div
-                        className="inline-block rounded-md px-2 py-0.5 text-[10.5px]"
-                        style={{
-                          background: 'var(--bid-primary-soft)',
-                          color: 'var(--bid-primary)',
-                          fontFamily: "'Noto Sans SC', sans-serif",
-                        }}
-                      >
-                        {t('review.accepted_badge')}
-                      </div>
-                    )}
-                  </>
+                {st === 'drafting' && (
+                  <div
+                    className="mb-4 flex items-center gap-2.5 text-[13px]"
+                    style={{
+                      color: 'var(--bid-muted-2)',
+                      fontFamily: "'Noto Sans SC', sans-serif",
+                    }}
+                  >
+                    <span
+                      className="inline-block h-3.5 w-3.5 flex-shrink-0 animate-spin rounded-full"
+                      style={{
+                        border: '2px solid #EEE6E4',
+                        borderTopColor: 'var(--bid-primary)',
+                      }}
+                    />
+                    {t('drafting.drafting_now')}
+                  </div>
                 )}
-
-                {(st === 'drafting' || st === 'pending') && (
-                  <>
-                    {st === 'drafting' && (
-                      <div
-                        className="mb-4 flex items-center gap-2.5 text-[13px]"
-                        style={{
-                          color: 'var(--bid-muted-2)',
-                          fontFamily: "'Noto Sans SC', sans-serif",
-                        }}
-                      >
-                        <span
-                          className="inline-block h-3.5 w-3.5 flex-shrink-0 animate-spin rounded-full"
-                          style={{
-                            border: '2px solid #EEE6E4',
-                            borderTopColor: 'var(--bid-primary)',
-                          }}
-                        />
-                        {t('drafting.drafting_now')}
-                      </div>
-                    )}
-                    <Skeleton lines={st === 'drafting' ? 4 : 3} />
-                  </>
-                )}
-
+                <Skeleton lines={st === 'drafting' ? 4 : 3} />
                 {st === 'error' && (
                   <div
                     className="text-[13px]"
@@ -573,6 +550,26 @@ export function GenerateRefineScreen({
       </div>
     </div>
   )
+}
+
+// Find a top-level bidSection node by sectionId in the editor's doc, or null.
+// Used by regenBlock to serialize the active section's body for line mapping.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function findSectionNode(editor: any, sectionId: string): { attrs: { sectionId: string } } | null {
+  if (!editor) return null
+  let found: { attrs: { sectionId: string } } | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  editor.state.doc.forEach((node: any) => {
+    if (found) return
+    if (
+      node.type &&
+      node.type.name === 'bidSection' &&
+      String(node.attrs?.sectionId) === sectionId
+    ) {
+      found = node
+    }
+  })
+  return found
 }
 
 function Skeleton({ lines }: { lines: number }) {

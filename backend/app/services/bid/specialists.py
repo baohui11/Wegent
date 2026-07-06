@@ -364,6 +364,8 @@ async def call_ghostwriter(
         + "\n\n## 风格圣经（style-zhongda.md）\n"
         + _STYLE
         + "\n\n## 后端调用输出格式\n只返回本节正文 markdown，不要 JSON、不要代码围栏。"
+        "\n\n## 章节标题约定\n正文**不要以章节标题开头**（不要输出 `# 章节名`、`## 章节名`）。"
+        "章节标题由系统从大纲注入并在前端单独渲染一次；正文从首段实质性内容开始。"
     )
     if brief:
         instructions += (

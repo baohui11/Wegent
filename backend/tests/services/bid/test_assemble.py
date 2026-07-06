@@ -25,12 +25,15 @@ def _seed(ws: BidWorkspace) -> None:
         {"sections": [{"id": "s1", "title": "总述"}, {"id": "s2", "title": "质量"}]},
     )
     ws.path("workspace/sections").mkdir(parents=True, exist_ok=True)
+    # Section bodies are title-less: the heading now lives only in the outline,
+    # and the assembler injects it (single-document foundation §6 / spike-notes
+    # Conclusion B). Previously the body started with `# 总述`.
     ws.path("workspace/sections/s1.md").write_text(
-        "# 总述\n\n本项目由{{bidder}}实施，已通过 CMMI3 评估{{qual:CMMI3}}。",
+        "本项目由{{bidder}}实施，已通过 CMMI3 评估{{qual:CMMI3}}。",
         encoding="utf-8",
     )
     ws.path("workspace/sections/s2.md").write_text(
-        "# 质量\n\n依托 ISO9001 认证{{qual:ISO9001}}。", encoding="utf-8"
+        "依托 ISO9001 认证{{qual:ISO9001}}。", encoding="utf-8"
     )
     ws.write_json(
         "corpus/qualifications.json",
@@ -76,7 +79,26 @@ def test_finalize_dangling_placeholder_raises(tmp_path):
     _seed(ws)
     # reference a qual id absent from the knowledge base -> resolve hard gate
     ws.path("workspace/sections/s1.md").write_text(
-        "# 总述\n\n{{bidder}} 持有 {{qual:GHOST}}。", encoding="utf-8"
+        "{{bidder}} 持有 {{qual:GHOST}}。", encoding="utf-8"
     )
     with pytest.raises(BidPipelineError):
         assemble.finalize(ws)
+
+
+def test_finalize_injects_section_titles_from_outline(tmp_path):
+    # Regression for the title-dedup change: bodies carry no heading now, so the
+    # assembler MUST add each section's heading from outline[*]["title"]. Without
+    # that, title-less bodies would silently lose their headings on export.
+    ws = BidWorkspace("asm3", root=tmp_path)
+    _seed(ws)
+    out = assemble.finalize(ws)
+    doc = Document(str(out))
+    heads = [
+        p.text for p in doc.paragraphs if p.style.name.startswith(("Heading", "Title"))
+    ]
+    # The two outline titles must each appear as a heading.
+    assert any("总述" in h for h in heads)
+    assert any("质量" in h for h in heads)
+    # And the bodies must still be present (post-resolve).
+    body = "\n".join(p.text for p in doc.paragraphs)
+    assert "CMMI3" in body and "ISO9001" in body
