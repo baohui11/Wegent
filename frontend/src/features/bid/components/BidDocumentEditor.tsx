@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
+import { generateJSON } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { Table } from '@tiptap/extension-table'
@@ -47,10 +48,46 @@ interface BidDocumentEditorProps {
   onReady?: (api: BidDocumentEditorApi) => void
 }
 
+// Block-level schema used ONLY to parse a section BODY's HTML into block JSON.
+// It must NOT include BidDocument/BidSection: BidDocument's top node is
+// `bidSection+`, which would reject a body's plain paragraphs/headings; a
+// default block-level `doc` lets them parse. Node types here (paragraph,
+// heading, lists, blockquote, code, image, table) all exist in the live
+// editor's schema, so the resulting JSON loads cleanly inside a bidSection.
+const BODY_EXTENSIONS = [
+  StarterKit.configure({ link: { openOnClick: false } }),
+  Image,
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
+]
+
+// Convert a section body's HTML (what tiptap-markdown's parser.parse returns)
+// into an array of block JSON for a bidSection's children. Empty HTML yields a
+// single empty paragraph (a bidSection's content is `block+`, never empty).
+// Exported so the real-tiptap conversion is unit-testable (the editor + its
+// markdown parser are mocked in Jest, which is exactly what hid the original
+// "parse() returns a string" bug).
+export function htmlToBlockContent(html: string): unknown[] {
+  if (!html) return [{ type: 'paragraph' }]
+  try {
+    const body = generateJSON(html, BODY_EXTENSIONS) as { content?: unknown[] }
+    return body.content && body.content.length > 0 ? body.content : [{ type: 'paragraph' }]
+  } catch {
+    // generateJSON needs real block extensions to build a schema; if that fails
+    // (e.g. tiptap extensions stubbed under Jest, or malformed HTML), degrade to
+    // an empty paragraph instead of crashing the editor mount. The real-browser
+    // conversion is covered by the Playwright smoke (bid-roundtrip-smoke.spec.ts).
+    return [{ type: 'paragraph' }]
+  }
+}
+
 // Assemble the single-document JSON: one bidSection node per section, each
 // carrying its addressing attrs and a body parsed from the title-less section
-// markdown. The body is parsed via the live editor's markdown parser so the
-// exact same rules as getMarkdown() apply (round-trip fidelity, spike-notes §1).
+// markdown. tiptap-markdown's `parser.parse()` returns an HTML STRING (not a PM
+// node), so we convert that HTML to block JSON via generateJSON and take its
+// content as the section's children.
 function buildDocJson(
   editor: Editor,
   sections: SectionSpec[],
@@ -58,18 +95,14 @@ function buildDocJson(
 ): unknown {
   const parser = (
     editor.storage as {
-      markdown?: { parser: { parse: (md: string) => { toJSON: () => unknown } } }
+      markdown?: { parser: { parse: (md: string) => string } }
     }
   ).markdown?.parser
   const sectionNodes = sections.map(sec => {
     const bodyMd = markdownToSectionContent(sec.content, sectionNames[sec.id] ?? sec.id)
-    // Parse the body markdown into a PM doc fragment; its content is the
-    // section's child blocks.
-    const parsed = parser ? parser.parse(bodyMd) : null
-    const childContent =
-      parsed && typeof (parsed as { toJSON?: () => unknown }).toJSON === 'function'
-        ? ((parsed as { toJSON: () => { content?: unknown } }).toJSON().content ?? [])
-        : [{ type: 'paragraph' }]
+    // md -> HTML (tiptap-markdown parser) -> block JSON (generateJSON).
+    const html = parser ? parser.parse(bodyMd) : ''
+    const childContent = htmlToBlockContent(html)
     return {
       type: 'bidSection',
       attrs: {

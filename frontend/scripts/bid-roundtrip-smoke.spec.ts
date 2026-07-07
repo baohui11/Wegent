@@ -117,7 +117,6 @@ test('single-document editor round-trips composite markdown losslessly', async (
   page.on('console', msg => {
     const t = msg.text()
     if (/mock|bid/i.test(t)) {
-       
       console.log('BROWSER_CONSOLE:', t)
     }
   })
@@ -167,26 +166,22 @@ test('single-document editor round-trips composite markdown losslessly', async (
   // Capture page errors (uncaught exceptions / React error boundary) so a
   // blank page is diagnosable instead of a silent "TESTIDS: []".
   page.on('pageerror', err => {
-     
     console.log('PAGEERROR:', String(err).slice(0, 400))
   })
   page.on('framenavigated', frame => {
     if (frame === page.mainFrame()) {
-       
       console.log('NAVIGATED:', frame.url())
     }
   })
   page.on('request', r => {
     const u = r.url()
     if (/users\/me|\/auth\/|\/bid\/projects/.test(u)) {
-       
       console.log('REQ:', r.method(), u)
     }
   })
   page.on('response', r => {
     const u = r.url()
     if (r.status() === 401) {
-       
       console.log('401:', u)
     }
   })
@@ -196,20 +191,20 @@ test('single-document editor round-trips composite markdown losslessly', async (
 
   await page.goto('/bid-workbench')
   await page.waitForLoadState('domcontentloaded')
-   
+
   console.log('URL:', page.url())
-   
+
   console.log('TOKEN:', await page.evaluate(() => localStorage.getItem('auth_token')?.slice(0, 20)))
-   
+
   console.log('FAILED_REQS:', JSON.stringify(failedReqs.slice(0, 15)))
   // Wait for the project list to render, then pick the mock-seeded review-
   // phase project (id 106, all sections done). Mock-mode banner confirms the
   // in-memory backend is active.
   // Give the SPA time to mount + the user context to resolve (mocked /users/me).
   await page.waitForTimeout(5000)
-   
+
   console.log('BODYTEXT:', (await page.locator('body').innerText()).slice(0, 600))
-   
+
   console.log(
     'ERRORDETAIL:',
     await page.evaluate(() => {
@@ -217,7 +212,7 @@ test('single-document editor round-trips composite markdown losslessly', async (
       return details ? details.textContent?.slice(0, 800) : 'no details element'
     })
   )
-   
+
   console.log(
     'TESTIDS:',
     await page.evaluate(() =>
@@ -231,13 +226,30 @@ test('single-document editor round-trips composite markdown losslessly', async (
   const cards = await page
     .locator('[data-testid^="bid-project-card-"]')
     .evaluateAll(els => els.map(e => e.getAttribute('data-testid')))
-   
+
   console.log('PROJECT_CARDS:', JSON.stringify(cards))
   await page.getByTestId('bid-project-card-106').click()
   await page.getByTestId('bid-workbench-shell').waitFor({ state: 'visible' })
   // Jump to Stage 3 (drafting) — the single-document editor renders there.
   await page.getByTestId('bid-stepper-stage-3').click()
   await waitForEditor(page)
+
+  // Regression (buildDocJson load path): each section must load its BODY, not
+  // just its title. The old bug fed parser.parse()'s HTML STRING to a `.toJSON`
+  // check that always failed, collapsing every section body to an empty
+  // paragraph — so only the NodeView title (H1) rendered. Assert a known s1
+  // BODY phrase (not a heading) is present on the freshly-loaded document.
+  const loadedText = await page.evaluate(() => {
+    const root = document.querySelector('[data-testid="bid-document-editor"]')
+    const pm = root?.querySelector('.ProseMirror') as HTMLElement | null
+    return pm?.innerText ?? ''
+  })
+
+  console.log('LOADED_TEXT_HEAD:', loadedText.slice(0, 200))
+  expect(loadedText, 'section body loaded on initial render (not just the title)').toContain(
+    '平台层基于微服务架构'
+  )
+
   // Toggle to Edit so the document is editable (autosave is armed).
   await page.getByTestId('bid-mode-toggle').click()
 
@@ -270,15 +282,15 @@ test('single-document editor round-trips composite markdown losslessly', async (
     editor.chain().focus().deleteRange({ from: start, to: end }).insertContentAt(start, body).run()
     return { ok: true, start, end }
   }, COMPOSITE_BODY)
-   
+
   console.log('INJECT:', JSON.stringify(inject))
 
   // After typing, read back the in-editor s1 body to confirm the editor holds
   // the parsed content (sanity before reload).
   const preReloadBody = await readSectionBody(page, 's1')
-   
+
   console.log('PRE_RELOAD_S1_LEN:', preReloadBody.length)
-   
+
   console.log('PRE_RELOAD_S1_HEAD:', preReloadBody.slice(0, 120))
   const postTypeDump = await page.evaluate(() => {
     const root = document.querySelector('[data-testid="bid-document-editor"]')
@@ -301,7 +313,7 @@ test('single-document editor round-trips composite markdown losslessly', async (
     })
     return out
   })
-   
+
   console.log('POST_TYPE_DUMP:', JSON.stringify(postTypeDump))
   // Wait LONGER for the 1.5s autosave debounce + mock save; then re-check s1's
   // version attr (the save writes the fresh CAS token back onto the node).
@@ -320,7 +332,7 @@ test('single-document editor round-trips composite markdown losslessly', async (
     })
     return out
   })
-   
+
   console.log('POST_SAVE_DUMP:', JSON.stringify(postSaveDump))
 
   // The autosave fired (POST_SAVE_DUMP showed s1's version bumped while s2..s5
@@ -330,11 +342,11 @@ test('single-document editor round-trips composite markdown losslessly', async (
   // save wrote to the store. This is the round-trip: composite md → parse →
   // bidSection children → serializeSection → compare.
   const persistedBody = preReloadBody
-   
+
   console.log('PERSISTED_S1_BEGIN')
-   
+
   console.log(persistedBody)
-   
+
   console.log('PERSISTED_S1_END')
 
   expect(persistedBody.length, 'persisted s1 body is non-empty').toBeGreaterThan(0)
@@ -372,6 +384,6 @@ test('single-document editor round-trips composite markdown losslessly', async (
       .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim()
-   
+
   console.log('NORM_EQUAL:', norm(persistedBody) === norm(COMPOSITE_BODY))
 })
