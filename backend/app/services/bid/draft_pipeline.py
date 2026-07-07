@@ -9,8 +9,11 @@ with an extra instruction."""
 import asyncio
 import logging
 
+from app.core.config import settings
+from app.services.bid import agentic_draft_client
 from app.services.bid import drafting_service as ds
 from app.services.bid import materials_service, post_gate, section_retrieval
+from app.services.bid.agentic_prompt import build_agentic_prompt
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_ghostwriter, rewrite_excerpt
@@ -77,22 +80,49 @@ async def _write_and_check(
     user_id,
     instruction,
 ):
-    md = await call_ghostwriter(
-        model=model,
-        model_config=model_config,
-        section=node,
-        tender=tender,
-        knowledge_base=kb,
-        brief=brief,
-        style_card=_STYLE_CARD,
-        materials=section_retrieval.retrieve_for_section(ws, node, brief),
-        instruction=instruction,
-        project_id=project_id,
-        user_id=user_id,
-    )
     target = ws.path(f"workspace/sections/{sid}.md")
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(md, encoding="utf-8")
+
+    # Agentic first pass only (no post_gate-rework instruction): try the sidecar,
+    # adopt if usable; any failure falls back to the deterministic ghostwriter.
+    # The post_gate rework retry (instruction != None) stays deterministic.
+    used_agent = False
+    if settings.BID_DRAFTING_MODE == "agentic" and instruction is None:
+        try:
+            agentic_draft_client.mount_section_writer_skill(ws)
+            prompt = build_agentic_prompt(node, tender, brief)
+            await agentic_draft_client.draft_via_sidecar(
+                ws=ws,
+                section_id=sid,
+                prompt=prompt,
+                model=agentic_draft_client.sidecar_model(model, model_config),
+                timeout_s=settings.BID_AGENTIC_TIMEOUT_S,
+                max_iters=settings.BID_AGENTIC_MAX_ITERS,
+                base_url=settings.BID_PI_RUNTIME_URL,
+            )
+            used_agent = agentic_draft_client.usable(
+                target, settings.BID_AGENTIC_USABLE_MIN
+            )
+        except Exception as e:  # noqa: BLE001 — any agentic failure => fallback
+            logger.warning("agentic draft %s failed, falling back: %s", sid, e)
+            used_agent = False
+
+    if not used_agent:
+        md = await call_ghostwriter(
+            model=model,
+            model_config=model_config,
+            section=node,
+            tender=tender,
+            knowledge_base=kb,
+            brief=brief,
+            style_card=_STYLE_CARD,
+            materials=section_retrieval.retrieve_for_section(ws, node, brief),
+            instruction=instruction,
+            project_id=project_id,
+            user_id=user_id,
+        )
+        target.write_text(md, encoding="utf-8")
+
     return post_gate.check_section(ws, sid, node, brief)
 
 

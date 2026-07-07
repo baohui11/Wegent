@@ -611,6 +611,18 @@ class Settings(BaseSettings):
     # host-side dev (sandbox returns a container-perspective URL); turn off when
     # the backend itself runs inside Docker (it can reach host.docker.internal).
     BID_SANDBOX_REWRITE_HOST: bool = True
+    # Bid agentic drafting (Phase 2): route the first-pass draft through the
+    # pi_runtime sidecar when "agentic"; "pipeline" keeps the one-shot
+    # ghostwriter. Agentic is opt-in until validated in a real deploy.
+    BID_DRAFTING_MODE: str = "pipeline"
+    # pi_runtime sidecar base URL (compose service name within Docker).
+    BID_PI_RUNTIME_URL: str = "http://pi_runtime:8300"
+    # Hard timeout for one agentic section draft (the bake-off validated 420s).
+    BID_AGENTIC_TIMEOUT_S: int = 420
+    # Non-space char floor for a drafted section to be adopted as usable.
+    BID_AGENTIC_USABLE_MIN: int = 500
+    # Max agentic iterations the sidecar allows before returning.
+    BID_AGENTIC_MAX_ITERS: int = 40
     # Backend internal URL (for service-to-service communication)
     # Used by chat_shell to download skill binaries
     BACKEND_INTERNAL_URL: str = "http://localhost:8000"
