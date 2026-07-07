@@ -123,6 +123,9 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./logs/backend:/app/logs
+      # Shared bid-workspace volume (also mounted by pi_runtime at the same
+      # path) so the backend and the pi_runtime sidecar read/write the same
+      # bid section files.
       - bid_workspaces:/data/bid-workspaces
     environment:
       BACKEND_UVICORN_WORKERS: ${BACKEND_UVICORN_WORKERS:-8}
@@ -220,7 +223,9 @@ services:
       KNOWLEDGE_CONVERSION_FILE_TYPES: ${KNOWLEDGE_CONVERSION_FILE_TYPES:-}
       # Persist chunk content to knowledge_documents.chunks for frontend viewing (default false)
       CHUNK_STORAGE_ENABLED: "${BACKEND_CHUNK_STORAGE_ENABLED:-False}"
-      # Bid workbench: blackboard file root (persisted volume) + tender model name
+      # Bid workbench: blackboard file root (persisted volume) + tender model name.
+      # /data/bid-workspaces is the SAME path the pi_runtime sidecar mounts, so
+      # sections drafted by pi land where the backend reads them back.
       BID_WORKSPACE_ROOT: /data/bid-workspaces
       BID_TENDER_MODEL_NAME: ${BID_TENDER_MODEL_NAME:-}
     depends_on:
@@ -489,6 +494,35 @@ services:
       - ./logs/knowledge_doc_converter:/app/logs
     networks:
       - wegent-network
+
+  pi_runtime:
+    # Internal-only sidecar: wraps the PI coding agent to draft bid sections
+    # over the shared bid-workspace volume. Reachable in-cluster at
+    # http://pi_runtime:8300. Not exposed to the host.
+    build:
+      context: .
+      dockerfile: docker/pi_runtime/Dockerfile
+    container_name: wegent-pi-runtime
+    restart: always
+    environment:
+      PI_RUNTIME_PORT: ${PI_RUNTIME_PORT:-8300}
+      # Same path the backend mounts (BID_WORKSPACE_ROOT), so the agent and the
+      # backend operate on the same section files via the shared volume.
+      BID_WORKSPACE_ROOT: /data/bid-workspaces
+    volumes:
+      - bid_workspaces:/data/bid-workspaces
+    networks:
+      - wegent-network
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8300/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mysql_data:
