@@ -7,11 +7,11 @@ import { draftSection } from './handler.mjs'
 
 test('returns section_chars from the written section file + passes model env to pi', async () => {
   const ws = mkdtempSync(join(tmpdir(), 'ws-'))
-  mkdirSync(join(ws, 'sections'), { recursive: true })
+  mkdirSync(join(ws, 'workspace', 'sections'), { recursive: true })
   let capturedEnv
   const fakeRunPi = async ({ env }) => {
     capturedEnv = env
-    writeFileSync(join(ws, 'sections', 's1.md'), '正文内容三十字'.repeat(3))
+    writeFileSync(join(ws, 'workspace', 'sections', 's1.md'), '正文内容三十字'.repeat(3))
     return { status: 'agent', logText: '', toolCalls: { read: 2, total: 2 } }
   }
   const res = await draftSection(

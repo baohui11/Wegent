@@ -23,3 +23,15 @@ test('kills the process and returns timeout when it overruns', async () => {
   })
   assert.equal(r.status, 'timeout')
 })
+
+test('closes stdin so a stdin-blocking child (like pi) finishes instead of hanging', async () => {
+  // fake-pi 'waitstdin' only exits on stdin EOF. If spawn left stdin as an open
+  // pipe it would hang and this test would time out; with stdin 'ignore' it EOFs
+  // immediately, emits a tool call, and exits agent. Locks the Phase-1 spike fix.
+  const r = await runPi({
+    piCmd: ['node', FAKE, 'waitstdin'], cwd: process.cwd(), promptFile: '/dev/null',
+    env: {}, timeoutMs: 3000, toolNames: TOOLS,
+  })
+  assert.equal(r.status, 'agent')
+  assert.equal(r.toolCalls.read, 1)
+})

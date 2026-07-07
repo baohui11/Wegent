@@ -35,7 +35,9 @@ export async function draftSection(body, deps) {
     piCmd: piCmd(piBin, promptFile, m.id, body.tools, bridgePath),
     cwd: ws, env, timeoutMs: (body.timeout_s || 420) * 1000, toolNames: body.tools,
   })
-  const secPath = join(ws, 'sections', `${body.section_id}.md`)
+  // The drafting prompt writes to workspace/sections/<id>.md (matching the
+  // validated bake-off layout + BidWorkspace), NOT <ws>/sections/.
+  const secPath = join(ws, 'workspace', 'sections', `${body.section_id}.md`)
   const section_chars = existsSync(secPath) ? readFileSync(secPath, 'utf8').length : 0
   return { status: r.status, section_chars, tool_calls: r.toolCalls, log_ref: null }
 }

@@ -7,4 +7,13 @@ if (mode === 'emit') {
   process.exit(0)
 } else if (mode === 'hang') {
   setTimeout(() => process.exit(0), 60000) // longer than the test timeout
+} else if (mode === 'waitstdin') {
+  // Only finishes once stdin reaches EOF. If the parent leaves stdin as an open
+  // pipe (spawn default), this hangs — mirroring pi's real hang. With stdin
+  // closed ('ignore' -> /dev/null), EOF is immediate and it emits + exits.
+  process.stdin.resume()
+  process.stdin.on('end', () => {
+    process.stdout.write('{"type":"tool_execution_start","toolName":"read"}\n')
+    process.exit(0)
+  })
 }
