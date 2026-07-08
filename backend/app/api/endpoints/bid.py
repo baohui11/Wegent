@@ -33,6 +33,7 @@ from app.schemas.bid import (
     NodeBriefsPayload,
     OutlineResponse,
     OutlineSaveRequest,
+    OutlineStage3Response,
     PackageRequest,
     ParseStageResponse,
     ParseTriggerRequest,
@@ -73,6 +74,12 @@ from app.services.bid.outline_service import (
     read_outline,
     write_bid_config,
     write_outline,
+)
+from app.services.bid.outline_stage3_service import (
+    differs_from_stage1,
+    ensure_stage3_outline,
+    read_stage3_outline,
+    write_stage3_outline,
 )
 from app.services.bid.parse_pipeline import (
     BidPipelineError,
@@ -356,6 +363,45 @@ def save_outline(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return OutlineResponse(outline=read_outline(ws), coverage=_coverage(ws))
+
+
+@router.get(
+    "/projects/{project_id}/outline/stage3", response_model=OutlineStage3Response
+)
+def get_outline_stage3(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        outline = read_stage3_outline(ws)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="outline not built yet")
+    return OutlineStage3Response(
+        outline=outline, differs_from_stage1=differs_from_stage1(ws)
+    )
+
+
+@router.put(
+    "/projects/{project_id}/outline/stage3", response_model=OutlineStage3Response
+)
+def save_outline_stage3(
+    project_id: int,
+    body: OutlineSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    try:
+        write_stage3_outline(ws, body.outline)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return OutlineStage3Response(
+        outline=read_stage3_outline(ws), differs_from_stage1=differs_from_stage1(ws)
+    )
 
 
 @router.get("/projects/{project_id}/grounding", response_model=GroundingResponse)

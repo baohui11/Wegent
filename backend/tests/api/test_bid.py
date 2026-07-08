@@ -839,3 +839,48 @@ def test_ingest_endpoint_reingests_all(tmp_path, monkeypatch):
     )
     out = bid_ep.materials_store.ingest_all(ws)
     assert out == {"a.txt": "ok"}
+
+
+def test_outline_stage3_read_edit_and_differs(
+    test_client, test_token, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "S3"}, headers=h).json()[
+        "id"
+    ]
+    ws_ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()[
+        "workspace_ref"
+    ]
+    ws = BidWorkspace(ws_ref)
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "a", "title": "第一章", "covers": []}], "volumes": []},
+    )
+    # The stage-1 GET /outline at the end computes coverage, which needs tender.
+    ws.write_json(
+        "workspace/tender.json",
+        {"scoring": [], "mandatory_clauses": []},
+    )
+
+    # GET lazily copies stage1 -> stage3; fresh copy does not differ.
+    r = test_client.get(f"/api/bid/projects/{pid}/outline/stage3", headers=h)
+    assert r.status_code == 200
+    assert r.json()["outline"]["sections"][0]["id"] == "a"
+    assert r.json()["differs_from_stage1"] is False
+
+    # PUT an edited stage3 -> differs; stage1 untouched.
+    edited = {
+        "sections": [{"id": "a", "title": "改过的第一章", "covers": []}],
+        "volumes": [],
+    }
+    r2 = test_client.put(
+        f"/api/bid/projects/{pid}/outline/stage3", json={"outline": edited}, headers=h
+    )
+    assert r2.status_code == 200 and r2.json()["differs_from_stage1"] is True
+    assert (
+        test_client.get(f"/api/bid/projects/{pid}/outline", headers=h).json()[
+            "outline"
+        ]["sections"][0]["title"]
+        == "第一章"
+    )

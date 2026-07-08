@@ -66,6 +66,11 @@ class OutlineSaveRequest(BaseModel):
     outline: dict
 
 
+class OutlineStage3Response(BaseModel):
+    outline: dict
+    differs_from_stage1: bool
+
+
 class PackageRequest(BaseModel):
     package: str
 
