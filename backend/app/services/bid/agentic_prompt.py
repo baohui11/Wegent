@@ -7,6 +7,7 @@ the validated bake-off build_c_prompt; the only variable knob is explore_budget.
 import json
 from pathlib import Path
 
+from app.services.bid import heading_align
 from app.services.bid.coverage import resolve_section_grounding
 
 _GW = (Path(__file__).parent / "vendor" / "prompts" / "bid_ghostwriter.md").read_text(
@@ -47,6 +48,15 @@ def build_agentic_prompt(
         "must_keep（原样写入正文句子）："
         + json.dumps(node.get("must_keep") or [], ensure_ascii=False),
     ]
+    leaves = heading_align.leaf_titles(node)
+    if leaves:
+        parts.append(
+            "\n## 小节结构（必须遵守）\n"
+            "本章大纲小节标题清单：\n"
+            + json.dumps(leaves, ensure_ascii=False)
+            + "\n正文必须为每个小节输出一个 `##` 二级标题，标题文本逐字使用清单文本、"
+            "保持顺序，每小节一个 `##`；其下撰写正文（可加更细的 `###`）。"
+        )
     if brief:
         parts.append(
             "\n## 编写要求 writing_brief：\n"

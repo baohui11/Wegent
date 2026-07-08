@@ -48,3 +48,14 @@ def test_prompt_threads_default_explore_budget():
     node = {"id": "s1", "title": "T"}
     p = build_agentic_prompt(node, _TENDER)  # default explore_budget=30
     assert "≤~30" in p
+
+
+def test_agentic_prompt_lists_leaf_headings():
+    node = {
+        "id": "s1",
+        "title": "第一章",
+        "children": [{"title": "小节甲"}, {"title": "小节乙"}],
+    }
+    p = build_agentic_prompt(node, {"scoring": [], "mandatory_clauses": []})
+    assert "小节甲" in p and "小节乙" in p
+    assert "##" in p
