@@ -51,8 +51,9 @@ interface BidDocumentEditorProps {
   sectionNames: Record<string, string>
   onSaved: (sectionId: string, version: string) => void
   onActiveSectionChange?: (sectionId: string | null) => void
-  /** Block-scoped AI regen (🅑) — wired to the bubble menu's ↻. */
-  onRegenerateBlock?: () => void
+  /** Block-scoped AI regen (🅑) — wired to the bubble menu's ↻, carrying the
+   * instruction gathered from its popover (③). */
+  onRegenerateBlock?: (instruction?: string) => void
   /** Unfilled placeholder count (🅓), reported on load and on every edit. */
   onPlaceholderCountChange?: (count: number) => void
   /** Mounted and ready — parent gets the editor + per-section flush. */

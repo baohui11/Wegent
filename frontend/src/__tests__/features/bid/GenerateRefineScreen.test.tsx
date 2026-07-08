@@ -204,8 +204,10 @@ test('regenerate-this-block maps a section-local block to a body-relative line r
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   await screen.findByTestId('bid-document-editor')
   // The editor is always editable now (no mode toggle); the block-level regen
-  // lives on the selection bubble (🅑 scope split), not the section right panel.
+  // lives on the selection bubble (🅑). Clicking ↻ opens an instruction popover
+  // (③) — it regenerates only on submit, here with an empty (undefined) box.
   fireEvent.click(await screen.findByTestId('bid-bubble-regen'))
+  fireEvent.click(await screen.findByTestId('bid-bubble-regen-submit'))
   // The line range is the contract: section-local block index 1 maps to lines
   // 3..3 of the title-less body. base_version is the focused section's version.
   await waitFor(() =>

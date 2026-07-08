@@ -58,11 +58,26 @@ test('bubble menu renders nothing without an editor', () => {
   expect(container).toBeEmptyDOMElement()
 })
 
-test('shows a block-regen ↻ that calls onRegenerateBlock (🅑 scope split)', () => {
+test('↻ opens an instruction box; submit regenerates with the instruction (③)', () => {
+  const onRegen = jest.fn()
+  render(<SectionBubbleMenu editor={makeEditor([])} onRegenerateBlock={onRegen} />)
+  // Clicking ↻ must NOT rewrite immediately — it opens the instruction box.
+  fireEvent.click(screen.getByTestId('bid-bubble-regen'))
+  expect(onRegen).not.toHaveBeenCalled()
+  const box = screen.getByTestId('bid-bubble-regen-instruction')
+  fireEvent.change(box, { target: { value: '更凝练' } })
+  fireEvent.click(screen.getByTestId('bid-bubble-regen-submit'))
+  expect(onRegen).toHaveBeenCalledWith('更凝练')
+})
+
+test('↻ chips prefill the instruction; empty submit sends undefined', () => {
   const onRegen = jest.fn()
   render(<SectionBubbleMenu editor={makeEditor([])} onRegenerateBlock={onRegen} />)
   fireEvent.click(screen.getByTestId('bid-bubble-regen'))
-  expect(onRegen).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByTestId('bid-bubble-regen-chip-0'))
+  fireEvent.click(screen.getByTestId('bid-bubble-regen-submit'))
+  // A chip prefills a non-empty instruction (the mocked t returns the key).
+  expect(onRegen).toHaveBeenCalledWith(expect.any(String))
 })
 
 test('hides the block-regen ↻ when no handler is given', () => {

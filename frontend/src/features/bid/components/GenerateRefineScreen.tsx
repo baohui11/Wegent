@@ -193,30 +193,36 @@ export function GenerateRefineScreen({
   // range RELATIVE TO THE SECTION BODY (title-less — spike §5/§6), then call
   // redraft-range with the (post-flush) version. Line numbers are stable only
   // against the just-saved bytes, so flush-then-map ordering matters.
-  const regenBlock = useCallback(async () => {
-    const sid = activeId ?? focusId
-    if (!sid) return
-    const editor = editorApiRef.current?.editor ?? null
-    const baseVersion = await flushActive()
-    beginProposal(sid, instruction, true) // block regen is reviewable too (🅒)
-    // Serialize the section's body (title-less) — the exact bytes the backend
-    // now stores — and map the cursor block (section-local index) to its line
-    // range within that body.
-    const sectionNode = editor ? findSectionNode(editor, sid) : null
-    const md = sectionNode && editor ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
-    const idx = topBlockIndexOf(editor, sid)
-    const { startLine, endLine } = blockLineRange(md, idx)
-    loadedRef.current.delete(sid) // force re-fetch after the range redrafts
-    await bidApis.redraftRange(
-      projectId,
-      sid,
-      startLine,
-      endLine,
-      instruction || undefined,
-      baseVersion
-    )
-    setInstruction('')
-  }, [activeId, focusId, contents, instruction, projectId, flushActive, beginProposal])
+  // The block instruction comes from the selection bubble's ↻ popover (③),
+  // NOT the section-level right-panel textarea — block and section AI are
+  // separate scopes.
+  const regenBlock = useCallback(
+    async (instr?: string) => {
+      const sid = activeId ?? focusId
+      if (!sid) return
+      const editor = editorApiRef.current?.editor ?? null
+      const baseVersion = await flushActive()
+      beginProposal(sid, instr, true) // block regen is reviewable too (🅒)
+      // Serialize the section's body (title-less) — the exact bytes the backend
+      // now stores — and map the cursor block (section-local index) to its line
+      // range within that body.
+      const sectionNode = editor ? findSectionNode(editor, sid) : null
+      const md =
+        sectionNode && editor ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
+      const idx = topBlockIndexOf(editor, sid)
+      const { startLine, endLine } = blockLineRange(md, idx)
+      loadedRef.current.delete(sid) // force re-fetch after the range redrafts
+      await bidApis.redraftRange(
+        projectId,
+        sid,
+        startLine,
+        endLine,
+        instr || undefined,
+        baseVersion
+      )
+    },
+    [activeId, focusId, contents, projectId, flushActive, beginProposal]
+  )
 
   // 🅒 review lifecycle. Accept keeps the regenerated content (already on disk).
   const acceptProposal = useCallback((id: string) => {
@@ -253,7 +259,7 @@ export function GenerateRefineScreen({
     (id: string) => {
       const p = proposals[id]
       if (!p) return
-      if (p.isBlock) void regenBlock()
+      if (p.isBlock) void regenBlock(p.instruction)
       else void redraft(id, p.instruction)
     },
     [proposals, redraft, regenBlock]
@@ -414,7 +420,7 @@ export function GenerateRefineScreen({
               sectionNames={Object.fromEntries(nameOf)}
               onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
               onActiveSectionChange={setActiveId}
-              onRegenerateBlock={() => void regenBlock()}
+              onRegenerateBlock={instr => void regenBlock(instr)}
               onPlaceholderCountChange={n => {
                 setPlaceholderCount(n)
                 onPlaceholderCountChange?.(n)

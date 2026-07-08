@@ -375,7 +375,12 @@
       "code": "Inline code",
       "bullet": "Bulleted list",
       "ordered": "Numbered list",
-      "regen": "Rewrite this paragraph"
+      "regen": "Rewrite this paragraph",
+      "regen_prompt": "Rewrite instruction, e.g. more concise, add data…",
+      "regen_submit": "Rewrite",
+      "regen_chip_concise": "More concise",
+      "regen_chip_tone": "Change tone",
+      "regen_chip_expand": "Expand"
     },
     "proposal": {
       "title": "AI revision",

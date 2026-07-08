@@ -375,7 +375,12 @@
       "code": "行内代码",
       "bullet": "无序列表",
       "ordered": "有序列表",
-      "regen": "重写此段"
+      "regen": "重写此段",
+      "regen_prompt": "输入重写要求，例如：更凝练、补充数据…",
+      "regen_submit": "重写",
+      "regen_chip_concise": "更凝练",
+      "regen_chip_tone": "改语气",
+      "regen_chip_expand": "扩写"
     },
     "proposal": {
       "title": "AI 新版本",
