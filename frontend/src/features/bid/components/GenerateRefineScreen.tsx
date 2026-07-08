@@ -278,8 +278,14 @@ export function GenerateRefineScreen({
     (status.sections[n.id] ??
       status.sections[rootChapterId(flat, n.id)] ??
       'pending') as BidSectionStatus
-  const scrollTo = (id: string) =>
-    docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  const scrollTo = (id: string) => {
+    // Done sections live inside the single document editor and expose a
+    // [data-bid-section] anchor (BidSectionNodeView); non-done sections still
+    // render beside it with a docRefs anchor. Prefer the DOM anchor, fall back.
+    const anchor =
+      document.querySelector<HTMLElement>(`[data-bid-section="${id}"]`) ?? docRefs.current[id]
+    anchor?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
   const focus = (id: string) => {
     void flushActive() // persist any in-flight edit before switching focus
     setFocusId(id)

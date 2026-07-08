@@ -339,6 +339,12 @@
   font-size: 14.5px;
 }
 
+/* Section anchor for TOC click-to-scroll: offset so the scrolled-to section
+   clears the sticky stepper/header instead of hiding under it (PR-A ①). */
+.bid-section-chrome {
+  scroll-margin-top: 80px;
+}
+
 .bid-prose p {
   margin-bottom: 0.75em;
   line-height: 2;
