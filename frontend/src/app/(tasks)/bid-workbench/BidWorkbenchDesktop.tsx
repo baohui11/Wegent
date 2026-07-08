@@ -85,7 +85,6 @@ export function BidWorkbenchDesktop() {
     reset,
     enterMaterials,
     completeMaterials,
-    startDrafting,
     completeReview,
     finalizeBid,
     goStage,
@@ -215,27 +214,18 @@ export function BidWorkbenchDesktop() {
         {t('phase2.header_action')}
       </HeaderButton>
     ) : phase === 'drafting' ? (
-      // Merged generate-refine screen: only the terminal "done" state exposes
-      // header actions (regenerate / proceed to check). There is no separate
-      // review phase — refinements happen in place on the same screen.
-      <>
-        {draftState === 'done' && (
-          <HeaderGhostButton
-            onClick={() => void startDrafting()}
-            testid="bid-drafting-restart-button"
-          >
-            {t('drafting.restart')}
-          </HeaderGhostButton>
-        )}
-        {draftState === 'done' && (
-          <HeaderButton
-            onClick={() => (placeholderCount > 0 ? setConfirmProceed(true) : completeReview())}
-            testid="review-next-button"
-          >
-            {t('review.header_action')}
-          </HeaderButton>
-        )}
-      </>
+      // Merged generate-refine screen: only the terminal "done" state exposes a
+      // single header action — proceed to check. Refinements happen in place on
+      // the same screen; there is no full-document restart (removed — it
+      // conflicted with proceed and let users wipe the whole draft).
+      draftState === 'done' ? (
+        <HeaderButton
+          onClick={() => (placeholderCount > 0 ? setConfirmProceed(true) : completeReview())}
+          testid="review-next-button"
+        >
+          {t('review.header_action')}
+        </HeaderButton>
+      ) : undefined
     ) : undefined
 
   return (
@@ -352,28 +342,6 @@ function HeaderButton({
       data-testid={testid}
       className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold text-white"
       style={{ background: 'var(--bid-primary)' }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function HeaderGhostButton({
-  onClick,
-  testid,
-  children,
-}: {
-  onClick: () => void
-  testid: string
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testid}
-      className="whitespace-nowrap rounded-lg px-4 py-2 text-xs font-bold"
-      style={{ border: '1px solid var(--bid-border-2)', color: 'var(--bid-sub)' }}
     >
       {children}
     </button>

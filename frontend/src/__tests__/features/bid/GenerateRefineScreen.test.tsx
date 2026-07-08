@@ -66,6 +66,25 @@ test('the document editor is always editable (no read/edit toggle)', async () =>
   expect(screen.queryByTestId('bid-mode-toggle')).not.toBeInTheDocument()
 })
 
+test('right rail order: status → AI → confirm → progress; presets are chips', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  const accept = await screen.findByTestId('bid-review-accept-button')
+  // The focused-section status chip sits at the top of the rail (renders once
+  // the first done section becomes the focus).
+  await screen.findByTestId('bid-focus-status')
+  const progress = screen.getByTestId('bid-draft-progress')
+  // Progress moved to the bottom of the rail: it follows the accept action.
+  expect(accept.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  // Presets are now quick-fill chips that prefill the instruction box.
+  expect(screen.getByTestId('bid-preset-chip-improve')).toBeInTheDocument()
+})
+
 test('right-panel actions are disabled until the focused section is done', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 2,
@@ -185,8 +204,10 @@ test('regenerate-this-block maps a section-local block to a body-relative line r
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   await screen.findByTestId('bid-document-editor')
   // The editor is always editable now (no mode toggle); the block-level regen
-  // lives on the selection bubble (🅑 scope split), not the section right panel.
+  // lives on the selection bubble (🅑). Clicking ↻ opens an instruction popover
+  // (③) — it regenerates only on submit, here with an empty (undefined) box.
   fireEvent.click(await screen.findByTestId('bid-bubble-regen'))
+  fireEvent.click(await screen.findByTestId('bid-bubble-regen-submit'))
   // The line range is the contract: section-local block index 1 maps to lines
   // 3..3 of the title-less body. base_version is the focused section's version.
   await waitFor(() =>

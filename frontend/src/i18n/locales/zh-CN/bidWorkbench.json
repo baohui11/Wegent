@@ -375,7 +375,12 @@
       "code": "行内代码",
       "bullet": "无序列表",
       "ordered": "有序列表",
-      "regen": "重写此段"
+      "regen": "重写此段",
+      "regen_prompt": "输入重写要求，例如：更凝练、补充数据…",
+      "regen_submit": "重写",
+      "regen_chip_concise": "更凝练",
+      "regen_chip_tone": "改语气",
+      "regen_chip_expand": "扩写"
     },
     "proposal": {
       "title": "AI 新版本",
@@ -400,7 +405,6 @@
     "status_needs_rework": "待返工",
     "drafting_now": "标书枪手正在起草本节…",
     "progress_title": "目录 · 生成进度",
-    "restart": "↻ 重新生成",
     "stop": "⏸ 停止",
     "resume": "▶ 继续",
     "restart_over": "↻ 重新开始"
@@ -415,6 +419,7 @@
     "status_drafting": "起草中",
     "status_done": "已完成",
     "status_error": "失败",
+    "status_needs_rework": "待返工",
     "section_error": "本节生成失败——可在审阅阶段重写。"
   },
   "phase5": {
