@@ -74,3 +74,22 @@ def test_rework_instruction_and_issue_roundtrip(tmp_path):
     assert "800" in instr and "承诺X" in instr
     post_gate.record_issues(ws, "s1", ["字数不足"])
     assert post_gate.read_issues(ws)["s1"] == ["字数不足"]
+
+
+def test_check_section_flags_missing_leaf_heading(tmp_path):
+    from app.services.bid import drafting_service as ds
+    from app.services.bid import post_gate
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("pg-leaf", root=tmp_path)
+    node = {
+        "id": "s1",
+        "title": "第一章",
+        "children": [{"title": "小节甲"}, {"title": "小节乙"}],
+    }
+    # Body has 甲 but not 乙.
+    ds.write_section(ws, "s1", "## 小节甲\n正文足够长。")
+    res = post_gate.check_section(ws, "s1", node, brief=None)
+    assert res["ok"] is False
+    assert any("小节乙" in i for i in res["issues"])
+    assert not any("小节甲" in i for i in res["issues"])

@@ -7,6 +7,7 @@ needs_rework status for manual review. No semantic 'coverage' guessing here."""
 
 import re
 
+from app.services.bid import heading_align
 from app.services.bid.workspace import BidWorkspace
 
 _GATE_ISSUES = "workspace/_gate_issues.json"
@@ -55,6 +56,12 @@ def check_section(
     # 3. Figure required but no ```figure spec block present.
     if brief.get("needFigure") == "是" and _FIGURE_MARKER not in text:
         issues.append("本节要求配图，但正文无 ```figure 规格块")
+
+    # 4. Every outline leaf must appear as a body heading (stage-3 alignment).
+    #    Drives the one auto-retry; the deterministic backstop in draft_pipeline
+    #    then appends a placeholder heading for any the ghostwriter still omits.
+    for title in heading_align.missing_leaf_headings(node, text):
+        issues.append(f"缺少小节标题（大纲叶子）：{title}")
 
     return {"ok": not issues, "issues": issues}
 
