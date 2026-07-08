@@ -669,6 +669,10 @@ async def start_draft(
     ws = BidWorkspace(project.workspace_ref)
     if not ws.path("workspace/outline.json").exists():
         raise HTTPException(status_code=409, detail="outline not built yet")
+    # Full re-draft overwrites the body (and any hand edits); reset the stage-3
+    # outline back to the stage-1/2 outline so the two match at draft time. The
+    # overwrite warning is surfaced by the frontend before this is reached.
+    write_stage3_outline(ws, read_outline(ws))
     if not BidProjectService.begin_draft(
         db, project_id=project.id, user_id=current_user.id
     ):

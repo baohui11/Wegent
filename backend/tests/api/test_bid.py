@@ -884,3 +884,37 @@ def test_outline_stage3_read_edit_and_differs(
         ]["sections"][0]["title"]
         == "第一章"
     )
+
+
+def test_draft_resets_stage3_to_stage1(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "R"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    ws = BidWorkspace(ref, root=tmp_path)
+    ws.write_json(
+        "workspace/outline.json",
+        {"sections": [{"id": "s1", "title": "第一章", "covers": []}], "volumes": []},
+    )
+    # A diverged stage3 (as if the user edited it in stage 3).
+    ws.write_json(
+        "workspace/outline_stage3.json",
+        {"sections": [{"id": "s1", "title": "被改过", "covers": []}], "volumes": []},
+    )
+
+    with (
+        patch("app.api.endpoints.bid.launch_drafting"),
+        patch(
+            "app.api.endpoints.bid.resolve_project_model",
+            return_value=("m", {"api_key": "k"}),
+        ),
+    ):
+        r = test_client.post(f"/api/bid/projects/{pid}/draft", headers=h)
+    assert r.status_code == 200
+    # Full re-draft overwrote stage3 back to stage1.
+    assert (
+        ws.read_json("workspace/outline_stage3.json")["sections"][0]["title"]
+        == "第一章"
+    )
