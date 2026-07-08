@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.services.bid.outline_stage3_service import ensure_stage3_outline
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.tender_normalize import ensure_normalized_tender
 from app.services.bid.workspace import BidWorkspace
@@ -30,14 +31,14 @@ _TASKS = "workspace/_fidelity_tasks.json"
 _VERDICTS = "workspace/_fidelity_verdicts.json"
 
 
-def _audit_args(verdicts: bool, tender_path: str) -> list[str]:
+def _audit_args(verdicts: bool, tender_path: str, outline_path: str) -> list[str]:
     args = [
         sys.executable,
         str(_SCRIPT),
         "--tender",
         tender_path,
         "--outline",
-        "workspace/outline.json",
+        outline_path,
         "--sections",
         "workspace/sections",
         "--pricing",
@@ -76,8 +77,9 @@ def _run(ws: BidWorkspace, *, verdicts: bool) -> dict:
     if not ws.path(_KB).exists():
         ws.write_json(_KB, {"bidder_knowledge_base": {}})
     tender_path = ensure_normalized_tender(ws)
+    outline_path = ensure_stage3_outline(ws)
     proc = subprocess.run(
-        _audit_args(verdicts, tender_path),
+        _audit_args(verdicts, tender_path, outline_path),
         cwd=str(ws.dir()),
         capture_output=True,
         text=True,
