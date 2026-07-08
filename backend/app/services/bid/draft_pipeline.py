@@ -14,6 +14,7 @@ from app.services.bid import agentic_draft_client
 from app.services.bid import drafting_service as ds
 from app.services.bid import materials_service, post_gate, section_retrieval
 from app.services.bid.agentic_prompt import build_agentic_prompt
+from app.services.bid.outline_stage3_service import read_stage3_outline
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.project_service import BidProjectService
 from app.services.bid.specialists import call_ghostwriter, rewrite_excerpt
@@ -284,7 +285,7 @@ async def redraft_one(
 ) -> None:
     ds.set_section_status(ws, section_id, "drafting")
     try:
-        outline = ws.read_json("workspace/outline.json")
+        outline = read_stage3_outline(ws)
         tender = ws.read_json(ensure_normalized_tender(ws))
         try:
             kb = ws.read_json("corpus/bidder_knowledge_base.json")

@@ -774,11 +774,10 @@ async def redraft_section(
     # async: launch_redraft uses asyncio.create_task (needs a running loop).
     project = _require(db, current_user, project_id)
     ws = BidWorkspace(project.workspace_ref)
-    outline = (
-        ws.read_json("workspace/outline.json")
-        if ws.path("workspace/outline.json").exists()
-        else {}
-    )
+    try:
+        outline = read_stage3_outline(ws)
+    except FileNotFoundError:
+        outline = {}
     if find_section(outline, section_id) is None:
         raise HTTPException(status_code=404, detail="section not in outline")
     drafting.set_section_status(ws, section_id, "drafting")
