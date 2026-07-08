@@ -447,11 +447,13 @@
 }
 
 /* ==========================================================================
-   Bid Workbench — block drag/add handle (DragHandle child, inside .bid-prose).
-   Small, muted ⠿ / + affordance. The real DragHandle positions this element
-   beside the hovered block; we just keep it subtle per the calm-UI aesthetic.
+   Bid Workbench — block handle + insert menu (DragHandle child, subproject 🅐).
+   ⠿ grip drags the hovered block; + opens the Notion-style block-insert
+   dropdown. The real DragHandle positions this element beside the hovered
+   block; align-items:center vertically centers the grip/+ to the block row.
    ========================================================================== */
-.bid-prose .bid-drag-handle-inner {
+.bid-prose .bid-block-insert {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -459,19 +461,147 @@
   font-size: 14px;
   line-height: 1;
   user-select: none;
+  /* The drag handle is positioned at the block's top-left (left-start). Give the
+     control the height of one body line box and center its content so the ⠿/+
+     line up with the block's FIRST line, not its top edge. translateX replaces a
+     @floating-ui offset() middleware (fixed 8px gap from the block) with pure CSS
+     — no extra dependency. */
+  height: 29px; /* body font-size (~14.5px) × line-height 2 */
+  transform: translateX(-8px);
 }
 
-.bid-prose .bid-drag-handle-inner button {
+/* Headings have a taller line box; let the handle sit at its natural height and
+   nudge it down a touch so it aligns with the heading's first line. */
+.bid-prose .bid-block-insert[data-node-type='heading'] {
+  height: auto;
+  padding-top: 2px;
+}
+
+.bid-prose .bid-block-insert > button {
   background: transparent;
   border: none;
   color: var(--bid-muted-2);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
-  padding: 0 2px;
-  transition: color 0.12s ease;
+  padding: 2px 3px;
+  border-radius: 4px;
+  transition:
+    color 0.12s ease,
+    background-color 0.12s ease;
 }
 
-.bid-prose .bid-drag-handle-inner button:hover {
+/* Hover affordance on the + and ⠿ controls (a soft fill + accent color). */
+.bid-prose .bid-block-insert > button:hover {
   color: var(--bid-primary);
+  background: var(--bid-primary-soft);
+}
+
+.bid-prose .bid-block-insert-grip {
+  cursor: grab;
+}
+
+/* Block-actions menu: type header + a danger (delete) item set apart. */
+.bid-prose .bid-block-menu-header {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  color: var(--bid-muted-2);
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.bid-prose .bid-block-insert-item-danger {
+  color: var(--bid-primary);
+  margin-top: 2px;
+  border-top: 1px solid var(--bid-border);
+  padding-top: 8px;
+}
+
+.bid-prose .bid-block-insert-item-danger .bid-block-insert-item-icon {
+  color: var(--bid-primary);
+}
+
+/* Dropdown: icon + label + right-aligned markdown hint, one system with the
+   calm UI (soft crimson hover, subtle shadow). */
+.bid-prose .bid-block-insert-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  /* Above the selection bubble (30) and handle (default); see the z-layer note. */
+  z-index: 40;
+  margin-top: 4px;
+  min-width: 184px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--bid-border-2);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+/* Flip the menu above the trigger when there isn't room below (the document
+   column scrolls, so a downward menu near the bottom would be clipped). */
+.bid-prose .bid-block-insert-menu-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.bid-prose .bid-block-insert-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--bid-ink-2);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.bid-prose .bid-block-insert-item:hover {
+  background: var(--bid-primary-soft);
+}
+
+.bid-prose .bid-block-insert-item-icon {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--bid-muted-2);
+}
+
+.bid-prose .bid-block-insert-item-label {
+  flex: 1;
+}
+
+.bid-prose .bid-block-insert-item-hint {
+  flex-shrink: 0;
+  color: var(--bid-muted-2);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+}
+
+/* ==========================================================================
+   Bid Workbench — placeholder chips (🅓). Inline atomic tokens for the unfilled
+   {{…}} / [待填…] markers; a soft warm pill signals "needs filling" without
+   shouting, per the calm UI.
+   ========================================================================== */
+.bid-prose .bid-placeholder-chip {
+  display: inline;
+  padding: 0 6px;
+  margin: 0 1px;
+  border-radius: 4px;
+  background: var(--bid-paper);
+  border: 1px solid var(--bid-warn);
+  color: var(--bid-warn);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 0.85em;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
 }

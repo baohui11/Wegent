@@ -40,35 +40,11 @@ test('mounts a single-document editor surface', () => {
       projectId={1}
       sections={mkSections()}
       sectionNames={{ s1: '一、方案', s2: '二、保障' }}
-      mode="edit"
       onSaved={jest.fn()}
     />
   )
   expect(screen.getByTestId('bid-document-editor')).toBeInTheDocument()
   expect(__lastEditorConfig.current?.editable).toBe(true)
-})
-
-test('edit mode flips editable; read mode is non-editable', () => {
-  const { rerender } = render(
-    <BidDocumentEditor
-      projectId={1}
-      sections={mkSections()}
-      sectionNames={{ s1: '一、方案', s2: '二、保障' }}
-      mode="read"
-      onSaved={jest.fn()}
-    />
-  )
-  expect(__lastEditorConfig.current?.editable).toBe(false)
-  rerender(
-    <BidDocumentEditor
-      projectId={1}
-      sections={mkSections()}
-      sectionNames={{ s1: '一、方案', s2: '二、保障' }}
-      mode="edit"
-      onSaved={jest.fn()}
-    />
-  )
-  expect(__mockEditor.setEditable).toHaveBeenCalledWith(true)
 })
 
 test('flushSection persists a section via the per-section CAS save', async () => {
@@ -82,7 +58,6 @@ test('flushSection persists a section via the per-section CAS save', async () =>
       projectId={1}
       sections={mkSections()}
       sectionNames={{ s1: '一、方案', s2: '二、保障' }}
-      mode="edit"
       onSaved={onSaved}
       onReady={a => {
         api = a
@@ -106,6 +81,62 @@ test('flushSection persists a section via the per-section CAS save', async () =>
   jest.useRealTimers()
 })
 
+test('shows the block handle + block-insert menu (no legacy toolbar)', () => {
+  render(
+    <BidDocumentEditor
+      projectId={1}
+      sections={mkSections()}
+      sectionNames={{ s1: '一、方案', s2: '二、保障' }}
+      onSaved={jest.fn()}
+    />
+  )
+  // The old Table/Divider toolbar is gone (subproject 🅐 replaced it).
+  expect(screen.queryByTestId('bid-editor-toolbar')).not.toBeInTheDocument()
+  // The block handle now hosts the `+` insert trigger.
+  expect(screen.getByTestId('bid-drag-handle-inner')).toBeInTheDocument()
+  expect(screen.getByTestId('bid-block-insert-trigger')).toBeInTheDocument()
+})
+
+test('reports the unfilled placeholder count from the document (🅓)', () => {
+  __mockEditor.state.doc.descendants = (cb: (n: unknown) => void) => {
+    cb({ type: { name: 'bidPlaceholder' } })
+    cb({ type: { name: 'paragraph' } })
+    cb({ type: { name: 'bidPlaceholder' } })
+  }
+  const onCount = jest.fn()
+  render(
+    <BidDocumentEditor
+      projectId={1}
+      sections={mkSections()}
+      sectionNames={{ s1: '一、方案', s2: '二、保障' }}
+      onSaved={jest.fn()}
+      onPlaceholderCountChange={onCount}
+    />
+  )
+  expect(onCount).toHaveBeenCalledWith(2)
+  delete (__mockEditor.state.doc as { descendants?: unknown }).descendants
+})
+
+test('always renders editing affordances without a mode toggle', () => {
+  // PR-C drops the read/edit mode: the editor is always editable, so the
+  // selection bubble, drag handle, block-insert trigger, and table controls
+  // are always mounted — with no `bid-mode-toggle` to flip first.
+  render(
+    <BidDocumentEditor
+      projectId={1}
+      sections={mkSections()}
+      sectionNames={{ s1: '一、方案', s2: '二、保障' }}
+      onSaved={jest.fn()}
+    />
+  )
+  expect(screen.queryByTestId('bid-mode-toggle')).toBeNull()
+  expect(screen.getByTestId('bid-bubble-toolbar')).toBeInTheDocument()
+  expect(screen.getByTestId('bid-drag-handle-inner')).toBeInTheDocument()
+  expect(screen.getByTestId('bid-block-insert-trigger')).toBeInTheDocument()
+  // The editor itself is editable from the first render.
+  expect(__lastEditorConfig.current?.editable).toBe(true)
+})
+
 test('exposes its editor + per-section flush to the parent via onReady', () => {
   const onReady = jest.fn()
   render(
@@ -113,7 +144,6 @@ test('exposes its editor + per-section flush to the parent via onReady', () => {
       projectId={1}
       sections={mkSections()}
       sectionNames={{ s1: '一、方案', s2: '二、保障' }}
-      mode="read"
       onSaved={jest.fn()}
       onReady={onReady}
     />

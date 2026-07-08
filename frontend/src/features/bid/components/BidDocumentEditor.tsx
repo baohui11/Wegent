@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import { generateJSON } from '@tiptap/core'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { Table } from '@tiptap/extension-table'
@@ -11,10 +12,17 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import { Markdown } from 'tiptap-markdown'
+import DragHandle from '@tiptap/extension-drag-handle-react'
+import { useTranslation } from '@/hooks/useTranslation'
+import { BlockInsertMenu, type OpenMenu } from './BlockInsertMenu'
+import { TableHoverControls } from './TableHoverControls'
 import { useDocumentAutosave } from '../hooks/useDocumentAutosave'
 import { BidSection } from '../extensions/bidSection'
 import { BidDocument } from '../extensions/bidDocument'
-import { markdownToSectionContent } from '../canvas/serializeSection'
+import { BidPlaceholder } from '../extensions/bidPlaceholder'
+import { markdownToSectionContent, serializeSection } from '../canvas/serializeSection'
+import { attrSignature, contentSignature } from '../canvas/docSync'
+import { injectPlaceholders } from '../canvas/placeholders'
 import { SectionBubbleMenu } from './SectionBubbleMenu'
 
 export type BidSectionStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
@@ -41,9 +49,12 @@ interface BidDocumentEditorProps {
   sections: SectionSpec[]
   // sectionId -> outline title (rendered once by the NodeView as the heading).
   sectionNames: Record<string, string>
-  mode: 'read' | 'edit'
   onSaved: (sectionId: string, version: string) => void
   onActiveSectionChange?: (sectionId: string | null) => void
+  /** Block-scoped AI regen (🅑) — wired to the bubble menu's ↻. */
+  onRegenerateBlock?: () => void
+  /** Unfilled placeholder count (🅓), reported on load and on every edit. */
+  onPlaceholderCountChange?: (count: number) => void
   /** Mounted and ready — parent gets the editor + per-section flush. */
   onReady?: (api: BidDocumentEditorApi) => void
 }
@@ -91,7 +102,11 @@ export function htmlToBlockContent(html: string): unknown[] {
 function buildDocJson(
   editor: Editor,
   sections: SectionSpec[],
-  sectionNames: Record<string, string>
+  sectionNames: Record<string, string>,
+  // sectionId -> block JSON to use verbatim instead of parsing `content`. Set
+  // for sections that carry an unsaved user edit so an external re-sync keeps
+  // the edited body (its live block JSON) rather than reverting to the prop.
+  bodyOverrides: Record<string, unknown[]> = {}
 ): unknown {
   const parser = (
     editor.storage as {
@@ -99,10 +114,17 @@ function buildDocJson(
     }
   ).markdown?.parser
   const sectionNodes = sections.map(sec => {
-    const bodyMd = markdownToSectionContent(sec.content, sectionNames[sec.id] ?? sec.id)
-    // md -> HTML (tiptap-markdown parser) -> block JSON (generateJSON).
-    const html = parser ? parser.parse(bodyMd) : ''
-    const childContent = htmlToBlockContent(html)
+    const override = bodyOverrides[sec.id]
+    let childContent: unknown[]
+    if (override) {
+      childContent = override.length > 0 ? override : [{ type: 'paragraph' }]
+    } else {
+      const bodyMd = markdownToSectionContent(sec.content, sectionNames[sec.id] ?? sec.id)
+      // md -> HTML (tiptap-markdown parser) -> block JSON (generateJSON), then
+      // rewrite unfilled markers into atomic bidPlaceholder chips (🅓).
+      const html = parser ? parser.parse(bodyMd) : ''
+      childContent = injectPlaceholders(htmlToBlockContent(html))
+    }
     return {
       type: 'bidSection',
       attrs: {
@@ -117,26 +139,119 @@ function buildDocJson(
   return { type: 'doc', content: sectionNodes }
 }
 
+interface CurrentSection {
+  sid: string
+  node: ProseMirrorNode
+  // Live body differs from the last-seeded/saved snapshot → unsaved user edit.
+  dirty: boolean
+}
+
+// Walk the editor's current top-level bidSection nodes and flag which ones hold
+// an unsaved edit (body != snapshot). A section never seeded (snapshot
+// undefined) is treated as clean — it is about to be seeded from props.
+function collectCurrentSections(
+  editor: Editor,
+  getSnapshot: (sid: string) => string | undefined
+): CurrentSection[] {
+  const out: CurrentSection[] = []
+  editor.state.doc.forEach(n => {
+    const node = n as ProseMirrorNode
+    if (node.type?.name !== 'bidSection') return
+    const sid = String(node.attrs?.sectionId ?? '')
+    const snap = getSnapshot(sid)
+    out.push({ sid, node, dirty: snap !== undefined && serializeSection(editor, node) !== snap })
+  })
+  return out
+}
+
+interface CaretInfo {
+  sid: string
+  offset: number
+}
+
+// Record the caret as (owning section id + offset within that section) so it can
+// be restored after a full-document rebuild. Returns null when there is no real
+// selection API (e.g. the editor is mocked under Jest) — restoration is a
+// best-effort UX nicety, never a correctness requirement.
+function captureCaret(editor: Editor): CaretInfo | null {
+  try {
+    const $from = editor.state.selection?.$from
+    if (!$from || typeof $from.node !== 'function' || typeof $from.start !== 'function') return null
+    for (let d = $from.depth; d > 0; d--) {
+      const anc = $from.node(d)
+      if (anc?.type?.name === 'bidSection') {
+        return { sid: String(anc.attrs?.sectionId ?? ''), offset: $from.pos - $from.start(d) }
+      }
+    }
+  } catch {
+    // No real selection to capture.
+  }
+  return null
+}
+
+// Put the caret back into the same section at (clamped) the same offset.
+function restoreCaret(editor: Editor, caret: CaretInfo | null): void {
+  if (!caret) return
+  try {
+    // Collect into an array (not a mutable `let x = null`) so TS keeps the
+    // element type instead of narrowing the closure variable to `never`.
+    const found: Array<{ pos: number; node: ProseMirrorNode }> = []
+    editor.state.doc.forEach((n, pos) => {
+      if (found.length) return
+      const node = n as ProseMirrorNode
+      if (node.type?.name === 'bidSection' && String(node.attrs?.sectionId ?? '') === caret.sid) {
+        found.push({ pos, node })
+      }
+    })
+    const target = found[0]
+    if (!target) return
+    const clamped = Math.min(target.pos + 1 + caret.offset, target.pos + target.node.nodeSize - 1)
+    editor.chain().setTextSelection(clamped).run()
+  } catch {
+    // Positions can be invalid if the section shrank; ignore.
+  }
+}
+
+// Count unfilled placeholder chips across the whole document (🅓). Guards the
+// mocked-editor path (no real ProseMirror doc under Jest → 0).
+function countPlaceholders(editor: Editor): number {
+  const doc = editor.state?.doc as { descendants?: (fn: (n: ProseMirrorNode) => void) => void }
+  if (!doc || typeof doc.descendants !== 'function') return 0
+  let n = 0
+  doc.descendants(node => {
+    if (node.type?.name === 'bidPlaceholder') n++
+  })
+  return n
+}
+
 export function BidDocumentEditor({
   projectId,
   sections,
   sectionNames,
-  mode,
   onSaved,
   onActiveSectionChange,
+  onRegenerateBlock,
+  onPlaceholderCountChange,
   onReady,
 }: BidDocumentEditorProps) {
+  const { t } = useTranslation('bidWorkbench')
   const [activeSection, setActiveSection] = useState<string | null>(null)
-  const sectionsKey = useMemo(
-    () => sections.map(s => `${s.id}:${s.version}:${s.status}:${s.accepted}`).join('|'),
-    [sections]
-  )
-  // First-population guard: seed snapshots once after the initial setContent so
-  // the loaded content is not treated as a user edit (the mount-time-PUT guard).
-  const seededRef = useRef(false)
+  // The block the drag handle currently sits beside (a child of a bidSection —
+  // NOT the whole section — because we enable nested targeting below). The `+`
+  // insert menu inserts a new block right after this one. Kept across pointer
+  // leave (node === null) so an open menu still knows its target.
+  const [hovered, setHovered] = useState<{ node: ProseMirrorNode; pos: number } | null>(null)
+  const [openMenu, setOpenMenu] = useState<OpenMenu>(null)
+  // Two independent re-sync signals (see docSync.ts): contentKey drives the
+  // rebuild-and-reseed path; attrKey drives targeted attribute updates. Keeping
+  // version/accepted OUT of contentKey is what stops an autosave (which only
+  // bumps a section's CAS version) from rebuilding the document and reverting
+  // the user's just-saved edit.
+  const contentKey = useMemo(() => contentSignature(sections), [sections])
+  const attrKey = useMemo(() => attrSignature(sections), [sections])
 
   const editor = useEditor({
-    editable: mode === 'edit',
+    editable: true,
     extensions: [
       StarterKit.configure({ document: false, link: { openOnClick: false } }),
       BidDocument,
@@ -147,6 +262,7 @@ export function BidDocumentEditor({
       TableCell,
       Markdown.configure({ html: false, transformPastedText: true }),
       BidSection.configure({ sectionNames }),
+      BidPlaceholder,
     ],
     content: { type: 'doc', content: [] },
     onUpdate: ({ editor }) => {
@@ -170,32 +286,109 @@ export function BidDocumentEditor({
 
   const autosave = useDocumentAutosave({ projectId, editor, onSaved })
 
-  // Populate the document whenever the section set changes (initial load +
-  // per-section redraft re-fetch). Stamped bidSeed so it never autosaves.
+  // Rebuild the document body whenever the section set / order / a section body
+  // changes externally (initial load, redraft, regen). NOT on version/accepted
+  // changes — those are attribute-only (see the attr effect below).
+  //
+  // The dispatch is deferred to a microtask because bidSection renders via
+  // ReactNodeViewRenderer: replacing the doc mounts React node-view portals
+  // that Tiptap flushes with flushSync, and doing that synchronously inside a
+  // React lifecycle collides with React 19's render cycle ("flushSync ... cannot
+  // flush when React is already rendering"). queueMicrotask runs it after React
+  // finishes the current commit. (Tiptap performance guide.)
+  //
+  // Sections the user has edited but not yet saved are "dirty": their live body
+  // is preserved (fed back as an override) so an external re-sync never drops an
+  // in-progress edit; on conflict the user's edit wins.
   useEffect(() => {
     if (!editor || sections.length === 0) return
-    const doc = buildDocJson(editor, sections, sectionNames)
-    editor.commands.command(({ tr, state, dispatch }) => {
-      const newDoc = state.schema.nodeFromJSON(doc as never)
-      tr.replaceWith(0, tr.doc.content.size, newDoc.content)
-      tr.setMeta('bidSeed', true)
-      dispatch?.(tr)
-      return true
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled || editor.isDestroyed) return
+      const current = collectCurrentSections(editor, autosave.getSnapshot)
+      const dirty = new Set(current.filter(c => c.dirty).map(c => c.sid))
+      const overrides: Record<string, unknown[]> = {}
+      for (const c of current) {
+        if (c.dirty) overrides[c.sid] = (c.node.toJSON().content as unknown[]) ?? []
+      }
+      const caret = captureCaret(editor)
+      const doc = buildDocJson(editor, sections, sectionNames, overrides)
+      editor.commands.command(({ tr, state, dispatch }) => {
+        const newDoc = state.schema.nodeFromJSON(doc as never)
+        tr.replaceWith(0, tr.doc.content.size, newDoc.content)
+        tr.setMeta('bidSeed', true)
+        dispatch?.(tr)
+        return true
+      })
+      restoreCaret(editor, caret)
+      // Reseed the clean baseline for every section (re)built from props so the
+      // freshly-loaded body is not seen as dirty. Dirty sections keep their old
+      // snapshot so their pending autosave still fires with the preserved edit.
+      for (const s of sections) {
+        if (!dirty.has(s.id)) autosave.seedSection(s.id)
+      }
     })
-    // Seed the autosave baseline after the population settles so the loaded
-    // bytes are not "dirty" (prevents the mount-time PUT regression).
-    if (!seededRef.current) {
-      seededRef.current = true
-      // Defer one tick so the transaction above has flushed.
-      queueMicrotask(() => autosave.seedSnapshots())
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, sectionsKey])
+  }, [editor, contentKey])
 
-  // Read/Edit mode flips the whole editor's editable flag.
+  // Apply version / status / accepted changes as targeted attribute updates on
+  // the matching bidSection nodes — no rebuild, no NodeView remount, no caret
+  // loss. Deferred for the same flushSync reason as the rebuild effect.
   useEffect(() => {
-    editor?.setEditable(mode === 'edit')
-  }, [mode, editor])
+    if (!editor || sections.length === 0) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled || editor.isDestroyed) return
+      const want = new Map(
+        sections.map(s => [s.id, { version: s.version, status: s.status, accepted: s.accepted }])
+      )
+      editor.commands.command(({ tr, state, dispatch }) => {
+        let changed = false
+        state.doc.forEach((n, pos) => {
+          const node = n as ProseMirrorNode
+          if (node.type?.name !== 'bidSection') return
+          const w = want.get(String(node.attrs?.sectionId ?? ''))
+          if (!w) return
+          if (node.attrs.version !== w.version) {
+            tr.setNodeAttribute(pos, 'version', w.version)
+            changed = true
+          }
+          if (node.attrs.status !== w.status) {
+            tr.setNodeAttribute(pos, 'status', w.status)
+            changed = true
+          }
+          if (node.attrs.accepted !== w.accepted) {
+            tr.setNodeAttribute(pos, 'accepted', w.accepted)
+            changed = true
+          }
+        })
+        if (!changed) return false
+        tr.setMeta('bidSeed', true)
+        dispatch?.(tr)
+        return true
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, attrKey])
+
+  // Report the unfilled-placeholder count (🅓) on load/rebuild and every edit,
+  // so the parent can show the badge and gate the proceed action.
+  useEffect(() => {
+    if (!editor || !onPlaceholderCountChange) return
+    const report = () => onPlaceholderCountChange(countPlaceholders(editor))
+    report()
+    editor.on('update', report)
+    return () => {
+      editor.off('update', report)
+    }
+    // contentKey re-runs the initial report after a rebuild seeds new chips.
+  }, [editor, onPlaceholderCountChange, contentKey])
 
   // Hand the editor + flush to the parent for section-level operations.
   useEffect(() => {
@@ -204,14 +397,80 @@ export function BidDocumentEditor({
     }
   }, [editor, onReady, autosave.flushSection])
 
+  // The drag handle's hovered target changed. Remember the block (for the insert
+  // menu) and collapse any open menu, since it belonged to the previous block.
+  const handleNodeChange = useCallback(
+    ({ node, pos }: { node: ProseMirrorNode | null; pos: number }) => {
+      if (node) setHovered({ node, pos })
+      setOpenMenu(null)
+    },
+    []
+  )
+
+  // Freeze the drag handle while either menu is open so moving the pointer
+  // doesn't reposition/hide it out from under the user. The React DragHandle has
+  // no `locked` prop; the underlying plugin consumes a `lockDragHandle` tr meta.
+  // Deferred to a microtask: dispatching a transaction synchronously here flushes
+  // the React NodeView portals (flushSync) during React's own render, which React
+  // 19 rejects — the microtask runs it after the commit settles.
+  useEffect(() => {
+    const view = editor?.view
+    if (!view) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled || editor.isDestroyed) return
+      view.dispatch(view.state.tr.setMeta('lockDragHandle', openMenu !== null))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [editor, openMenu])
+
   const flush = useCallback((sid: string) => autosave.flushSection(sid), [autosave])
   // Reference flush so it's part of the component's stable surface even when
   // onReady is absent (keeps the callback alive for future parent wiring).
   void flush
 
+  // Save state of the section the caret currently sits in (document-level
+  // autosave keys state per section). Shown next to the toolbar as live feedback.
+  const activeSaveState = activeSection ? autosave.saveState[activeSection] : undefined
+
   return (
     <div className="bid-prose" data-testid="bid-document-editor">
-      {mode === 'edit' && editor && <SectionBubbleMenu editor={editor} />}
+      {editor && <SectionBubbleMenu editor={editor} onRegenerateBlock={onRegenerateBlock} />}
+      {editor && (
+        // Notion-style block handle: ⠿ drags the hovered block, + inserts a new
+        // block right after it (subproject 🅐). nested targeting is REQUIRED here
+        // because the doc's top-level nodes are bidSections — without it the
+        // handle would target/insert against the whole section, not the block the
+        // pointer is on. allowedContainers scopes it to blocks inside a section
+        // (the section itself is excluded, so ⠿ never drags an entire chapter).
+        <DragHandle
+          editor={editor}
+          nested={{ allowedContainers: ['bidSection'] }}
+          onNodeChange={handleNodeChange}
+        >
+          <BlockInsertMenu
+            editor={editor}
+            target={hovered}
+            openMenu={openMenu}
+            onOpenMenuChange={setOpenMenu}
+          />
+        </DragHandle>
+      )}
+      {editor && <TableHoverControls editor={editor} />}
+      {editor && activeSaveState && activeSaveState !== 'idle' && (
+        // Save state of the caret's section — live autosave feedback.
+        <div className="mb-2 flex justify-end">
+          <span
+            data-testid="bid-section-save-state"
+            className="text-[11px]"
+            style={{ color: 'var(--bid-muted-2)' }}
+          >
+            {t(`editor.save_${activeSaveState}`)}
+          </span>
+        </div>
+      )}
       <EditorContent editor={editor} />
     </div>
   )

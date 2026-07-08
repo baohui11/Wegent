@@ -59,6 +59,10 @@ export function BidWorkbenchDesktop() {
   const [maxStage, setMaxStage] = useState(1)
   const [draftState, setDraftState] = useState<'running' | 'done'>('running')
   const [confirmDraft, setConfirmDraft] = useState(false)
+  // 🅓 proceed gate: unfilled placeholder count from the drafting screen, and
+  // whether the "still unfilled — continue?" confirm dialog is open.
+  const [placeholderCount, setPlaceholderCount] = useState(0)
+  const [confirmProceed, setConfirmProceed] = useState(false)
   // Header "enter generation" must persist the current materials briefs before
   // the confirm dialog opens; MaterialsScreen registers its persist here.
   const materialsPersist = useRef<(() => Promise<void>) | null>(null)
@@ -224,7 +228,10 @@ export function BidWorkbenchDesktop() {
           </HeaderGhostButton>
         )}
         {draftState === 'done' && (
-          <HeaderButton onClick={completeReview} testid="review-next-button">
+          <HeaderButton
+            onClick={() => (placeholderCount > 0 ? setConfirmProceed(true) : completeReview())}
+            testid="review-next-button"
+          >
             {t('review.header_action')}
           </HeaderButton>
         )}
@@ -266,6 +273,7 @@ export function BidWorkbenchDesktop() {
             projectId={projectId}
             outline={outline ?? undefined}
             onStateChange={setDraftState}
+            onPlaceholderCountChange={setPlaceholderCount}
           />
         )}
         {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (
@@ -307,6 +315,20 @@ export function BidWorkbenchDesktop() {
           onConfirm={() => {
             setConfirmDraft(false)
             void completeMaterials()
+          }}
+        />
+      )}
+      {confirmProceed && (
+        // 🅓 gate: warn before entering the check stage with unfilled placeholders.
+        <ConfirmDialog
+          title={t('editor.placeholder_gate_title')}
+          desc={t('editor.placeholder_gate_desc', { count: placeholderCount })}
+          cancel={t('editor.placeholder_gate_cancel')}
+          confirm={t('editor.placeholder_gate_confirm')}
+          onCancel={() => setConfirmProceed(false)}
+          onConfirm={() => {
+            setConfirmProceed(false)
+            void completeReview()
           }}
         />
       )}

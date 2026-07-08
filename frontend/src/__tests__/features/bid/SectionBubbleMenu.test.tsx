@@ -57,3 +57,15 @@ test('bubble menu renders nothing without an editor', () => {
   const { container } = render(<SectionBubbleMenu editor={null} />)
   expect(container).toBeEmptyDOMElement()
 })
+
+test('shows a block-regen ↻ that calls onRegenerateBlock (🅑 scope split)', () => {
+  const onRegen = jest.fn()
+  render(<SectionBubbleMenu editor={makeEditor([])} onRegenerateBlock={onRegen} />)
+  fireEvent.click(screen.getByTestId('bid-bubble-regen'))
+  expect(onRegen).toHaveBeenCalledTimes(1)
+})
+
+test('hides the block-regen ↻ when no handler is given', () => {
+  render(<SectionBubbleMenu editor={makeEditor([])} />)
+  expect(screen.queryByTestId('bid-bubble-regen')).not.toBeInTheDocument()
+})

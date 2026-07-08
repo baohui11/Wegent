@@ -318,12 +318,71 @@
     "regen_block": "重新生成本段",
     "insert_table": "表格",
     "insert_pagebreak": "分隔/分页",
-    "mode_read": "阅读",
-    "mode_edit": "编辑",
     "block_add": "新增段落",
+    "placeholder_count": "还有 {{count}} 处待填",
+    "placeholder_gate_title": "仍有待填项",
+    "placeholder_gate_desc": "还有 {{count}} 处待填未完成，仍要进入检查阶段吗？",
+    "placeholder_gate_confirm": "仍要继续",
+    "placeholder_gate_cancel": "继续填写",
+    "insert": {
+      "menu_label": "插入块",
+      "paragraph": "正文",
+      "heading1": "标题 1",
+      "heading2": "标题 2",
+      "heading3": "标题 3",
+      "bullet_list": "无序列表",
+      "ordered_list": "有序列表",
+      "table": "表格",
+      "image": "图片",
+      "divider": "分隔线",
+      "code_block": "代码块",
+      "image_prompt": "图片链接"
+    },
+    "actions": {
+      "menu_label": "块操作",
+      "insert_above": "上方插入",
+      "insert_below": "下方插入",
+      "duplicate": "复制",
+      "delete": "删除"
+    },
+    "block_type": {
+      "paragraph": "正文",
+      "heading": "标题",
+      "bulletList": "无序列表",
+      "orderedList": "有序列表",
+      "table": "表格",
+      "codeBlock": "代码块",
+      "blockquote": "引用",
+      "horizontalRule": "分隔线",
+      "image": "图片",
+      "block": "块"
+    },
+    "table": {
+      "col_before": "左侧插入列",
+      "col_after": "右侧插入列",
+      "col_delete": "删除列",
+      "row_before": "上方插入行",
+      "row_after": "下方插入行",
+      "row_delete": "删除行",
+      "toggle_header": "切换首行表头",
+      "delete_table": "删除表格"
+    },
     "bubble": {
       "h2": "标题2",
-      "h3": "标题3"
+      "h3": "标题3",
+      "bold": "加粗",
+      "italic": "斜体",
+      "code": "行内代码",
+      "bullet": "无序列表",
+      "ordered": "有序列表",
+      "regen": "重写此段"
+    },
+    "proposal": {
+      "title": "AI 新版本",
+      "regenerating": "重新生成中…",
+      "accept": "采纳",
+      "discard": "丢弃",
+      "retry": "重试"
     }
   },
   "drafting": {
@@ -335,7 +394,6 @@
     "log_drafting": "正在起草 {{name}}…",
     "log_error": "{{name}} 生成失败",
     "ghostwriter": "标书枪手",
-    "doc_subtitle": "技术文件 · 智能生成中",
     "gen_log": "生成日志",
     "status_running": "生成中",
     "status_done": "已完成",
@@ -478,7 +536,7 @@
     "op_structure": "🗂 调整结构",
     "accept_version": "采纳当前版本",
     "instruction_placeholder": "自定义重写指令…",
-    "redraft": "按指令重写",
+    "redraft": "重写本节",
     "complete": "完成审阅 →",
     "pick_section": "请选择左侧章节",
     "header_action": "确认内容并进入检查阶段"

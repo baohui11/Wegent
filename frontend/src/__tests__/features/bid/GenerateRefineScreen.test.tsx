@@ -51,7 +51,7 @@ test('renders the single-document surface for done sections', async () => {
   expect(screen.getByTestId('bid-draft-progress').textContent).toContain('2/2')
 })
 
-test('read mode is the default; the document editor stays read-only until toggled', async () => {
+test('the document editor is always editable (no read/edit toggle)', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 1,
     finished: true,
@@ -60,11 +60,10 @@ test('read mode is the default; the document editor stays read-only until toggle
   })
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   await screen.findByTestId('bid-document-editor')
-  // The single-document editor is mounted in read mode.
-  expect(__lastEditorConfig.current?.editable).toBe(false)
-  // Toggling to edit makes the whole document editable.
-  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
-  expect(__mockEditor.setEditable).toHaveBeenLastCalledWith(true)
+  // PR-C removed the Read/Edit mode: the editor is editable from first render.
+  expect(__lastEditorConfig.current?.editable).toBe(true)
+  // The mode-toggle button is gone.
+  expect(screen.queryByTestId('bid-mode-toggle')).not.toBeInTheDocument()
 })
 
 test('right-panel actions are disabled until the focused section is done', async () => {
@@ -105,6 +104,35 @@ test('redraft with instruction calls redraftSection', async () => {
   fireEvent.change(box, { target: { value: '更凝练' } })
   fireEvent.click(screen.getByTestId('bid-review-redraft-button'))
   await waitFor(() => expect(bidApis.redraftSection).toHaveBeenCalledWith(1, 's1', '更凝练'))
+})
+
+test('AI redraft opens a reversible review; discard reverts to the snapshot (🅒)', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  const redraftBtn = await screen.findByTestId('bid-review-redraft-button')
+  await waitFor(() => expect(redraftBtn).not.toBeDisabled())
+  // Let the section content ('正文段落。', v1) load so the snapshot captures it.
+  await waitFor(() => expect(bidApis.getSectionContent).toHaveBeenCalledWith(1, 's1'))
+
+  fireEvent.click(redraftBtn)
+  await waitFor(() => expect(bidApis.redraftSection).toHaveBeenCalled())
+  // The panel switches to the review gate (preview + accept/discard/retry).
+  const review = await screen.findByTestId('bid-proposal-review')
+  expect(review).toBeInTheDocument()
+  // The diff previews the pre-redraft snapshot as the old side.
+  expect(screen.getByTestId('old-value')).toHaveTextContent('正文段落。')
+
+  fireEvent.click(screen.getByTestId('bid-proposal-discard'))
+  // Discard writes the snapshot back (backend redraft already overwrote it).
+  await waitFor(() =>
+    expect(bidApis.saveSection).toHaveBeenCalledWith(1, 's1', '正文段落。', expect.any(String))
+  )
+  await waitFor(() => expect(screen.queryByTestId('bid-proposal-review')).not.toBeInTheDocument())
 })
 
 test('reports done state to the shell header', async () => {
@@ -156,8 +184,9 @@ test('regenerate-this-block maps a section-local block to a body-relative line r
 
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   await screen.findByTestId('bid-document-editor')
-  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
-  fireEvent.click(await screen.findByTestId('bid-regen-block-button'))
+  // The editor is always editable now (no mode toggle); the block-level regen
+  // lives on the selection bubble (🅑 scope split), not the section right panel.
+  fireEvent.click(await screen.findByTestId('bid-bubble-regen'))
   // The line range is the contract: section-local block index 1 maps to lines
   // 3..3 of the title-less body. base_version is the focused section's version.
   await waitFor(() =>
@@ -165,9 +194,26 @@ test('regenerate-this-block maps a section-local block to a body-relative line r
   )
 })
 
-test('entering edit mode does NOT autosave every section (mount-time PUT guard)', async () => {
+test('does not render the red technical-document subtitle header', async () => {
+  // The single-document surface used to top the page card with a centered,
+  // teal-underlined subtitle (`drafting.doc_subtitle`). PR-C removes it as
+  // visual noise; assert neither the text nor the 3px accent rule remains.
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 2,
+    finished: true,
+    error: null,
+    sections: { s1: 'done', s2: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  await screen.findByTestId('bid-generate-document')
+  expect(screen.queryByText('drafting.doc_subtitle')).toBeNull()
+})
+
+test('mounting the document does NOT autosave every section (mount-time PUT guard)', async () => {
   // Regression guard: the population setContent is stamped bidSeed, so loading
   // the document must NOT PUT. saveSection should only fire on a genuine edit.
+  // PR-C made the editor always-editable, so the population setContent now runs
+  // at mount (rather than on a mode toggle).
   jest.useFakeTimers()
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 1,
@@ -177,8 +223,8 @@ test('entering edit mode does NOT autosave every section (mount-time PUT guard)'
   })
   render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
   await screen.findByTestId('bid-document-editor')
-  // Toggle to edit (mounts population) and advance past the debounce: no save.
-  fireEvent.click(screen.getByTestId('bid-mode-toggle'))
+  // The editor mounts editable, so population runs at mount. Advance past the
+  // debounce: no save.
   act(() => jest.advanceTimersByTime(1600))
   expect(bidApis.saveSection).not.toHaveBeenCalled()
   jest.useRealTimers()

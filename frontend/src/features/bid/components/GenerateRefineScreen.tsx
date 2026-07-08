@@ -18,6 +18,7 @@ import {
 } from './BidDocumentEditor'
 import { blockLineRange, topBlockIndexOf } from '../canvas/blockRange'
 import { serializeSection } from '../canvas/serializeSection'
+import { SectionProposalReview } from './SectionProposalReview'
 
 const DOT: Record<string, string> = {
   pending: 'var(--bid-border-3)',
@@ -33,10 +34,13 @@ export function GenerateRefineScreen({
   projectId,
   outline,
   onStateChange,
+  onPlaceholderCountChange,
 }: {
   projectId: number
   outline?: OutlineDoc
   onStateChange?: (state: DraftState) => void
+  // Unfilled placeholder count (🅓), surfaced to the shell for the proceed gate.
+  onPlaceholderCountChange?: (count: number) => void
 }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
@@ -45,17 +49,24 @@ export function GenerateRefineScreen({
   const [accepted, setAccepted] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
-  // Document-wide Edit/Read mode. Both modes render the single-document
-  // ProseMirror editor (Read = editable:false, Edit = editable:true); this is
-  // the single-renderer design (spec §7) that removes the Read/Edit drift.
-  const [mode, setMode] = useState<'read' | 'edit'>('read')
   const [instruction, setInstruction] = useState('')
+  // 🅒 AI diff safety: sections with an in-flight AI revision awaiting the user's
+  // accept / discard / retry. The snapshot is the pre-redraft content so discard
+  // can revert it (frontend-reversible — the backend redraft is destructive).
+  const [proposals, setProposals] = useState<
+    Record<
+      string,
+      { oldContent: string; oldVersion: string; instruction?: string; isBlock: boolean }
+    >
+  >({})
   const docRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const loadedRef = useRef<Set<string>>(new Set())
   // Active section = the bidSection node the cursor currently sits in. Drives
   // the right panel and the paragraph-regen address. The single-document
   // editor reports it via onActiveSectionChange.
   const [activeId, setActiveId] = useState<string | null>(null)
+  // Unfilled placeholder count (🅓), reported by the document editor.
+  const [placeholderCount, setPlaceholderCount] = useState(0)
   // The single document editor's API (live editor instance + per-section
   // flush). Replaces the per-section apisRef Map from the stacked architecture.
   const editorApiRef = useRef<BidDocumentEditorApi | null>(null)
@@ -143,15 +154,38 @@ export function GenerateRefineScreen({
     return versions[sid] ?? ''
   }, [activeId, focusId, versions])
 
+  // Snapshot a section before an AI redraft so the change is reversible (🅒).
+  // Keeps the ORIGINAL snapshot across retries, so discard always reverts to the
+  // content from before the first redraft of this review cycle.
+  const beginProposal = useCallback(
+    (id: string, instr: string | undefined, isBlock: boolean) => {
+      setProposals(prev =>
+        prev[id]
+          ? prev
+          : {
+              ...prev,
+              [id]: {
+                oldContent: contents[id] ?? '',
+                oldVersion: versions[id] ?? '',
+                instruction: instr,
+                isBlock,
+              },
+            }
+      )
+    },
+    [contents, versions]
+  )
+
   const redraft = useCallback(
     async (id: string, instr?: string) => {
       // Persist any pending edit first so the redraft operates on the saved
       // content (and its on-disk version).
       await flushActive()
+      beginProposal(id, instr, false) // gate the rewrite behind review (🅒)
       loadedRef.current.delete(id) // force re-fetch after this section re-drafts
       await bidApis.redraftSection(projectId, id, instr || undefined)
     },
-    [projectId, flushActive]
+    [projectId, flushActive, beginProposal]
   )
 
   // Regenerate the active section's cursor block only: flush the pending edit
@@ -164,6 +198,7 @@ export function GenerateRefineScreen({
     if (!sid) return
     const editor = editorApiRef.current?.editor ?? null
     const baseVersion = await flushActive()
+    beginProposal(sid, instruction, true) // block regen is reviewable too (🅒)
     // Serialize the section's body (title-less) — the exact bytes the backend
     // now stores — and map the cursor block (section-local index) to its line
     // range within that body.
@@ -181,7 +216,48 @@ export function GenerateRefineScreen({
       baseVersion
     )
     setInstruction('')
-  }, [activeId, focusId, contents, instruction, projectId, flushActive])
+  }, [activeId, focusId, contents, instruction, projectId, flushActive, beginProposal])
+
+  // 🅒 review lifecycle. Accept keeps the regenerated content (already on disk).
+  const acceptProposal = useCallback((id: string) => {
+    setProposals(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
+  // Discard reverts to the pre-redraft snapshot: the backend redraft already
+  // overwrote the file, so we write the snapshot back and re-seed the editor.
+  const discardProposal = useCallback(
+    async (id: string) => {
+      const p = proposals[id]
+      if (!p) return
+      try {
+        const r = await bidApis.saveSection(projectId, id, p.oldContent, versions[id] ?? '')
+        setContents(prev => ({ ...prev, [id]: p.oldContent }))
+        setVersions(prev => ({ ...prev, [id]: r.version }))
+      } catch {
+        return // leave the review open so the user can retry the discard
+      }
+      setProposals(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+    },
+    [proposals, projectId, versions]
+  )
+
+  const retryProposal = useCallback(
+    (id: string) => {
+      const p = proposals[id]
+      if (!p) return
+      if (p.isBlock) void regenBlock()
+      else void redraft(id, p.instruction)
+    },
+    [proposals, redraft, regenBlock]
+  )
 
   if (!status) return null
 
@@ -190,6 +266,7 @@ export function GenerateRefineScreen({
   const focusStatus = focusId ? status.sections[focusId] : undefined
   const focusDone = focusStatus === 'done'
   const focusName = focusId ? (nameOf.get(focusId) ?? focusId) : ''
+  const focusProposal = focusId ? proposals[focusId] : undefined
 
   const statusFor = (n: FlatNode): BidSectionStatus =>
     (status.sections[n.id] ??
@@ -326,46 +403,22 @@ export function GenerateRefineScreen({
           }}
           data-testid="bid-generate-document"
         >
-          <div
-            className="mb-9 border-b-[3px] pb-4 text-center"
-            style={{ borderColor: 'var(--bid-primary)' }}
-          >
-            <div
-              className="text-xs font-bold tracking-[2px]"
-              style={{ color: 'var(--bid-primary)' }}
-            >
-              {t('drafting.doc_subtitle')}
-            </div>
-          </div>
-
-          <div className="mb-4 flex justify-end">
-            <button
-              type="button"
-              data-testid="bid-mode-toggle"
-              onClick={() => setMode(m => (m === 'read' ? 'edit' : 'read'))}
-              className="rounded-md px-3 py-1 text-[11px] font-semibold"
-              style={{
-                border: '1px solid var(--bid-border-2)',
-                color: 'var(--bid-sub)',
-                fontFamily: "'Noto Sans SC', sans-serif",
-              }}
-            >
-              {t(mode === 'read' ? 'editor.mode_edit' : 'editor.mode_read')}
-            </button>
-          </div>
-
           {/* Single-document editor: all done sections as bidSection nodes.
-              Both Read and Edit modes render this editor (same engine, spec §7);
-              only `editable` flips. Non-done sections render beside it as
-              locked chrome + skeleton so the doc still reads top-to-bottom. */}
+              The editor is always editable (PR-C removed the Read/Edit toggle);
+              non-done sections render beside it as locked chrome + skeleton so
+              the doc still reads top-to-bottom. */}
           {doneSections.length > 0 && (
             <BidDocumentEditor
               projectId={projectId}
               sections={doneSections}
               sectionNames={Object.fromEntries(nameOf)}
-              mode={mode}
               onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
               onActiveSectionChange={setActiveId}
+              onRegenerateBlock={() => void regenBlock()}
+              onPlaceholderCountChange={n => {
+                setPlaceholderCount(n)
+                onPlaceholderCountChange?.(n)
+              }}
               onReady={api => {
                 editorApiRef.current = api
               }}
@@ -477,75 +530,101 @@ export function GenerateRefineScreen({
           </div>
         </div>
 
-        <div style={{ opacity: focusDone ? 1 : 0.5 }}>
-          <div className="mb-2 truncate text-xs font-extrabold" style={{ color: 'var(--bid-sub)' }}>
-            {t('review.content_ops')} · {focusName}
+        {placeholderCount > 0 && (
+          <div
+            data-testid="bid-placeholder-count"
+            className="rounded-lg px-3 py-2 text-[11.5px] font-semibold"
+            style={{
+              background: 'var(--bid-paper)',
+              color: 'var(--bid-warn)',
+              border: '1px solid var(--bid-border-2)',
+            }}
+          >
+            {t('editor.placeholder_count', { count: placeholderCount })}
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                ['review.op_regenerate', ''],
-                ['review.op_improve', '优化表达，使行文更凝练'],
-                ['review.op_figure', '补充与本节内容匹配的配图'],
-                ['review.op_structure', '优化本节结构层次'],
-              ] as const
-            ).map(([label, instr]) => (
-              <button
-                key={label}
-                type="button"
-                disabled={!focusDone}
-                onClick={() => focusId && void redraft(focusId, instr)}
-                className="rounded-[9px] px-1.5 py-2 text-[11.5px] disabled:cursor-not-allowed"
-                style={{
-                  background: '#fff',
-                  border: '1px solid var(--bid-border)',
-                  color: 'var(--bid-sub)',
-                }}
+        )}
+
+        <div style={{ opacity: focusDone || focusProposal ? 1 : 0.5 }}>
+          {focusProposal && focusId ? (
+            // 🅒 review gate: while an AI revision is pending, the panel offers
+            // preview + accept / discard / retry instead of new AI actions.
+            <SectionProposalReview
+              sectionName={focusName}
+              oldContent={focusProposal.oldContent}
+              newContent={contents[focusId] ?? ''}
+              pending={status.sections[focusId] === 'drafting'}
+              onAccept={() => acceptProposal(focusId)}
+              onDiscard={() => void discardProposal(focusId)}
+              onRetry={() => retryProposal(focusId)}
+            />
+          ) : (
+            <>
+              <div
+                className="mb-2 truncate text-xs font-extrabold"
+                style={{ color: 'var(--bid-sub)' }}
               >
-                {t(label)}
+                {t('review.content_ops')} · {focusName}
+              </div>
+              {/* Presets PREFILL the instruction (one section-level entry point);
+                  the single "重写本节" button below executes. op_regenerate is
+                  dropped — an empty-instruction rewrite is just clicking the main
+                  button with an empty box (🅑/🅒 scope convergence). */}
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    ['review.op_improve', '优化表达，使行文更凝练'],
+                    ['review.op_figure', '补充与本节内容匹配的配图'],
+                    ['review.op_structure', '优化本节结构层次'],
+                  ] as const
+                ).map(([label, instr]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={!focusDone}
+                    onClick={() => setInstruction(instr)}
+                    className="rounded-[9px] px-1.5 py-2 text-[11.5px] disabled:cursor-not-allowed"
+                    style={{
+                      background: '#fff',
+                      border: '1px solid var(--bid-border)',
+                      color: 'var(--bid-sub)',
+                    }}
+                  >
+                    {t(label)}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={instruction}
+                onChange={e => setInstruction(e.target.value)}
+                placeholder={t('review.instruction_placeholder')}
+                data-testid="bid-review-instruction"
+                disabled={!focusDone}
+                rows={3}
+                className="mt-2 w-full resize-y rounded-lg px-3 py-2 text-xs outline-none disabled:cursor-not-allowed"
+                style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
+              />
+              <button
+                type="button"
+                onClick={redraftFocus}
+                disabled={!focusDone}
+                data-testid="bid-review-redraft-button"
+                className="mt-2 w-full rounded-lg py-2 text-xs font-semibold disabled:cursor-not-allowed"
+                style={{ border: '1px solid var(--bid-primary)', color: 'var(--bid-primary)' }}
+              >
+                {t('review.redraft')}
               </button>
-            ))}
-          </div>
-          <textarea
-            value={instruction}
-            onChange={e => setInstruction(e.target.value)}
-            placeholder={t('review.instruction_placeholder')}
-            data-testid="bid-review-instruction"
-            disabled={!focusDone}
-            rows={3}
-            className="mt-2 w-full resize-y rounded-lg px-3 py-2 text-xs outline-none disabled:cursor-not-allowed"
-            style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
-          />
-          <button
-            type="button"
-            onClick={redraftFocus}
-            disabled={!focusDone}
-            data-testid="bid-review-redraft-button"
-            className="mt-2 w-full rounded-lg py-2 text-xs font-semibold disabled:cursor-not-allowed"
-            style={{ border: '1px solid var(--bid-primary)', color: 'var(--bid-primary)' }}
-          >
-            {t('review.redraft')}
-          </button>
-          <button
-            type="button"
-            onClick={() => void regenBlock()}
-            disabled={!focusDone}
-            data-testid="bid-regen-block-button"
-            className="mt-2 w-full rounded-lg py-2 text-xs font-semibold disabled:cursor-not-allowed"
-            style={{ border: '1px solid var(--bid-border-2)', color: 'var(--bid-sub)' }}
-          >
-            {t('editor.regen_block')}
-          </button>
-          <button
-            type="button"
-            onClick={accept}
-            disabled={!focusDone}
-            data-testid="bid-review-accept-button"
-            className="mt-2 w-full rounded-lg py-2.5 text-[12.5px] font-bold text-white disabled:cursor-not-allowed"
-            style={{ background: 'var(--bid-primary)' }}
-          >
-            {t('review.accept_version')}
-          </button>
+              <button
+                type="button"
+                onClick={accept}
+                disabled={!focusDone}
+                data-testid="bid-review-accept-button"
+                className="mt-2 w-full rounded-lg py-2.5 text-[12.5px] font-bold text-white disabled:cursor-not-allowed"
+                style={{ background: 'var(--bid-primary)' }}
+              >
+                {t('review.accept_version')}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -136,6 +136,24 @@ export function useDocumentAutosave({
     }
   }, [editor])
 
+  // Reseed a SINGLE section's snapshot to its current body — used after the
+  // document editor (re)seeds one section from props (initial load / redraft),
+  // so that freshly-loaded body is the clean baseline and does not look dirty.
+  const seedSection = useCallback(
+    (sid: string) => {
+      if (!editor) return
+      const entry = sections(editor).find(s => s.sid === sid)
+      if (entry) snapshots.current[sid] = serializeSection(editor, entry.node)
+    },
+    [editor]
+  )
+
+  // Last-persisted body markdown for a section, or undefined if never seeded.
+  // The document editor compares the live body against this to decide whether a
+  // section carries an unsaved user edit (dirty) before re-seeding from props —
+  // dirty sections are preserved so an external re-sync never drops the edit.
+  const getSnapshot = useCallback((sid: string): string | undefined => snapshots.current[sid], [])
+
   // Cancel pending timers on unmount.
   useEffect(
     () => () => {
@@ -145,5 +163,5 @@ export function useDocumentAutosave({
     []
   )
 
-  return { saveState, flushSection, seedSnapshots }
+  return { saveState, flushSection, seedSnapshots, seedSection, getSnapshot }
 }
