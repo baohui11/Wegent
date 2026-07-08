@@ -276,3 +276,44 @@ it('runs the full chain new -> ... -> export download', async () => {
   fireEvent.click(await screen.findByTestId('bid-download-button'))
   await waitFor(() => expect(bidApis.downloadBid).toHaveBeenCalledWith(3))
 })
+
+it('shows the overwrite warning when re-drafting a project that already drafted', async () => {
+  // Arrange: a project already drafted once (max_phase_reached >= 4) reopened at
+  // the materials phase. Its stage-3 outline diverged from stage 1 (user edits).
+  ;(bidApis.listProjects as jest.Mock).mockResolvedValue([
+    {
+      id: 8,
+      title: '已起草项目',
+      current_phase: 3,
+      max_phase_reached: 4,
+      status: 'parsed',
+      created_at: '2026-07-03T00:00:00Z',
+    },
+  ])
+  ;(bidApis.getKnowledgeBase as jest.Mock).mockResolvedValue({
+    knowledge_base: { bidder_knowledge_base: {} },
+  })
+  ;(bidApis.getQualifications as jest.Mock).mockResolvedValue({
+    qualifications: { company: '', items: {} },
+  })
+  ;(bidApis.getBriefs as jest.Mock).mockResolvedValue({ briefs: {}, materials: [] })
+  ;(bidApis.saveBriefs as jest.Mock).mockImplementation((_id: number, d: unknown) =>
+    Promise.resolve(d)
+  )
+  ;(bidApis.listAttachments as jest.Mock).mockResolvedValue({ items: [] })
+  ;(bidApis.getOutlineStage3 as jest.Mock).mockResolvedValue({
+    outline: { sections: [{ id: 's1', title: '改过' }] },
+    differs_from_stage1: true,
+  })
+
+  render(<BidWorkbenchDesktop />)
+  fireEvent.click(await screen.findByTestId('bid-project-card-8'))
+  await screen.findByTestId('bid-materials-screen')
+  // Act: open the generate-confirm dialog.
+  fireEvent.click(screen.getByTestId('materials-next-button'))
+  // Assert: the dialog shows the outline+body overwrite copy (not the first-time
+  // confirm copy). useTranslation is mocked as identity => the desc is the key.
+  await screen.findByTestId('bid-confirm-dialog')
+  expect(screen.getByText('phase2.regen_overwrite_desc_outline')).toBeInTheDocument()
+  expect(screen.queryByText('phase2.confirm_desc')).toBeNull()
+})

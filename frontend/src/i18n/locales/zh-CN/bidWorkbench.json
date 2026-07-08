@@ -268,6 +268,8 @@
     "pick_node": "请选择左侧节点进行配置",
     "confirm_title": "确认开始内容生成？",
     "confirm_desc": "将按已配置的编写要求交由智能体逐节起草内容，是否继续？",
+    "regen_overwrite_desc": "重新生成将覆盖全部正文（含人工编辑），此操作不可撤销。是否继续？",
+    "regen_overwrite_desc_outline": "重新生成将覆盖阶段三的大纲修改与全部正文（含人工编辑），此操作不可撤销。是否继续？",
     "confirm_ok": "确认继续",
     "veto_clause": "废标条款",
     "scoring_item": "评分项",

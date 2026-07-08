@@ -75,6 +75,9 @@ export function BidWorkbenchDesktop() {
     phase,
     projectId,
     outline,
+    stage3Outline,
+    stage3Differs,
+    maxPhaseReached,
     coverage,
     error,
     startFromText,
@@ -198,6 +201,11 @@ export function BidWorkbenchDesktop() {
     )
   }
 
+  // Re-drafting overwrites the body (and stage-3 outline edits); warn only when
+  // the project has already reached drafting (max_phase_reached >= 4 => sections
+  // exist), per spec §4. A first-time draft (never reached stage 3) is silent.
+  const maxStageReachedDraft = maxPhaseReached >= 4
+
   // Stage action shown in the shell header (unified action area).
   const headerAction =
     phase === 'outline_ready' && outline && coverage ? (
@@ -262,7 +270,7 @@ export function BidWorkbenchDesktop() {
         {phase === 'drafting' && projectId != null && (
           <GenerateRefineScreen
             projectId={projectId}
-            outline={outline ?? undefined}
+            outline={stage3Outline ?? outline ?? undefined}
             onStateChange={setDraftState}
             onPlaceholderCountChange={setPlaceholderCount}
             onRenameSection={renameSection}
@@ -300,7 +308,13 @@ export function BidWorkbenchDesktop() {
       {confirmDraft && (
         <ConfirmDialog
           title={t('phase2.confirm_title')}
-          desc={t('phase2.confirm_desc')}
+          desc={
+            maxStageReachedDraft
+              ? stage3Differs
+                ? t('phase2.regen_overwrite_desc_outline')
+                : t('phase2.regen_overwrite_desc')
+              : t('phase2.confirm_desc')
+          }
           cancel={t('outline.delete_cancel')}
           confirm={t('phase2.confirm_ok')}
           onCancel={() => setConfirmDraft(false)}
