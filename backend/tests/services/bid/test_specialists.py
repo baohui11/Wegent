@@ -122,6 +122,35 @@ async def test_call_ghostwriter_includes_instruction():
     assert "语言更简洁，补充业绩数据" in m.await_args.kwargs["instructions"]
 
 
+@pytest.mark.asyncio
+async def test_ghostwriter_injects_leaf_headings(monkeypatch):
+    import app.services.bid.specialists as sp
+
+    captured = {}
+
+    async def _fake_complete(**kwargs):
+        captured["ctx"] = kwargs["ctx"]
+        captured["instructions"] = kwargs["instructions"]
+        return "正文"
+
+    monkeypatch.setattr(sp, "_complete_ctx", _fake_complete)
+    section = {
+        "id": "s1",
+        "title": "第一章",
+        "children": [{"title": "小节甲"}, {"title": "小节乙"}],
+    }
+    await sp.call_ghostwriter(
+        model="m",
+        model_config=None,
+        section=section,
+        tender={},
+        knowledge_base={},
+    )
+    assert captured["ctx"]["section"]["children"] == ["小节甲", "小节乙"]
+    assert "小节甲" in captured["instructions"]
+    assert "##" in captured["instructions"]
+
+
 def test_route_map_tags_match_segmenter_vocabulary():
     # segment_tender.py only emits these route_tags (plus "unrouted"); any
     # other tag in ROUTE_MAP silently matches nothing and falls back to
