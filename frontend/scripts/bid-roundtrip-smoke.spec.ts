@@ -250,8 +250,8 @@ test('single-document editor round-trips composite markdown losslessly', async (
     '平台层基于微服务架构'
   )
 
-  // Toggle to Edit so the document is editable (autosave is armed).
-  await page.getByTestId('bid-mode-toggle').click()
+  // The document is always editable now (PR-C removed the Read/Edit toggle),
+  // so autosave is armed on load — no mode switch needed.
 
   // Replace s1's children by parsing the composite MARKDOWN through the
   // editor's own markdown parser (Markdown extension overrode insertContentAt

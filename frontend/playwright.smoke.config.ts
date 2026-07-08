@@ -24,7 +24,7 @@ const resolveChromium = (): string => {
 
 export default defineConfig({
   testDir: './scripts',
-  testMatch: /bid-roundtrip-smoke\.spec\.ts/,
+  testMatch: /bid-.*smoke\.spec\.ts/,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   use: {
