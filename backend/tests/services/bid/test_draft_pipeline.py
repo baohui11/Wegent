@@ -385,3 +385,42 @@ async def test_redraft_one_reads_stage3_outline(tmp_path, monkeypatch):
     await dp.redraft_one(ws, "s1", model="m", model_config=None, instruction=None)
     assert seen["title"] == "只在 stage3 的章"
     assert ds.read_status(ws)["sections"]["s1"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_draft_section_backfills_missing_leaf_headings(tmp_path, monkeypatch):
+    ws = BidWorkspace("c1-backfill", root=tmp_path)
+    node = {
+        "id": "s1",
+        "title": "第一章",
+        "children": [{"title": "小节甲"}, {"title": "小节乙"}],
+    }
+
+    async def _fake_write_and_check(ws_, node_, sid_, *, instruction, **kw):
+        # Simulate a ghostwriter that wrote only 甲 (乙 missing); gate is otherwise ok.
+        ws_.path(f"workspace/sections/{sid_}.md").parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        ws_.path(f"workspace/sections/{sid_}.md").write_text(
+            "## 小节甲\n正文足够长。", encoding="utf-8"
+        )
+        return {"ok": True, "issues": []}
+
+    monkeypatch.setattr(dp, "_write_and_check", _fake_write_and_check)
+    sem = asyncio.Semaphore(1)
+    monkeypatch.setattr(dp.materials_service, "read_briefs", lambda w: {"briefs": {}})
+    await dp._draft_section(
+        sem,
+        ws,
+        node,
+        tender={},
+        kb={},
+        model="m",
+        model_config=None,
+        project_id=1,
+        user_id=1,
+    )
+    body = ws.path("workspace/sections/s1.md").read_text(encoding="utf-8")
+    assert "## 小节乙" in body  # backfilled
+    assert "待填（来源：..）" in body  # as a 🅓 placeholder
+    assert ds.read_status(ws)["sections"]["s1"] == "done"
