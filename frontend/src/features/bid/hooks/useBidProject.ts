@@ -59,6 +59,9 @@ export function useBidProject() {
   const [tender, setTender] = useState<TenderDoc | null>(null)
   const [outline, setOutline] = useState<OutlineDoc | null>(null)
   const [coverage, setCoverage] = useState<CoverageReport | null>(null)
+  const [stage3Outline, setStage3Outline] = useState<OutlineDoc | null>(null)
+  const [stage3Differs, setStage3Differs] = useState(false)
+  const [maxPhaseReached, setMaxPhaseReached] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   const pollUntilParsed = useCallback(async (id: number) => {
@@ -71,6 +74,16 @@ export function useBidProject() {
       await new Promise(r => setTimeout(r, 3000))
     }
     throw new Error('拆标超时，请稍后重试')
+  }, [])
+
+  const loadStage3 = useCallback(async (id: number) => {
+    try {
+      const res = await bidApis.getOutlineStage3(id)
+      setStage3Outline(res.outline)
+      setStage3Differs(res.differs_from_stage1)
+    } catch {
+      // No stage-3 outline yet (never drafted) — leave nulls.
+    }
   }, [])
 
   const parseExisting = useCallback(
@@ -101,6 +114,7 @@ export function useBidProject() {
     async (project: BidProject) => {
       setError(null)
       setProjectId(project.id)
+      setMaxPhaseReached(project.max_phase_reached)
       const cp = project.current_phase
       const st = project.status
       try {
@@ -148,6 +162,9 @@ export function useBidProject() {
           } catch {
             // No stored outline yet — the screens degrade to an empty tree.
           }
+          // Stage 3 reads/edits a separate outline file; load it once the project
+          // has reached drafting (best-effort — absent before the first draft).
+          if (project.max_phase_reached >= 4) void loadStage3(project.id)
         }
         if (cp === 3) {
           setPhase('materials')
@@ -233,25 +250,27 @@ export function useBidProject() {
     [projectId]
   )
 
-  // Rename one chapter's title and persist it to the outline (single source).
-  // Optimistic: update local state immediately (so the NodeView title + left TOC
-  // follow at once), then save; roll back on failure.
+  // Rename one chapter's title in the stage-3 outline (the editable drafting
+  // outline, kept separate from the stage-1 canvas). Optimistic: update local
+  // state immediately (so the NodeView title + left TOC follow at once), then
+  // save; roll back on failure.
   const renameSection = useCallback(
     async (sectionId: string, title: string) => {
-      if (projectId == null || !outline) return
-      const prev = outline
-      const edited = renameInOutline(outline, sectionId, title)
-      setOutline(edited)
+      const base = stage3Outline ?? outline
+      if (projectId == null || !base) return
+      const prev = stage3Outline
+      const edited = renameInOutline(base, sectionId, title)
+      setStage3Outline(edited)
       try {
-        const { outline: saved, coverage } = await bidApis.saveOutline(projectId, edited)
-        setOutline(saved)
-        setCoverage(coverage)
+        const res = await bidApis.saveOutlineStage3(projectId, edited)
+        setStage3Outline(res.outline)
+        setStage3Differs(res.differs_from_stage1)
       } catch (e) {
-        setOutline(prev)
+        setStage3Outline(prev)
         setError(e instanceof Error ? e.message : 'unknown')
       }
     },
-    [projectId, outline]
+    [projectId, stage3Outline, outline]
   )
 
   const reset = useCallback(() => {
@@ -260,6 +279,9 @@ export function useBidProject() {
     setTender(null)
     setOutline(null)
     setCoverage(null)
+    setStage3Outline(null)
+    setStage3Differs(false)
+    setMaxPhaseReached(0)
     setError(null)
   }, [])
 
@@ -271,14 +293,18 @@ export function useBidProject() {
     if (projectId == null) return
     await bidApis.completeMaterials(projectId)
     await bidApis.startDraft(projectId)
+    setMaxPhaseReached(m => Math.max(m, 4))
+    await loadStage3(projectId)
     setPhase('drafting')
-  }, [projectId])
+  }, [projectId, loadStage3])
 
   const startDrafting = useCallback(async () => {
     if (projectId == null) return
     await bidApis.startDraft(projectId)
+    setMaxPhaseReached(m => Math.max(m, 4))
+    await loadStage3(projectId)
     setPhase('drafting')
-  }, [projectId])
+  }, [projectId, loadStage3])
 
   // Confirming the review advances straight to Stage 5 (check & export).
   const completeReview = useCallback(async () => {
@@ -320,6 +346,9 @@ export function useBidProject() {
     tender,
     outline,
     coverage,
+    stage3Outline,
+    stage3Differs,
+    maxPhaseReached,
     error,
     startFromText,
     parseExisting,
@@ -328,6 +357,7 @@ export function useBidProject() {
     buildOutline,
     saveOutline,
     renameSection,
+    loadStage3,
     reset,
     enterMaterials,
     completeMaterials,
