@@ -304,3 +304,56 @@ async def test_draft_section_retry_recovers_to_done(tmp_path):
         )
         assert ds.read_status(ws)["sections"]["s1"] == "done"
         assert dp.call_ghostwriter.await_count == 2
+
+
+# ---- draft unit = top-level chapters only (P0 fix) --------------------------
+
+
+def test_top_level_sections_excludes_leaves():
+    # After a stage-1 outline edit, leaves carry ids too — draft units must
+    # still be top-level chapters only.
+    outline = {
+        "sections": [
+            {
+                "id": "a",
+                "title": "第一章",
+                "children": [
+                    {"id": "a1", "title": "小节A"},
+                    {"id": "a2", "title": "小节B"},
+                ],
+            },
+            {"id": "b", "title": "第二章"},
+        ]
+    }
+    assert [s["id"] for s in dp.top_level_sections(outline)] == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_run_drafting_parallel_fans_out_top_level_only(tmp_path, monkeypatch):
+    ws = BidWorkspace("p0", root=tmp_path)
+    outline = {
+        "sections": [
+            {
+                "id": "s1",
+                "title": "第一章",
+                "children": [
+                    {"id": "s1.1", "title": "小节A"},
+                    {"id": "s1.2", "title": "小节B"},
+                ],
+            },
+            {"id": "s2", "title": "第二章"},
+        ]
+    }
+    ws.write_json("workspace/tender_normalized.json", {"scoring": [], "clauses": []})
+    monkeypatch.setattr(
+        dp, "ensure_normalized_tender", lambda w: "workspace/tender_normalized.json"
+    )
+    monkeypatch.setattr(dp, "_section_importance_key", lambda n, t: (1, 0.0))
+    monkeypatch.setattr(dp, "_draft_section", AsyncMock(return_value=None))
+
+    await dp.run_drafting_parallel(
+        ws=ws, outline=outline, model="m", model_config=None, project_id=1, user_id=1
+    )
+
+    keys = set(ds.read_status(ws)["sections"].keys())
+    assert keys == {"s1", "s2"}  # NOT s1.1 / s1.2

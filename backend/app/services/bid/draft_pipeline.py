@@ -48,6 +48,18 @@ def flatten_sections(outline: dict) -> list[dict]:
     return out
 
 
+def top_level_sections(outline: dict) -> list[dict]:
+    """Draft units = top-level chapters only.
+
+    A leaf carrying an ``id`` (e.g. after a stage-1 outline edit persisted ids
+    onto children) must NOT become an independent draft unit — that produced
+    duplicate section drafts and orphan section files at assembly time
+    (assemble binds only the top level). Unlike ``flatten_sections`` (used by
+    ``find_section`` to locate any node by id), this never recurses.
+    """
+    return [n for n in (outline.get("sections") or []) if n.get("id") is not None]
+
+
 def find_section(outline: dict, section_id: str) -> dict | None:
     for s in flatten_sections(outline):
         if str(s.get("id")) == str(section_id):
@@ -190,7 +202,7 @@ async def run_drafting_parallel(
         kb = ws.read_json("corpus/bidder_knowledge_base.json")
     except FileNotFoundError:
         kb = {}
-    sections = flatten_sections(outline)
+    sections = top_level_sections(outline)
     ds.init_status(ws, [str(s["id"]) for s in sections])
     ordered = sorted(sections, key=lambda n: _section_importance_key(n, tender))
     sem = asyncio.Semaphore(_DRAFT_CONCURRENCY)
