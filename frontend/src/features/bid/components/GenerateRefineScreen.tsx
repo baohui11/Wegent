@@ -501,33 +501,27 @@ export function GenerateRefineScreen({
         className="flex w-[300px] flex-shrink-0 flex-col gap-4 overflow-auto p-4"
         style={{ borderLeft: '1px solid var(--bid-border)', background: 'var(--bid-paper-2)' }}
       >
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <div
-              className="h-1.5 flex-1 overflow-hidden rounded-full"
-              style={{ background: 'var(--bid-primary-soft)' }}
-            >
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${status.total ? Math.round((doneCount / status.total) * 100) : 0}%`,
-                  background: 'var(--bid-primary)',
-                }}
-              />
-            </div>
+        {/* Section identity + status chip. Inspector IA: identity → actions →
+            progress, ordered top-to-bottom by urgency (Linear/Figma model). */}
+        <div className="flex items-center justify-between gap-2">
+          <div
+            className="min-w-0 truncate text-xs font-extrabold"
+            style={{ color: 'var(--bid-sub)' }}
+          >
+            {focusName || t('drafting.progress_title')}
+          </div>
+          {focusId && (
             <span
-              className="text-xs font-bold"
-              style={{ color: 'var(--bid-ink-2)' }}
-              data-testid="bid-draft-progress"
+              data-testid="bid-focus-status"
+              className="flex-shrink-0 whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-semibold"
+              style={{
+                background: 'var(--bid-paper)',
+                color: DOT[status.sections[focusId] ?? 'pending'],
+              }}
             >
-              {doneCount}/{status.total}
+              {t(`phase4.status_${status.sections[focusId] ?? 'pending'}`)}
             </span>
-          </div>
-          <div className="text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
-            {generatingId
-              ? t('drafting.log_drafting', { name: nameOf.get(generatingId) ?? generatingId })
-              : t('drafting.status_done')}
-          </div>
+          )}
         </div>
 
         {placeholderCount > 0 && (
@@ -559,30 +553,24 @@ export function GenerateRefineScreen({
             />
           ) : (
             <>
-              <div
-                className="mb-2 truncate text-xs font-extrabold"
-                style={{ color: 'var(--bid-sub)' }}
-              >
-                {t('review.content_ops')} · {focusName}
-              </div>
-              {/* Presets PREFILL the instruction (one section-level entry point);
-                  the single "重写本节" button below executes. op_regenerate is
-                  dropped — an empty-instruction rewrite is just clicking the main
-                  button with an empty box (🅑/🅒 scope convergence). */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Presets are quick-fill chips for the instruction box (one
+                  section-level entry point; "重写本节" below executes). Identity
+                  now lives in the rail header, so no duplicate title here. */}
+              <div className="mb-1.5 flex flex-wrap gap-1.5">
                 {(
                   [
-                    ['review.op_improve', '优化表达，使行文更凝练'],
-                    ['review.op_figure', '补充与本节内容匹配的配图'],
-                    ['review.op_structure', '优化本节结构层次'],
+                    ['improve', 'review.op_improve', '优化表达，使行文更凝练'],
+                    ['figure', 'review.op_figure', '补充与本节内容匹配的配图'],
+                    ['structure', 'review.op_structure', '优化本节结构层次'],
                   ] as const
-                ).map(([label, instr]) => (
+                ).map(([key, label, instr]) => (
                   <button
-                    key={label}
+                    key={key}
                     type="button"
+                    data-testid={`bid-preset-chip-${key}`}
                     disabled={!focusDone}
                     onClick={() => setInstruction(instr)}
-                    className="rounded-[9px] px-1.5 py-2 text-[11.5px] disabled:cursor-not-allowed"
+                    className="rounded-full px-2.5 py-1 text-[11px] disabled:cursor-not-allowed"
                     style={{
                       background: '#fff',
                       border: '1px solid var(--bid-border)',
@@ -625,6 +613,36 @@ export function GenerateRefineScreen({
               </button>
             </>
           )}
+        </div>
+
+        {/* Document-level progress pinned to the bottom of the rail. */}
+        <div className="mt-auto pt-2">
+          <div className="mb-2 flex items-center gap-2">
+            <div
+              className="h-1.5 flex-1 overflow-hidden rounded-full"
+              style={{ background: 'var(--bid-primary-soft)' }}
+            >
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${status.total ? Math.round((doneCount / status.total) * 100) : 0}%`,
+                  background: 'var(--bid-primary)',
+                }}
+              />
+            </div>
+            <span
+              className="text-xs font-bold"
+              style={{ color: 'var(--bid-ink-2)' }}
+              data-testid="bid-draft-progress"
+            >
+              {doneCount}/{status.total}
+            </span>
+          </div>
+          <div className="text-[11px]" style={{ color: 'var(--bid-muted-2)' }}>
+            {generatingId
+              ? t('drafting.log_drafting', { name: nameOf.get(generatingId) ?? generatingId })
+              : t('drafting.status_done')}
+          </div>
         </div>
       </div>
     </div>

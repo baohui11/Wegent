@@ -66,6 +66,25 @@ test('the document editor is always editable (no read/edit toggle)', async () =>
   expect(screen.queryByTestId('bid-mode-toggle')).not.toBeInTheDocument()
 })
 
+test('right rail order: status → AI → confirm → progress; presets are chips', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  const accept = await screen.findByTestId('bid-review-accept-button')
+  // The focused-section status chip sits at the top of the rail (renders once
+  // the first done section becomes the focus).
+  await screen.findByTestId('bid-focus-status')
+  const progress = screen.getByTestId('bid-draft-progress')
+  // Progress moved to the bottom of the rail: it follows the accept action.
+  expect(accept.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  // Presets are now quick-fill chips that prefill the instruction box.
+  expect(screen.getByTestId('bid-preset-chip-improve')).toBeInTheDocument()
+})
+
 test('right-panel actions are disabled until the focused section is done', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 2,

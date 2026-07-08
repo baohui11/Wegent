@@ -414,6 +414,7 @@
     "status_drafting": "起草中",
     "status_done": "已完成",
     "status_error": "失败",
+    "status_needs_rework": "待返工",
     "section_error": "本节生成失败——可在审阅阶段重写。"
   },
   "phase5": {

@@ -414,6 +414,7 @@
     "status_drafting": "Drafting",
     "status_done": "Done",
     "status_error": "Failed",
+    "status_needs_rework": "Needs rework",
     "section_error": "This section failed to generate — retry it in review."
   },
   "phase5": {
