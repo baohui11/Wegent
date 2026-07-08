@@ -641,7 +641,14 @@ export const bidMockApis = {
     p._redraftAt = { ...(p._redraftAt ?? {}), [sectionId]: Date.now() }
     return delay({ status: 'drafting' }, 80)
   },
-  redraftRange: (): Promise<{ status: string }> => delay({ status: 'drafting' }, 80),
+  redraftRange: (id: number, sectionId: string): Promise<{ status: string }> => {
+    // Same as redraftSection: mark the section re-drafting so draftProgress
+    // applies a visible rewrite. Without this the block-rewrite (bubble ↻ /
+    // "扩写") was a no-op under mock mode — looking like it never ran.
+    const p = need(id)
+    p._redraftAt = { ...(p._redraftAt ?? {}), [sectionId]: Date.now() }
+    return delay({ status: 'drafting' }, 80)
+  },
   saveSection: (_id: number, sectionId: string, content: string): Promise<{ version: string }> => {
     // mock store: overwrite the section body and return its new version
     sectionContentOverrides[sectionId] = content
