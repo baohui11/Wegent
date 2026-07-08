@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from app.services.bid import llm_log, materials_service
+from app.services.bid import heading_align, llm_log, materials_service
 from app.services.chat_shell_model_service import (
     create_response,
     extract_response_text,
@@ -345,11 +345,13 @@ async def call_ghostwriter(
     grounding = resolve_section_grounding(section, tender)
     scoring = grounding["scoring"]
     clauses = grounding["clauses"]
+    leaves = heading_align.leaf_titles(section)
     ctx = {
         "section": {
             "id": section.get("id"),
             "title": section.get("title"),
             "must_keep": section.get("must_keep") or [],
+            "children": leaves,
         },
         "scoring_to_cover": scoring,
         "mandatory_clauses": clauses,
@@ -367,6 +369,15 @@ async def call_ghostwriter(
         "\n\n## 章节标题约定\n正文**不要以章节标题开头**（不要输出 `# 章节名`、`## 章节名`）。"
         "章节标题由系统从大纲注入并在前端单独渲染一次；正文从首段实质性内容开始。"
     )
+    if leaves:
+        instructions += (
+            "\n\n## 小节结构（必须遵守）\n"
+            "本章大纲小节标题清单：\n"
+            + json.dumps(leaves, ensure_ascii=False)
+            + "\n（亦见输入 JSON 的 section.children。）正文必须为每个小节输出一个 `##` 二级标题，"
+            "标题文本**逐字使用**清单里的文本、**保持给定顺序**，每个小节一个 `##`；"
+            "在其下撰写该小节正文。（章标题 H1 仍不要输出；可在小节内按需增加更细的 `###` 子标题。）"
+        )
     if brief:
         instructions += (
             "\n\n## 本节人工编写要求（writing_brief，必须遵守）\n"

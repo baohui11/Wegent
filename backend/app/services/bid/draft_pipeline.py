@@ -10,9 +10,16 @@ import asyncio
 import logging
 
 from app.core.config import settings
-from app.services.bid import agentic_draft_client
+from app.services.bid import (
+    agentic_draft_client,
+)
 from app.services.bid import drafting_service as ds
-from app.services.bid import materials_service, post_gate, section_retrieval
+from app.services.bid import (
+    heading_align,
+    materials_service,
+    post_gate,
+    section_retrieval,
+)
 from app.services.bid.agentic_prompt import build_agentic_prompt
 from app.services.bid.outline_stage3_service import read_stage3_outline
 from app.services.bid.parse_pipeline import BidPipelineError
@@ -175,6 +182,16 @@ async def _draft_section(
                     instruction=post_gate.rework_instruction(result["issues"]),
                     **kw,
                 )
+            # Deterministic alignment backstop (§9): append a placeholder heading
+            # for any outline leaf the ghostwriter still omitted, so the outline↔
+            # body mapping never breaks. The 待填 chip surfaces via the 🅓 gate.
+            target = ws.path(f"workspace/sections/{sid}.md")
+            if target.exists():
+                aligned, appended = heading_align.align_leaf_headings(
+                    node, target.read_text(encoding="utf-8")
+                )
+                if appended:
+                    target.write_text(aligned, encoding="utf-8")
             if result["ok"]:
                 ds.set_section_status(ws, sid, "done")
             else:
