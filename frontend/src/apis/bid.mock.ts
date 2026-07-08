@@ -291,6 +291,8 @@ interface MockProject extends BidProject {
   _draftAt?: number | null
   _draftElapsed?: number
   _redraftAt?: Record<string, number>
+  // Sections whose redraft already applied its visible rewrite (apply once).
+  _redraftDone?: Record<string, boolean>
   outline?: OutlineDoc
   coverage?: CoverageReport
   kb?: Record<string, unknown>
@@ -405,6 +407,11 @@ function tickParse(p: MockProject) {
   }
 }
 
+// A section re-drafts for this long, then finishes with a rewritten body — so
+// the editor + proposal diff visibly change (the old mock was a no-op, which is
+// exactly why "重写没生效" reproduced under mock mode).
+const REDRAFT_MS = 4000
+
 function draftProgress(p: MockProject): DraftStatus {
   // Stamp the start on first observation so a directly-opened drafting project
   // streams from 0 rather than re-basing to "now" on every poll.
@@ -417,6 +424,22 @@ function draftProgress(p: MockProject): DraftStatus {
   SECTION_IDS.forEach((id, i) => {
     sections[id] = i < doneCount ? 'done' : i === doneCount ? 'drafting' : 'pending'
   })
+  // Overlay per-section redraft: a re-drafting section shows 'drafting' for
+  // REDRAFT_MS, then flips to 'done' with a visibly rewritten body (applied once)
+  // so getSectionContent returns changed content and the editor/diff update.
+  const now = Date.now()
+  for (const [sid, at] of Object.entries(p._redraftAt ?? {})) {
+    if (now - at < REDRAFT_MS) {
+      sections[sid] = 'drafting'
+    } else {
+      sections[sid] = 'done'
+      if (!p._redraftDone?.[sid]) {
+        sectionContentOverrides[sid] =
+          `（AI 重写版）本节已根据重写指令优化表达。\n\n${sectionBody(sid)}`
+        p._redraftDone = { ...(p._redraftDone ?? {}), [sid]: true }
+      }
+    }
+  }
   const finished = doneCount >= SECTION_IDS.length
   return {
     total: SECTION_IDS.length,

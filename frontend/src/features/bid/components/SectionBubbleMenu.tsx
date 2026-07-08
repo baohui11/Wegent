@@ -44,6 +44,7 @@ export function SectionBubbleMenu({ editor, onRegenerateBlock }: SectionBubbleMe
 
   const btn = (testid: string, label: string, title: string, run: () => void) => (
     <button
+      key={testid}
       type="button"
       data-testid={testid}
       title={title}
@@ -91,11 +92,13 @@ export function SectionBubbleMenu({ editor, onRegenerateBlock }: SectionBubbleMe
           }}
           data-testid="bid-bubble-toolbar"
         >
-          {btn('bid-bubble-h2', t('editor.bubble.h2'), t('editor.bubble.h2'), () =>
-            editor.chain().focus().toggleHeading({ level: 2 }).run()
-          )}
-          {btn('bid-bubble-h3', t('editor.bubble.h3'), t('editor.bubble.h3'), () =>
-            editor.chain().focus().toggleHeading({ level: 3 }).run()
+          {([2, 3, 4, 5] as const).map(level =>
+            btn(
+              `bid-bubble-h${level}`,
+              t(`editor.bubble.h${level}`),
+              t(`editor.bubble.h${level}`),
+              () => editor.chain().focus().toggleHeading({ level }).run()
+            )
           )}
           {btn('bid-bubble-bold', 'B', t('editor.bubble.bold'), () =>
             editor.chain().focus().toggleBold().run()
@@ -158,7 +161,13 @@ export function SectionBubbleMenu({ editor, onRegenerateBlock }: SectionBubbleMe
               placeholder={t('editor.bubble.regen_prompt')}
               rows={2}
               className="w-full resize-none rounded-md px-2 py-1 text-[12px] outline-none"
-              style={{ border: '1px solid var(--bid-border-2)' }}
+              // Explicit light surface: the popover is a white card, so the
+              // textarea must not inherit a dark-theme black background/text.
+              style={{
+                border: '1px solid var(--bid-border-2)',
+                background: '#fff',
+                color: 'var(--bid-ink)',
+              }}
             />
             <button
               type="button"

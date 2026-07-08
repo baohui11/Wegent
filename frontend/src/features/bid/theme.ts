@@ -42,6 +42,11 @@ export const bidThemeVars = {
   fontFamily:
     "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
   '--bid-serif': "'Noto Serif SC', 'Songti SC', 'SimSun', serif",
+  // The bid workbench is a fixed warm-paper LIGHT design; it never follows the
+  // global dark theme. Lock color-scheme so native controls (textarea/input/
+  // scrollbars) don't invert to dark surfaces under [data-theme='dark'] — e.g.
+  // the rewrite (↻) instruction box turning black.
+  colorScheme: 'light',
 } as CSSProperties
 
 // Shared inline-style helpers for the mockup-faithful components.

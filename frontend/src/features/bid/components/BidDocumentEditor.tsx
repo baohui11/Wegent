@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Editor, EditorContent, useEditor } from '@tiptap/react'
 import { generateJSON } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
@@ -42,6 +42,7 @@ interface SectionSpec {
   version: string
   status: BidSectionStatus
   accepted: boolean
+  title?: string // chapter title, from the outline (rendered by the NodeView)
 }
 
 interface BidDocumentEditorProps {
@@ -49,11 +50,13 @@ interface BidDocumentEditorProps {
   sections: SectionSpec[]
   // sectionId -> outline title (rendered once by the NodeView as the heading).
   sectionNames: Record<string, string>
-  onSaved: (sectionId: string, version: string) => void
+  onSaved: (sectionId: string, version: string, markdown?: string) => void
   onActiveSectionChange?: (sectionId: string | null) => void
   /** Block-scoped AI regen (🅑) — wired to the bubble menu's ↻, carrying the
    * instruction gathered from its popover (③). */
   onRegenerateBlock?: (instruction?: string) => void
+  /** Rename a section's chapter title — persisted to the outline (single source). */
+  onRenameSection?: (sectionId: string, title: string) => void
   /** Unfilled placeholder count (🅓), reported on load and on every edit. */
   onPlaceholderCountChange?: (count: number) => void
   /** Mounted and ready — parent gets the editor + per-section flush. */
@@ -67,7 +70,10 @@ interface BidDocumentEditorProps {
 // heading, lists, blockquote, code, image, table) all exist in the live
 // editor's schema, so the resulting JSON loads cleanly inside a bidSection.
 const BODY_EXTENSIONS = [
-  StarterKit.configure({ link: { openOnClick: false } }),
+  // Heading levels 2–5 (level 1 is the chapter title, rendered by the NodeView
+  // from the outline). MUST match the live editor's StarterKit config below, or
+  // generateJSON's heading JSON won't match the live schema on initial load.
+  StarterKit.configure({ heading: { levels: [2, 3, 4, 5] }, link: { openOnClick: false } }),
   Image,
   Table.configure({ resizable: false }),
   TableRow,
@@ -133,6 +139,7 @@ function buildDocJson(
         version: sec.version,
         status: sec.status,
         accepted: sec.accepted,
+        title: sec.title ?? '',
       },
       content: childContent as unknown[],
     }
@@ -232,11 +239,42 @@ export function BidDocumentEditor({
   onSaved,
   onActiveSectionChange,
   onRegenerateBlock,
+  onRenameSection,
   onPlaceholderCountChange,
   onReady,
 }: BidDocumentEditorProps) {
   const { t } = useTranslation('bidWorkbench')
+  // Latest rename handler behind a stable ref — the editor's extension options
+  // are frozen at creation, so the NodeView reaches the current callback here.
+  const onRenameRef = useRef<((sectionId: string, title: string) => void) | null>(null)
+  onRenameRef.current = onRenameSection ?? null
   const [activeSection, setActiveSection] = useState<string | null>(null)
+  // Last section id reported to the parent, so selection-driven reporting can
+  // dedupe without depending on the (closure-stale) `activeSection` state.
+  const activeSectionRef = useRef<string | null>(null)
+  // Report the caret's owning bidSection to the parent. MUST run on selection
+  // change (not only doc change): the right panel + paragraph regen address the
+  // section the caret is IN, and merely clicking / selecting produces no doc
+  // update. Reads live editor state, so a stale closure is harmless.
+  const reportActiveSection = useCallback(
+    (ed: Editor) => {
+      const $from = ed.state.selection?.$from
+      if (!$from || typeof $from.node !== 'function') return
+      for (let depth = $from.depth; depth > 0; depth--) {
+        const ancestor = $from.node(depth)
+        if (ancestor?.type?.name === 'bidSection') {
+          const sid = String(ancestor.attrs?.sectionId ?? '')
+          if (sid !== activeSectionRef.current) {
+            activeSectionRef.current = sid
+            setActiveSection(sid)
+            onActiveSectionChange?.(sid)
+          }
+          return
+        }
+      }
+    },
+    [onActiveSectionChange]
+  )
   // The block the drag handle currently sits beside (a child of a bidSection —
   // NOT the whole section — because we enable nested targeting below). The `+`
   // insert menu inserts a new block right after this one. Kept across pointer
@@ -254,7 +292,11 @@ export function BidDocumentEditor({
   const editor = useEditor({
     editable: true,
     extensions: [
-      StarterKit.configure({ document: false, link: { openOnClick: false } }),
+      StarterKit.configure({
+        document: false,
+        heading: { levels: [2, 3, 4, 5] },
+        link: { openOnClick: false },
+      }),
       BidDocument,
       Image,
       Table.configure({ resizable: false }),
@@ -262,26 +304,16 @@ export function BidDocumentEditor({
       TableHeader,
       TableCell,
       Markdown.configure({ html: false, transformPastedText: true }),
-      BidSection.configure({ sectionNames }),
+      BidSection.configure({ sectionNames, onRenameSectionRef: onRenameRef }),
       BidPlaceholder,
     ],
     content: { type: 'doc', content: [] },
-    onUpdate: ({ editor }) => {
-      // Track the active section from the cursor's owning bidSection so the
-      // right panel / paragraph regen address the section being edited.
-      const { $from } = editor.state.selection
-      for (let depth = $from.depth; depth > 0; depth--) {
-        const ancestor = $from.node(depth)
-        if (ancestor?.type?.name === 'bidSection') {
-          const sid = String(ancestor.attrs?.sectionId ?? '')
-          if (sid !== activeSection) {
-            setActiveSection(sid)
-            onActiveSectionChange?.(sid)
-          }
-          break
-        }
-      }
-    },
+    // Track the active section from the cursor's owning bidSection so the right
+    // panel / paragraph regen address the section the caret is in. MUST fire on
+    // selection change too — clicking / arrowing into another section produces
+    // no doc update, and addressing off a stale section is the core rewrite bug.
+    onUpdate: ({ editor }) => reportActiveSection(editor),
+    onSelectionUpdate: ({ editor }) => reportActiveSection(editor),
     immediatelyRender: false,
   })
 
@@ -344,7 +376,10 @@ export function BidDocumentEditor({
     queueMicrotask(() => {
       if (cancelled || editor.isDestroyed) return
       const want = new Map(
-        sections.map(s => [s.id, { version: s.version, status: s.status, accepted: s.accepted }])
+        sections.map(s => [
+          s.id,
+          { version: s.version, status: s.status, accepted: s.accepted, title: s.title ?? '' },
+        ])
       )
       editor.commands.command(({ tr, state, dispatch }) => {
         let changed = false
@@ -363,6 +398,10 @@ export function BidDocumentEditor({
           }
           if (node.attrs.accepted !== w.accepted) {
             tr.setNodeAttribute(pos, 'accepted', w.accepted)
+            changed = true
+          }
+          if (w.title && node.attrs.title !== w.title) {
+            tr.setNodeAttribute(pos, 'title', w.title)
             changed = true
           }
         })
@@ -448,6 +487,10 @@ export function BidDocumentEditor({
         // (the section itself is excluded, so ⠿ never drags an entire chapter).
         <DragHandle
           editor={editor}
+          // Keep the library's default `drag-handle` class AND add our own so a
+          // stylesheet can nudge the handle into a left gutter — otherwise it
+          // floats directly over a list item's marker (the ⠿/+ overlap the "1.").
+          className="drag-handle bid-drag-handle"
           nested={{ allowedContainers: ['bidSection'] }}
           onNodeChange={handleNodeChange}
         >

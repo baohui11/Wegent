@@ -20,6 +20,13 @@ export interface BidSectionOptions {
   // (the body markdown carries no heading anymore, see spike-notes §6); a
   // placeholder is derived when an outline name is missing.
   sectionNames?: Record<string, string>
+  // Ref to the latest rename handler. Options are frozen when the editor is
+  // created, so a ref (stable identity, live .current) lets the NodeView reach
+  // the current callback. Editing the title bar calls it to persist the new
+  // chapter title to the outline (single source stays in the outline).
+  onRenameSectionRef?: {
+    current: ((sectionId: string, title: string) => void) | null
+  }
 }
 
 // A top-level document block that owns exactly one bid section. It is
@@ -37,7 +44,7 @@ export const BidSection = Node.create<BidSectionOptions>({
   defining: true,
 
   addOptions() {
-    return { sectionNames: {} }
+    return { sectionNames: {}, onRenameSectionRef: undefined }
   },
 
   addAttributes() {
@@ -51,6 +58,9 @@ export const BidSection = Node.create<BidSectionOptions>({
       version: { default: '' },
       status: { default: 'pending' },
       accepted: { default: false },
+      // Chapter title. Not rendered to HTML / markdown (the title lives in the
+      // outline, injected into buildDocJson); the NodeView renders + edits it.
+      title: { default: '' },
     }
   },
 

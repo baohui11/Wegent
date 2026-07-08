@@ -6,8 +6,21 @@ import {
   type BidProject,
   type CoverageReport,
   type OutlineDoc,
+  type OutlineNode,
   type TenderDoc,
 } from '@/apis/bid'
+
+// Deep-copy the outline, replacing one node's title (matched by id). Pure so the
+// optimistic update and rollback both work off immutable snapshots.
+function renameInOutline(doc: OutlineDoc, sectionId: string, title: string): OutlineDoc {
+  const walk = (nodes: OutlineNode[]): OutlineNode[] =>
+    nodes.map(n => ({
+      ...n,
+      title: n.id === sectionId ? title : n.title,
+      ...(n.children ? { children: walk(n.children) } : {}),
+    }))
+  return { ...doc, sections: doc.sections ? walk(doc.sections) : doc.sections }
+}
 
 export type Phase =
   | 'idle'
@@ -220,6 +233,27 @@ export function useBidProject() {
     [projectId]
   )
 
+  // Rename one chapter's title and persist it to the outline (single source).
+  // Optimistic: update local state immediately (so the NodeView title + left TOC
+  // follow at once), then save; roll back on failure.
+  const renameSection = useCallback(
+    async (sectionId: string, title: string) => {
+      if (projectId == null || !outline) return
+      const prev = outline
+      const edited = renameInOutline(outline, sectionId, title)
+      setOutline(edited)
+      try {
+        const { outline: saved, coverage } = await bidApis.saveOutline(projectId, edited)
+        setOutline(saved)
+        setCoverage(coverage)
+      } catch (e) {
+        setOutline(prev)
+        setError(e instanceof Error ? e.message : 'unknown')
+      }
+    },
+    [projectId, outline]
+  )
+
   const reset = useCallback(() => {
     setPhase('idle')
     setProjectId(null)
@@ -293,6 +327,7 @@ export function useBidProject() {
     open,
     buildOutline,
     saveOutline,
+    renameSection,
     reset,
     enterMaterials,
     completeMaterials,

@@ -2,7 +2,7 @@
 
 'use client'
 
-import ReactDiffViewer from 'react-diff-viewer-continued'
+import ReactDiffViewer, { DiffMethod } from 'react-diff-viewer-continued'
 import { useTranslation } from '@/hooks/useTranslation'
 
 interface SectionProposalReviewProps {
@@ -56,7 +56,16 @@ export function SectionProposalReview({
             style={{ border: '1px solid var(--bid-border)' }}
             data-testid="bid-proposal-diff"
           >
-            <ReactDiffViewer oldValue={oldContent} newValue={newContent} splitView={false} />
+            <ReactDiffViewer
+              oldValue={oldContent}
+              newValue={newContent}
+              splitView={false}
+              // CJK has no word boundaries → char-level diff; wrap long lines so
+              // the panel doesn't scroll horizontally.
+              compareMethod={DiffMethod.CHARS}
+              hideLineNumbers
+              styles={{ contentText: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }}
+            />
           </div>
           <div className="grid grid-cols-3 gap-2">
             <button

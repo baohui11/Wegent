@@ -37,12 +37,15 @@ export function GenerateRefineScreen({
   outline,
   onStateChange,
   onPlaceholderCountChange,
+  onRenameSection,
 }: {
   projectId: number
   outline?: OutlineDoc
   onStateChange?: (state: DraftState) => void
   // Unfilled placeholder count (🅓), surfaced to the shell for the proceed gate.
   onPlaceholderCountChange?: (count: number) => void
+  // Rename a chapter title — persisted to the outline (single source).
+  onRenameSection?: (sectionId: string, title: string) => Promise<void> | void
 }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
@@ -52,6 +55,9 @@ export function GenerateRefineScreen({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
   const [instruction, setInstruction] = useState('')
+  // Last AI-operation failure, shown in the right rail (redraft / regen errors
+  // must not fail silently and strand the review panel).
+  const [opError, setOpError] = useState<string | null>(null)
   // 🅒 AI diff safety: sections with an in-flight AI revision awaiting the user's
   // accept / discard / retry. The snapshot is the pre-redraft content so discard
   // can revert it (frontend-reversible — the backend redraft is destructive).
@@ -103,6 +109,15 @@ export function GenerateRefineScreen({
     }
     return m
   }, [outlineEntries])
+
+  // The single active outline entry (caret-driven). Exactly one entry is active,
+  // so deriving BOTH the chapter-row and heading-row highlight from it is what
+  // removes the old dual-highlight (focus-click vs caret) that lit several rows
+  // at once.
+  const activeEntry = useMemo(
+    () => outlineEntries.find(e => e.key === activeKey) ?? null,
+    [outlineEntries, activeKey]
+  )
 
   const loadContent = useCallback(
     async (id: string) => {
@@ -182,18 +197,50 @@ export function GenerateRefineScreen({
     return versions[sid] ?? ''
   }, [activeId, focusId, versions])
 
+  // Flush a SPECIFIC section (not merely the "active" one). A redraft / regen
+  // must persist ITS OWN target before rewriting, since the caret's active
+  // section can differ from the operation's target — flushing the wrong one
+  // rewrites stale bytes and desyncs the CAS version.
+  const flushSectionId = useCallback(
+    async (sid: string): Promise<string> => {
+      if (editorApiRef.current) return editorApiRef.current.flushSection(sid)
+      return versions[sid] ?? ''
+    },
+    [versions]
+  )
+
+  // Caret moved into a section (reported by the editor on selection change):
+  // mirror it into BOTH the active (caret) and focus (right-rail) state so the
+  // TOC highlight, the inspector and the redraft target all track ONE section.
+  // Stable identity (only setState setters) so the editor captures it once.
+  const handleActiveSection = useCallback((sid: string | null) => {
+    setActiveId(sid)
+    if (sid) setFocusId(sid)
+  }, [])
+
+  // Remove a section's pending AI review (accept, or clean up after a failure).
+  const dropProposal = useCallback((id: string) => {
+    setProposals(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
   // Snapshot a section before an AI redraft so the change is reversible (🅒).
   // Keeps the ORIGINAL snapshot across retries, so discard always reverts to the
   // content from before the first redraft of this review cycle.
   const beginProposal = useCallback(
-    (id: string, instr: string | undefined, isBlock: boolean) => {
+    (id: string, instr: string | undefined, isBlock: boolean, oldContent: string) => {
       setProposals(prev =>
         prev[id]
           ? prev
           : {
               ...prev,
               [id]: {
-                oldContent: contents[id] ?? '',
+                // oldContent is the caller's just-flushed baseline (the real
+                // on-disk bytes), NOT the possibly-stale contents cache.
+                oldContent,
                 oldVersion: versions[id] ?? '',
                 instruction: instr,
                 isBlock,
@@ -201,19 +248,31 @@ export function GenerateRefineScreen({
             }
       )
     },
-    [contents, versions]
+    [versions]
   )
 
   const redraft = useCallback(
     async (id: string, instr?: string) => {
-      // Persist any pending edit first so the redraft operates on the saved
-      // content (and its on-disk version).
-      await flushActive()
-      beginProposal(id, instr, false) // gate the rewrite behind review (🅒)
+      setOpError(null)
+      // Persist THIS section's pending edit first so the redraft operates on the
+      // saved content (and its on-disk version).
+      await flushSectionId(id)
+      // Snapshot the just-saved body as the diff baseline (real bytes, not the
+      // stale contents cache).
+      const editor = editorApiRef.current?.editor ?? null
+      const node = editor ? findSectionNode(editor, id) : null
+      const oldMd = node && editor ? serializeSection(editor, node) : (contents[id] ?? '')
+      beginProposal(id, instr, false, oldMd) // gate the rewrite behind review (🅒)
       loadedRef.current.delete(id) // force re-fetch after this section re-drafts
-      await bidApis.redraftSection(projectId, id, instr || undefined)
+      try {
+        await bidApis.redraftSection(projectId, id, instr || undefined)
+      } catch {
+        // Don't leave the rail stuck in a bogus review; surface the failure.
+        dropProposal(id)
+        setOpError(t('review.op_failed'))
+      }
     },
-    [projectId, flushActive, beginProposal]
+    [projectId, flushSectionId, beginProposal, dropProposal, t, contents]
   )
 
   // Regenerate the active section's cursor block only: flush the pending edit
@@ -228,38 +287,38 @@ export function GenerateRefineScreen({
     async (instr?: string) => {
       const sid = activeId ?? focusId
       if (!sid) return
+      setOpError(null)
       const editor = editorApiRef.current?.editor ?? null
-      const baseVersion = await flushActive()
-      beginProposal(sid, instr, true) // block regen is reviewable too (🅒)
+      const baseVersion = await flushSectionId(sid)
       // Serialize the section's body (title-less) — the exact bytes the backend
       // now stores — and map the cursor block (section-local index) to its line
-      // range within that body.
+      // range within that body. This body is also the diff baseline.
       const sectionNode = editor ? findSectionNode(editor, sid) : null
       const md =
         sectionNode && editor ? serializeSection(editor, sectionNode) : (contents[sid] ?? '')
+      beginProposal(sid, instr, true, md) // block regen is reviewable too (🅒)
       const idx = topBlockIndexOf(editor, sid)
       const { startLine, endLine } = blockLineRange(md, idx)
       loadedRef.current.delete(sid) // force re-fetch after the range redrafts
-      await bidApis.redraftRange(
-        projectId,
-        sid,
-        startLine,
-        endLine,
-        instr || undefined,
-        baseVersion
-      )
+      try {
+        await bidApis.redraftRange(
+          projectId,
+          sid,
+          startLine,
+          endLine,
+          instr || undefined,
+          baseVersion
+        )
+      } catch {
+        dropProposal(sid)
+        setOpError(t('review.op_failed'))
+      }
     },
-    [activeId, focusId, contents, projectId, flushActive, beginProposal]
+    [activeId, focusId, contents, projectId, flushSectionId, beginProposal, dropProposal, t]
   )
 
   // 🅒 review lifecycle. Accept keeps the regenerated content (already on disk).
-  const acceptProposal = useCallback((id: string) => {
-    setProposals(prev => {
-      const next = { ...prev }
-      delete next[id]
-      return next
-    })
-  }, [])
+  const acceptProposal = useCallback((id: string) => dropProposal(id), [dropProposal])
 
   // Discard reverts to the pre-redraft snapshot: the backend redraft already
   // overwrote the file, so we write the snapshot back and re-seed the editor.
@@ -314,11 +373,29 @@ export function GenerateRefineScreen({
       document.querySelector<HTMLElement>(`[data-bid-section="${id}"]`) ?? docRefs.current[id]
     anchor?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }
+  // Resolve a clicked outline row to its actual draft section id: the nearest
+  // self-or-ancestor that has a draft status. A row can be the section itself, a
+  // grouping chapter, or a sub-label — addressing a non-section row raw disabled
+  // the inspector and sent invalid ids to redraft (rewrite bug RC2).
+  const sectionIdOf = (id: string): string => {
+    if (status.sections[id]) return id
+    let cur = flat.find(n => n.id === id)
+    while (cur?.parentId) {
+      if (status.sections[cur.parentId]) return cur.parentId
+      cur = flat.find(n => n.id === cur!.parentId)
+    }
+    return id
+  }
   const focus = (id: string) => {
     void flushActive() // persist any in-flight edit before switching focus
-    setFocusId(id)
-    setActiveId(id)
-    scrollTo(id)
+    const sid = sectionIdOf(id)
+    setFocusId(sid)
+    setActiveId(sid)
+    // Move the caret into the section so the caret-driven TOC highlight follows
+    // the click — the single source of truth for the active entry.
+    const editor = editorApiRef.current?.editor ?? null
+    if (editor && status.sections[sid] === 'done') caretIntoSection(editor, sid)
+    scrollTo(sid)
   }
   const toggleCollapse = (id: string) =>
     setCollapsed(prev => {
@@ -334,7 +411,7 @@ export function GenerateRefineScreen({
   }
   const accept = async () => {
     if (!focusId) return
-    await flushActive() // don't accept a version that drops an unsaved edit
+    await flushSectionId(focusId) // don't accept a version that drops an unsaved edit
     await bidApis.acceptSection(projectId, focusId)
     setAccepted((await bidApis.getReviewStatus(projectId)).accepted)
   }
@@ -342,16 +419,20 @@ export function GenerateRefineScreen({
   // Build the per-section specs the single-document editor renders. Only done
   // sections become bidSection nodes; mid-draft / pending sections render their
   // chrome + skeleton beside the document editor (status-driven, locked).
-  const doneSections = sectionIds
-    .filter(id => status.sections[id] === 'done')
-    .map(id => ({
-      id,
-      content: contents[id] ?? '',
-      version: versions[id] ?? '',
-      status: status.sections[id] as BidSectionStatus,
-      accepted: Boolean(accepted[id]),
-    }))
-  const nonDoneSections = sectionIds.filter(id => status.sections[id] !== 'done')
+  // A section stays IN the single-document editor once it has content, even
+  // while re-drafting — so a rewrite locks it in place (NodeView shows the
+  // 'drafting' status + becomes non-editable) instead of being yanked out to the
+  // skeleton area and reinserted on done (the "消失又出现" flicker).
+  const inDoc = (id: string) => status.sections[id] === 'done' || contents[id] !== undefined
+  const doneSections = sectionIds.filter(inDoc).map(id => ({
+    id,
+    content: contents[id] ?? '',
+    version: versions[id] ?? '',
+    status: status.sections[id] as BidSectionStatus,
+    accepted: Boolean(accepted[id]),
+    title: nameOf.get(id) ?? id,
+  }))
+  const nonDoneSections = sectionIds.filter(id => !inDoc(id))
 
   return (
     <div className="flex h-full" data-testid="bid-generate-refine-screen">
@@ -371,7 +452,13 @@ export function GenerateRefineScreen({
           .map(n => {
             const st = statusFor(n)
             const hasKids = flat.some(x => x.parentId === n.id)
-            const isFocus = focusId === n.id
+            // Highlight the caret's entry (single source): when the caret is in
+            // a heading only that heading row lights up — never also its chapter.
+            // Falls back to the click-driven focus when there is no live outline
+            // yet (nothing done / mocked editor under Jest).
+            const rowActive = activeEntry
+              ? activeEntry.kind === 'section' && activeEntry.sectionId === n.id
+              : focusId === n.id
             // In-document headings (H2/H3) discovered live inside this section's
             // body — rendered as clickable sub-entries under the section (②).
             const headings = headingsBySection.get(n.id) ?? []
@@ -380,11 +467,12 @@ export function GenerateRefineScreen({
                 <div
                   onClick={() => focus(n.id)}
                   data-testid={`bid-generate-node-${n.id}`}
+                  data-active={rowActive ? 'true' : undefined}
                   className="flex cursor-pointer items-center gap-1.5 rounded-md py-1.5"
                   style={{
                     paddingLeft: 8 + n.depth * 14,
                     paddingRight: 8,
-                    background: isFocus ? 'var(--bid-primary-soft)' : 'transparent',
+                    background: rowActive ? 'var(--bid-primary-soft)' : 'transparent',
                   }}
                 >
                   {hasKids ? (
@@ -416,8 +504,8 @@ export function GenerateRefineScreen({
                     className="min-w-0 flex-1 truncate"
                     style={{
                       fontSize: n.depth === 0 ? 12.5 : 12,
-                      fontWeight: n.depth === 0 || isFocus ? 700 : 500,
-                      color: isFocus ? 'var(--bid-primary)' : 'var(--bid-ink-2)',
+                      fontWeight: n.depth === 0 || rowActive ? 700 : 500,
+                      color: rowActive ? 'var(--bid-primary)' : 'var(--bid-ink-2)',
                     }}
                   >
                     {n.name}
@@ -437,9 +525,12 @@ export function GenerateRefineScreen({
                     key={h.key}
                     onClick={() => scrollToEntry(h)}
                     data-testid={`bid-generate-heading-${h.key}`}
+                    data-active={activeKey === h.key ? 'true' : undefined}
                     className="flex cursor-pointer items-center rounded-md py-1"
                     style={{
-                      paddingLeft: 8 + (n.depth + 1) * 14 + 4,
+                      // Indent by the heading's own level (H2 → one level under
+                      // the section, H3 → two, …) so H2–H5 nest visibly.
+                      paddingLeft: 8 + (n.depth + (h.level - 1)) * 14 + 4,
                       paddingRight: 8,
                       background: activeKey === h.key ? 'var(--bid-primary-soft)' : 'transparent',
                     }}
@@ -483,9 +574,15 @@ export function GenerateRefineScreen({
               projectId={projectId}
               sections={doneSections}
               sectionNames={Object.fromEntries(nameOf)}
-              onSaved={(sid, v) => setVersions(prev => ({ ...prev, [sid]: v }))}
-              onActiveSectionChange={setActiveId}
+              onSaved={(sid, v, md) => {
+                setVersions(prev => ({ ...prev, [sid]: v }))
+                // Keep the content cache in sync with what was persisted, so the
+                // proposal diff baseline and later reads aren't stale.
+                if (md !== undefined) setContents(prev => ({ ...prev, [sid]: md }))
+              }}
+              onActiveSectionChange={handleActiveSection}
               onRegenerateBlock={instr => void regenBlock(instr)}
+              onRenameSection={onRenameSection}
               onPlaceholderCountChange={n => {
                 setPlaceholderCount(n)
                 onPlaceholderCountChange?.(n)
@@ -610,6 +707,20 @@ export function GenerateRefineScreen({
           </div>
         )}
 
+        {opError && (
+          <div
+            data-testid="bid-op-error"
+            className="rounded-lg px-3 py-2 text-[11.5px] font-semibold"
+            style={{
+              background: 'var(--bid-paper)',
+              color: 'var(--bid-primary)',
+              border: '1px solid var(--bid-border-2)',
+            }}
+          >
+            {opError}
+          </div>
+        )}
+
         <div style={{ opacity: focusDone || focusProposal ? 1 : 0.5 }}>
           {focusProposal && focusId ? (
             // 🅒 review gate: while an AI revision is pending, the panel offers
@@ -661,7 +772,11 @@ export function GenerateRefineScreen({
                 disabled={!focusDone}
                 rows={3}
                 className="mt-2 w-full resize-y rounded-lg px-3 py-2 text-xs outline-none disabled:cursor-not-allowed"
-                style={{ border: '1px solid var(--bid-border-2)', background: '#fff' }}
+                style={{
+                  border: '1px solid var(--bid-border-2)',
+                  background: '#fff',
+                  color: 'var(--bid-ink)',
+                }}
               />
               <button
                 type="button"
@@ -740,6 +855,31 @@ function findSectionNode(editor: any, sectionId: string): any {
     }
   })
   return found
+}
+
+// Place the caret at the start of a section's body so the caret-driven TOC
+// highlight follows a TOC click. No-ops when the section is absent or the
+// editor has no real selection API (mocked under Jest).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function caretIntoSection(editor: any, sectionId: string): void {
+  if (!editor) return
+  let pos: number | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  editor.state.doc.forEach((node: any, offset: number) => {
+    if (pos !== null) return
+    if (node.type?.name === 'bidSection' && String(node.attrs?.sectionId) === sectionId) {
+      pos = offset
+    }
+  })
+  if (pos === null) return
+  try {
+    editor
+      .chain()
+      .setTextSelection(pos + 1)
+      .run()
+  } catch {
+    // No real selection to set (e.g. mocked editor) — highlight stays as-is.
+  }
 }
 
 function Skeleton({ lines }: { lines: number }) {

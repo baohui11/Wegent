@@ -38,7 +38,7 @@ describe('BidSection node definition', () => {
 
   test('declares the addressing + CAS attrs used to persist each section', () => {
     const attrs = config.addAttributes!()
-    expect(Object.keys(attrs)).toEqual(['sectionId', 'version', 'status', 'accepted'])
+    expect(Object.keys(attrs)).toEqual(['sectionId', 'version', 'status', 'accepted', 'title'])
     expect(attrs.sectionId.default).toBe('')
     expect(attrs.version.default).toBe('')
     expect(attrs.status.default).toBe('pending')

@@ -4,8 +4,17 @@ interface ReactDiffViewerProps {
   newValue?: string
   splitView?: boolean
   showDiffOnly?: boolean
+  hideLineNumbers?: boolean
+  compareMethod?: string
   styles?: Record<string, unknown>
 }
+
+// Named export mirrored from the real module (consumers use DiffMethod.CHARS).
+export const DiffMethod = {
+  CHARS: 'diffChars',
+  WORDS: 'diffWords',
+  LINES: 'diffLines',
+} as const
 
 export default function ReactDiffViewer({ oldValue = '', newValue = '' }: ReactDiffViewerProps) {
   return (

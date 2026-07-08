@@ -82,6 +82,7 @@ export function BidWorkbenchDesktop() {
     startNew,
     open,
     saveOutline,
+    renameSection,
     reset,
     enterMaterials,
     completeMaterials,
@@ -264,6 +265,7 @@ export function BidWorkbenchDesktop() {
             outline={outline ?? undefined}
             onStateChange={setDraftState}
             onPlaceholderCountChange={setPlaceholderCount}
+            onRenameSection={renameSection}
           />
         )}
         {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (

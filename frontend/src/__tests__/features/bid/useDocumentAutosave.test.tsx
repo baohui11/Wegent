@@ -146,7 +146,7 @@ describe('useDocumentAutosave', () => {
     })
     expect(bidApis.saveSection).toHaveBeenCalledWith(1, 'a', 'A body EDITED', 'v1a')
     expect(version).toBe('v2-a')
-    expect(onSaved).toHaveBeenCalledWith('a', 'v2-a')
+    expect(onSaved).toHaveBeenCalledWith('a', 'v2-a', 'A body EDITED')
     jest.useRealTimers()
   })
 

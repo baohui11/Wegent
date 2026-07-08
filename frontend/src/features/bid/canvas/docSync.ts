@@ -24,6 +24,10 @@ export interface SectionSyncSpec {
   content: string
   version: string
   accepted: boolean
+  // Section (chapter) title — an attribute like version/accepted (NOT body), so
+  // an outline rename updates the NodeView title via the targeted attr path
+  // without a full rebuild.
+  title?: string
 }
 
 // djb2 — a short, stable digest so a large body doesn't bloat the effect key
@@ -41,7 +45,7 @@ export function contentSignature(sections: SectionSyncSpec[]): string {
   return sections.map(s => `${s.id}~${digest(s.content)}`).join('|')
 }
 
-// Per-section version + accepted. Drives targeted attribute updates only.
+// Per-section version + accepted + title. Drives targeted attribute updates only.
 export function attrSignature(sections: SectionSyncSpec[]): string {
-  return sections.map(s => `${s.id}:${s.version}:${s.accepted ? 1 : 0}`).join('|')
+  return sections.map(s => `${s.id}:${s.version}:${s.accepted ? 1 : 0}:${s.title ?? ''}`).join('|')
 }

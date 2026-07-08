@@ -47,7 +47,9 @@ export function useDocumentAutosave({
 }: {
   projectId: number
   editor: Editor | null
-  onSaved: (sectionId: string, version: string) => void
+  // markdown = the exact body just persisted, so the parent can keep its own
+  // content cache in sync (and diff against a real baseline).
+  onSaved: (sectionId: string, version: string, markdown?: string) => void
 }) {
   const [saveState, setSaveState] = useState<Record<string, SectionSaveState>>({})
   // Last persisted body markdown per section — the dirty-detection baseline.
@@ -79,7 +81,7 @@ export function useDocumentAutosave({
           dispatch?.(tr)
           return true
         })
-        onSaved(sid, r.version)
+        onSaved(sid, r.version, md)
         setSaveState(s => ({ ...s, [sid]: 'saved' }))
         return r.version
       } catch {

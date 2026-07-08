@@ -348,27 +348,77 @@
 .bid-prose p {
   margin-bottom: 0.75em;
   line-height: 2;
-  text-indent: 2em;
 }
 
 .bid-prose h1,
 .bid-prose h2,
 .bid-prose h3,
-.bid-prose h4 {
+.bid-prose h4,
+.bid-prose h5 {
   font-family: 'Noto Sans SC', sans-serif;
   font-weight: 700;
   color: var(--bid-ink);
   margin: 0.75em 0 0.5em;
+  /* Clear the sticky stepper/header when a TOC heading entry scrolls into view. */
+  scroll-margin-top: 80px;
+}
+
+/* In-body heading size ladder (Tailwind preflight flattens all headings to
+   inherit; give each level a distinct size). Level 1 = the chapter title, which
+   the NodeView renders separately from the outline. */
+.bid-prose h2 {
+  font-size: 17px;
 }
 
 .bid-prose h3 {
-  font-size: 15px;
+  font-size: 15.5px;
+}
+
+.bid-prose h4 {
+  font-size: 14.5px;
+}
+
+.bid-prose h5 {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .bid-prose ul,
 .bid-prose ol {
   line-height: 2;
   margin-bottom: 0.75em;
+  /* Restore list markers + indent that Tailwind preflight resets (reset:0 on
+     ol/ul). Without this, ordered/unordered lists render as flat, marker-less,
+     un-indented lines inside the editor — indistinguishable from paragraphs. */
+  padding-left: 1.5em;
+}
+
+.bid-prose ul {
+  list-style-type: disc;
+}
+
+.bid-prose ol {
+  list-style-type: decimal;
+}
+
+.bid-prose ul ul {
+  list-style-type: circle;
+}
+
+/* ProseMirror wraps every <li> body in a <p>; tighten its spacing so list items
+   don't inherit the full paragraph margin. */
+.bid-prose li p {
+  margin-bottom: 0.25em;
+}
+
+/* The block drag/insert handle is placed just left of the hovered block. For a
+   list item that band is exactly where the "1."/"•" marker sits (list markers
+   render outside, left of the item box), so the ⠿/+ handle overlaps the marker.
+   Shift the handle into a dedicated left gutter — clears the widest markers
+   while staying inside the document card's padding, and keeps list hanging
+   indent intact (no list-style-position change). */
+.bid-drag-handle {
+  margin-left: -1.9em;
 }
 
 .bid-prose blockquote {
@@ -481,6 +531,15 @@
 .bid-prose .bid-block-insert[data-node-type='heading'] {
   height: auto;
   padding-top: 2px;
+}
+
+/* A list item is indented by the list's left padding (1.5em) and the handle
+   targets the <li>, so without compensation its handle sits 1.5em right of the
+   paragraph/heading handles. Shift it back onto the same vertical gutter so all
+   block handles line up (top-level list; nested lists keep their extra indent,
+   matching Notion). */
+.bid-prose .bid-block-insert[data-node-type='listItem'] {
+  transform: translateX(calc(-8px - 1.5em));
 }
 
 .bid-prose .bid-block-insert > button {

@@ -45,6 +45,17 @@ export function useDocumentOutline(editor: Editor | null, sectionNames: Record<s
 
   const scrollTo = useCallback(
     (entry: OutlineEntry) => {
+      // Move the caret to the clicked entry so the caret-driven active highlight
+      // follows the click — the single source of truth for "where am I". Without
+      // this a click scrolls but the previous entry stays highlighted.
+      try {
+        editor
+          ?.chain()
+          .setTextSelection(entry.pos + 1)
+          .run()
+      } catch {
+        // No real selection to set (mocked editor under Jest).
+      }
       // Sections have a stable DOM anchor (BidSectionNodeView data-bid-section);
       // in-body headings resolve their DOM via the ProseMirror position.
       if (entry.kind === 'section') {
@@ -53,8 +64,11 @@ export function useDocumentOutline(editor: Editor | null, sectionNames: Record<s
           ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         return
       }
-      const dom = editor?.view?.domAtPos(entry.pos)?.node as globalThis.Node | undefined
-      const el = dom?.nodeType === 1 ? (dom as HTMLElement) : (dom?.parentElement ?? null)
+      // nodeDOM(pos) returns the DOM element of the node that STARTS at `pos`
+      // (the heading itself). domAtPos(pos) at a block boundary instead returns
+      // the parent content container + child offset, so scrolling it jumped to
+      // the section top rather than the heading — that was the bug.
+      const el = editor?.view?.nodeDOM(entry.pos) as HTMLElement | null
       el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
     },
     [editor]

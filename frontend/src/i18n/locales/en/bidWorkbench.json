@@ -370,6 +370,8 @@
     "bubble": {
       "h2": "H2",
       "h3": "H3",
+      "h4": "H4",
+      "h5": "H5",
       "bold": "Bold",
       "italic": "Italic",
       "code": "Inline code",
@@ -544,6 +546,7 @@
     "redraft": "Rewrite this section",
     "complete": "Complete review →",
     "pick_section": "Select a section on the left",
-    "header_action": "Confirm content & enter check"
+    "header_action": "Confirm content & enter check",
+    "op_failed": "Rewrite failed. Please try again."
   }
 }
