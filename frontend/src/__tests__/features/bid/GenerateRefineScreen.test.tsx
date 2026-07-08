@@ -66,6 +66,26 @@ test('the document editor is always editable (no read/edit toggle)', async () =>
   expect(screen.queryByTestId('bid-mode-toggle')).not.toBeInTheDocument()
 })
 
+test('TOC click scrolls to the section via its [data-bid-section] anchor', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  render(<GenerateRefineScreen projectId={1} outline={OUTLINE as never} />)
+  const node = await screen.findByTestId('bid-generate-node-s1')
+  // Done sections live in the single document editor; scroll targets their
+  // BidSectionNodeView [data-bid-section] anchor (jsdom has no real nodeview, so
+  // stub querySelector — the anchor itself is covered by the Playwright smoke).
+  const scrollIntoView = jest.fn()
+  const qs = jest.spyOn(document, 'querySelector').mockReturnValue({ scrollIntoView } as never)
+  fireEvent.click(node)
+  expect(qs).toHaveBeenCalledWith('[data-bid-section="s1"]')
+  expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+  qs.mockRestore()
+})
+
 test('right rail order: status → AI → confirm → progress; presets are chips', async () => {
   ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
     total: 1,

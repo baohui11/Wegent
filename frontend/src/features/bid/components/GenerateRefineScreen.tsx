@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { bidApis, type DraftStatus, type OutlineDoc } from '@/apis/bid'
 import {
@@ -19,6 +19,8 @@ import {
 import { blockLineRange, topBlockIndexOf } from '../canvas/blockRange'
 import { serializeSection } from '../canvas/serializeSection'
 import { SectionProposalReview } from './SectionProposalReview'
+import { useDocumentOutline } from '../hooks/useDocumentOutline'
+import type { OutlineEntry } from '../canvas/documentOutline'
 
 const DOT: Record<string, string> = {
   pending: 'var(--bid-border-3)',
@@ -70,11 +72,37 @@ export function GenerateRefineScreen({
   // The single document editor's API (live editor instance + per-section
   // flush). Replaces the per-section apisRef Map from the stacked architecture.
   const editorApiRef = useRef<BidDocumentEditorApi | null>(null)
+  // Flipped true when the document editor registers its API, so the derived-
+  // outline hook picks up the live editor (editorApiRef is a ref, not reactive).
+  // Boolean + idempotent set: onReady may fire on every render (its identity
+  // changes), so setting the SAME value lets React bail out instead of looping.
+  const [editorReady, setEditorReady] = useState(false)
 
   const flat = useMemo(() => flattenOutline(outline?.sections), [outline])
   const rows = useMemo(() => dfsOrder(flat), [flat])
   const nameOf = useMemo(() => new Map(flat.map(n => [n.id, n.name])), [flat])
   const chapterOrder = useMemo(() => childrenOf(flat, null).map(c => c.id), [flat])
+
+  // Live document outline (PR-A ①②): the left panel keeps the backend chapter
+  // skeleton (rows) and augments each section with its in-document headings,
+  // recomputed live as the user edits. Caret-driven active highlight.
+  const liveEditor = editorReady ? (editorApiRef.current?.editor ?? null) : null
+  const memoNames = useMemo(() => Object.fromEntries(nameOf), [nameOf])
+  const {
+    entries: outlineEntries,
+    activeKey,
+    scrollTo: scrollToEntry,
+  } = useDocumentOutline(liveEditor, memoNames)
+  const headingsBySection = useMemo(() => {
+    const m = new Map<string, OutlineEntry[]>()
+    for (const e of outlineEntries) {
+      if (e.kind !== 'heading') continue
+      const arr = m.get(e.sectionId)
+      if (arr) arr.push(e)
+      else m.set(e.sectionId, [e])
+    }
+    return m
+  }, [outlineEntries])
 
   const loadContent = useCallback(
     async (id: string) => {
@@ -278,8 +306,14 @@ export function GenerateRefineScreen({
     (status.sections[n.id] ??
       status.sections[rootChapterId(flat, n.id)] ??
       'pending') as BidSectionStatus
-  const scrollTo = (id: string) =>
-    docRefs.current[id]?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  const scrollTo = (id: string) => {
+    // Done sections live inside the single document editor and expose a
+    // [data-bid-section] anchor (BidSectionNodeView); non-done sections still
+    // render beside it with a docRefs anchor. Prefer the DOM anchor, fall back.
+    const anchor =
+      document.querySelector<HTMLElement>(`[data-bid-section="${id}"]`) ?? docRefs.current[id]
+    anchor?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
   const focus = (id: string) => {
     void flushActive() // persist any in-flight edit before switching focus
     setFocusId(id)
@@ -338,59 +372,90 @@ export function GenerateRefineScreen({
             const st = statusFor(n)
             const hasKids = flat.some(x => x.parentId === n.id)
             const isFocus = focusId === n.id
+            // In-document headings (H2/H3) discovered live inside this section's
+            // body — rendered as clickable sub-entries under the section (②).
+            const headings = headingsBySection.get(n.id) ?? []
             return (
-              <div
-                key={n.id}
-                onClick={() => focus(n.id)}
-                data-testid={`bid-generate-node-${n.id}`}
-                className="flex cursor-pointer items-center gap-1.5 rounded-md py-1.5"
-                style={{
-                  paddingLeft: 8 + n.depth * 14,
-                  paddingRight: 8,
-                  background: isFocus ? 'var(--bid-primary-soft)' : 'transparent',
-                }}
-              >
-                {hasKids ? (
-                  <span
-                    onClick={e => {
-                      e.stopPropagation()
-                      toggleCollapse(n.id)
-                    }}
-                    className="inline-block flex-shrink-0 text-[9px]"
-                    style={{
-                      opacity: 0.5,
-                      transform: collapsed.has(n.id) ? 'none' : 'rotate(90deg)',
-                      transition: 'transform .15s',
-                    }}
-                  >
-                    ▸
-                  </span>
-                ) : (
-                  <span
-                    className="h-2 w-2 flex-shrink-0 rounded-full"
-                    style={{
-                      background: DOT[st],
-                      animation: st === 'drafting' ? 'pulse 1.2s ease-in-out infinite' : undefined,
-                    }}
-                  />
-                )}
-                <span
-                  className="min-w-0 flex-1 truncate"
+              <Fragment key={n.id}>
+                <div
+                  onClick={() => focus(n.id)}
+                  data-testid={`bid-generate-node-${n.id}`}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-md py-1.5"
                   style={{
-                    fontSize: n.depth === 0 ? 12.5 : 12,
-                    fontWeight: n.depth === 0 || isFocus ? 700 : 500,
-                    color: isFocus ? 'var(--bid-primary)' : 'var(--bid-ink-2)',
+                    paddingLeft: 8 + n.depth * 14,
+                    paddingRight: 8,
+                    background: isFocus ? 'var(--bid-primary-soft)' : 'transparent',
                   }}
                 >
-                  {n.name}
-                </span>
-                {st === 'needs_rework' && (
-                  <span className="flex-shrink-0 text-[10px]" style={{ color: 'var(--bid-warn)' }}>
-                    {t('drafting.status_needs_rework')}
+                  {hasKids ? (
+                    <span
+                      onClick={e => {
+                        e.stopPropagation()
+                        toggleCollapse(n.id)
+                      }}
+                      className="inline-block flex-shrink-0 text-[9px]"
+                      style={{
+                        opacity: 0.5,
+                        transform: collapsed.has(n.id) ? 'none' : 'rotate(90deg)',
+                        transition: 'transform .15s',
+                      }}
+                    >
+                      ▸
+                    </span>
+                  ) : (
+                    <span
+                      className="h-2 w-2 flex-shrink-0 rounded-full"
+                      style={{
+                        background: DOT[st],
+                        animation:
+                          st === 'drafting' ? 'pulse 1.2s ease-in-out infinite' : undefined,
+                      }}
+                    />
+                  )}
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    style={{
+                      fontSize: n.depth === 0 ? 12.5 : 12,
+                      fontWeight: n.depth === 0 || isFocus ? 700 : 500,
+                      color: isFocus ? 'var(--bid-primary)' : 'var(--bid-ink-2)',
+                    }}
+                  >
+                    {n.name}
                   </span>
-                )}
-                {accepted[n.id] && <span style={{ color: 'var(--bid-success)' }}>✓</span>}
-              </div>
+                  {st === 'needs_rework' && (
+                    <span
+                      className="flex-shrink-0 text-[10px]"
+                      style={{ color: 'var(--bid-warn)' }}
+                    >
+                      {t('drafting.status_needs_rework')}
+                    </span>
+                  )}
+                  {accepted[n.id] && <span style={{ color: 'var(--bid-success)' }}>✓</span>}
+                </div>
+                {headings.map(h => (
+                  <div
+                    key={h.key}
+                    onClick={() => scrollToEntry(h)}
+                    data-testid={`bid-generate-heading-${h.key}`}
+                    className="flex cursor-pointer items-center rounded-md py-1"
+                    style={{
+                      paddingLeft: 8 + (n.depth + 1) * 14 + 4,
+                      paddingRight: 8,
+                      background: activeKey === h.key ? 'var(--bid-primary-soft)' : 'transparent',
+                    }}
+                  >
+                    <span
+                      className="min-w-0 flex-1 truncate text-[11.5px]"
+                      style={{
+                        color: activeKey === h.key ? 'var(--bid-primary)' : 'var(--bid-muted-2)',
+                        fontWeight: activeKey === h.key ? 700 : 500,
+                      }}
+                    >
+                      {h.text}
+                    </span>
+                  </div>
+                ))}
+              </Fragment>
             )
           })}
       </div>
@@ -427,6 +492,7 @@ export function GenerateRefineScreen({
               }}
               onReady={api => {
                 editorApiRef.current = api
+                setEditorReady(true)
               }}
             />
           )}
