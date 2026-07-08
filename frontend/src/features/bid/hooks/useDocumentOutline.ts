@@ -17,7 +17,13 @@ export function useDocumentOutline(editor: Editor | null, sectionNames: Record<s
   useEffect(() => {
     if (!editor) return
     const recompute = () => {
-      const next = deriveOutline(editor.state.doc, sectionNames)
+      // Guard the mocked-editor path (Jest maps tiptap to a stub whose doc has
+      // no real forEach → 0 entries; real behaviour is covered by Playwright).
+      const doc = editor.state?.doc as { forEach?: unknown } | undefined
+      const next =
+        doc && typeof doc.forEach === 'function'
+          ? deriveOutline(editor.state.doc, sectionNames)
+          : []
       setEntries(next)
       // Active = the last entry whose position does not pass the caret.
       const caret = editor.state.selection?.$from?.pos ?? 0

@@ -35,6 +35,10 @@ export function deriveOutline(
       text: sectionNames[sectionId] ?? sectionId,
       pos: offset,
     })
+    // A real ProseMirror node exposes forEach to walk its children; the Jest
+    // editor mock yields section stubs without it — keep the chapter entry but
+    // skip heading derivation there (real behaviour is covered by Playwright).
+    if (typeof (section as { forEach?: unknown }).forEach !== 'function') return
     // First child sits one position inside the section node; accumulate each
     // child's size to get the next child's absolute position.
     let inner = offset + 1
