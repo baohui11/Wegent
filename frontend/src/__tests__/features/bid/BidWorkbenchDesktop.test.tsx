@@ -266,7 +266,11 @@ it('runs the full chain new -> ... -> export download', async () => {
   fireEvent.click(await screen.findByTestId('bid-confirm-ok'))
   await screen.findByTestId('bid-generate-refine-screen')
   // Merged generate-refine screen: one header action advances to Stage 4 (check).
-  fireEvent.click(await screen.findByTestId('review-next-button'))
+  const proceed = await screen.findByTestId('review-next-button')
+  // No full-document restart button beside proceed (removed in PR-B — it
+  // conflicted with proceed and let users wipe the whole draft).
+  expect(screen.queryByTestId('bid-drafting-restart-button')).toBeNull()
+  fireEvent.click(proceed)
   await screen.findByTestId('bid-audit-screen')
   // Stage 4 merges audit + export: the Word download lives in the same screen.
   fireEvent.click(await screen.findByTestId('bid-download-button'))
