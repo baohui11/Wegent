@@ -357,3 +357,31 @@ async def test_run_drafting_parallel_fans_out_top_level_only(tmp_path, monkeypat
 
     keys = set(ds.read_status(ws)["sections"].keys())
     assert keys == {"s1", "s2"}  # NOT s1.1 / s1.2
+
+
+@pytest.mark.asyncio
+async def test_redraft_one_reads_stage3_outline(tmp_path, monkeypatch):
+    ws = BidWorkspace("rd-s3", root=tmp_path)
+    # stage1 lacks the node; stage3 has it — redraft must find it via stage3.
+    ws.write_json("workspace/outline.json", {"sections": [], "volumes": []})
+    ws.write_json(
+        "workspace/outline_stage3.json",
+        {"sections": [{"id": "s1", "title": "只在 stage3 的章"}], "volumes": []},
+    )
+    ws.write_json("workspace/tender_normalized.json", {"scoring": [], "clauses": []})
+    monkeypatch.setattr(
+        dp, "ensure_normalized_tender", lambda w: "workspace/tender_normalized.json"
+    )
+    seen = {}
+
+    async def _gw(**kwargs):
+        seen["title"] = kwargs["section"].get("title")
+        return "正文"
+
+    monkeypatch.setattr(dp, "call_ghostwriter", _gw)
+    monkeypatch.setattr(
+        dp.section_retrieval, "retrieve_for_section", lambda *a, **k: []
+    )
+    await dp.redraft_one(ws, "s1", model="m", model_config=None, instruction=None)
+    assert seen["title"] == "只在 stage3 的章"
+    assert ds.read_status(ws)["sections"]["s1"] == "done"

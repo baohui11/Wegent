@@ -102,3 +102,26 @@ def test_finalize_injects_section_titles_from_outline(tmp_path):
     # And the bodies must still be present (post-resolve).
     body = "\n".join(p.text for p in doc.paragraphs)
     assert "CMMI3" in body and "ISO9001" in body
+
+
+def test_finalize_binds_stage3_outline(tmp_path, monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    from app.services.bid import assemble_service as asvc
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("asm-s3", root=tmp_path)
+    ws.write_json("workspace/outline.json", {"sections": [{"id": "a"}], "volumes": []})
+
+    ok = MagicMock(returncode=0, stdout="", stderr="")
+    with patch(
+        "app.services.bid.assemble_service.subprocess.run", return_value=ok
+    ) as run:
+        # DOCX won't exist (subprocess mocked); finalize returns its path regardless.
+        asvc.finalize(ws)
+    # The assemble subprocess (2nd call) must bind the stage-3 outline.
+    assemble_args = run.call_args_list[-1].args[0]
+    assert "--outline" in assemble_args
+    i = assemble_args.index("--outline")
+    assert assemble_args[i + 1] == "workspace/outline_stage3.json"
+    assert ws.path("workspace/outline_stage3.json").exists()

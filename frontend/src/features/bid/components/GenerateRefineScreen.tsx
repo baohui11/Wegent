@@ -54,6 +54,7 @@ export function GenerateRefineScreen({
   const [accepted, setAccepted] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [editingHeadingKey, setEditingHeadingKey] = useState<string | null>(null)
   const [instruction, setInstruction] = useState('')
   // Last AI-operation failure, shown in the right rail (redraft / regen errors
   // must not fail silently and strand the review panel).
@@ -523,7 +524,8 @@ export function GenerateRefineScreen({
                 {headings.map(h => (
                   <div
                     key={h.key}
-                    onClick={() => scrollToEntry(h)}
+                    onClick={() => editingHeadingKey !== h.key && scrollToEntry(h)}
+                    onDoubleClick={() => setEditingHeadingKey(h.key)}
                     data-testid={`bid-generate-heading-${h.key}`}
                     data-active={activeKey === h.key ? 'true' : undefined}
                     className="flex cursor-pointer items-center rounded-md py-1"
@@ -535,15 +537,42 @@ export function GenerateRefineScreen({
                       background: activeKey === h.key ? 'var(--bid-primary-soft)' : 'transparent',
                     }}
                   >
-                    <span
-                      className="min-w-0 flex-1 truncate text-[11.5px]"
-                      style={{
-                        color: activeKey === h.key ? 'var(--bid-primary)' : 'var(--bid-muted-2)',
-                        fontWeight: activeKey === h.key ? 700 : 500,
-                      }}
-                    >
-                      {h.text}
-                    </span>
+                    {editingHeadingKey === h.key ? (
+                      <input
+                        autoFocus
+                        defaultValue={h.text}
+                        data-testid={`bid-generate-heading-edit-${h.key}`}
+                        className="min-w-0 flex-1 rounded border px-1 text-[11.5px]"
+                        style={{ borderColor: 'var(--bid-border)' }}
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            const v = (e.target as HTMLInputElement).value.trim()
+                            if (v) void editorApiRef.current?.renameHeadingAt(h.pos, v, h.sectionId)
+                            setEditingHeadingKey(null)
+                          } else if (e.key === 'Escape') {
+                            setEditingHeadingKey(null)
+                          }
+                        }}
+                        onBlur={e => {
+                          const v = e.target.value.trim()
+                          if (v && v !== h.text)
+                            void editorApiRef.current?.renameHeadingAt(h.pos, v, h.sectionId)
+                          setEditingHeadingKey(null)
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="min-w-0 flex-1 truncate text-[11.5px]"
+                        style={{
+                          color: activeKey === h.key ? 'var(--bid-primary)' : 'var(--bid-muted-2)',
+                          fontWeight: activeKey === h.key ? 700 : 500,
+                        }}
+                      >
+                        {h.text}
+                      </span>
+                    )}
                   </div>
                 ))}
               </Fragment>

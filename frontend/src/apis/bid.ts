@@ -78,6 +78,11 @@ export interface OutlineResponse {
   coverage: CoverageReport
 }
 
+export interface OutlineStage3Response {
+  outline: OutlineDoc
+  differs_from_stage1: boolean
+}
+
 export interface AttachmentStats {
   chars: number
   pages: number
@@ -216,6 +221,10 @@ const realBidApis = {
     apiClient.get<OutlineResponse>(`/bid/projects/${id}/outline`),
   saveOutline: (id: number, outline: OutlineDoc): Promise<OutlineResponse> =>
     apiClient.put<OutlineResponse>(`/bid/projects/${id}/outline`, { outline }),
+  getOutlineStage3: (id: number): Promise<OutlineStage3Response> =>
+    apiClient.get<OutlineStage3Response>(`/bid/projects/${id}/outline/stage3`),
+  saveOutlineStage3: (id: number, outline: OutlineDoc): Promise<OutlineStage3Response> =>
+    apiClient.put<OutlineStage3Response>(`/bid/projects/${id}/outline/stage3`, { outline }),
   getGrounding: (id: number): Promise<GroundingDoc> =>
     apiClient.get<GroundingDoc>(`/bid/projects/${id}/grounding`),
   declarePackage: (id: number, pkg: string): Promise<{ status: string }> =>

@@ -21,6 +21,7 @@ import type {
   OutlineDoc,
   OutlineNode,
   OutlineResponse,
+  OutlineStage3Response,
   ScoringItem,
   TenderDoc,
 } from './bid'
@@ -294,6 +295,7 @@ interface MockProject extends BidProject {
   // Sections whose redraft already applied its visible rewrite (apply once).
   _redraftDone?: Record<string, boolean>
   outline?: OutlineDoc
+  stage3Outline?: OutlineDoc
   coverage?: CoverageReport
   kb?: Record<string, unknown>
   quals?: Record<string, unknown>
@@ -521,6 +523,23 @@ export const bidMockApis = {
     const p = need(id)
     p.outline = outline
     return delay({ outline, coverage: p.coverage ?? MOCK_COVERAGE })
+  },
+  getOutlineStage3: (id: number): Promise<OutlineStage3Response> => {
+    const p = need(id)
+    const stage1 = p.outline ?? MOCK_OUTLINE
+    // Lazily seed stage3 from the project outline (mirrors the backend copy).
+    if (p.stage3Outline === undefined) p.stage3Outline = stage1
+    const differs_from_stage1 = JSON.stringify(p.stage3Outline) !== JSON.stringify(stage1)
+    return delay({ outline: p.stage3Outline, differs_from_stage1 })
+  },
+  saveOutlineStage3: (id: number, outline: OutlineDoc): Promise<OutlineStage3Response> => {
+    const p = need(id)
+    p.stage3Outline = outline
+    const stage1 = p.outline ?? MOCK_OUTLINE
+    return delay({
+      outline,
+      differs_from_stage1: JSON.stringify(outline) !== JSON.stringify(stage1),
+    })
   },
   declarePackage: (): Promise<{ status: string }> => delay({ status: 'declared' }),
   getKnowledgeBase: (id: number): Promise<{ knowledge_base: Record<string, unknown> }> =>

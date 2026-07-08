@@ -27,6 +27,13 @@ import { SectionBubbleMenu } from './SectionBubbleMenu'
 
 export type BidSectionStatus = 'pending' | 'drafting' | 'done' | 'error' | 'needs_rework'
 
+// The inline-text range of a heading node that starts at `pos` and has size
+// `nodeSize` (i.e. excluding the node's open/close tokens). Pure so it can be
+// unit-tested without a live editor.
+export function headingTextRange(nodeSize: number, pos: number): { from: number; to: number } {
+  return { from: pos + 1, to: pos + nodeSize - 1 }
+}
+
 // Public API surface the editor exposes to its parent (GenerateRefineScreen):
 // the live editor instance (for section-local block targeting / redraft-range)
 // and a flush that persists the active section and resolves to its post-save
@@ -34,6 +41,9 @@ export type BidSectionStatus = 'pending' | 'drafting' | 'done' | 'error' | 'need
 export interface BidDocumentEditorApi {
   editor: Editor | null
   flushSection: (sectionId: string) => Promise<string>
+  /** Replace the heading at absolute pos `pos` with `text`, then flush its
+   * section (returns the new version). Used by the TOC leaf inline-rename. */
+  renameHeadingAt: (pos: number, text: string, sectionId: string) => Promise<string>
 }
 
 interface SectionSpec {
@@ -430,12 +440,32 @@ export function BidDocumentEditor({
     // contentKey re-runs the initial report after a rebuild seeds new chips.
   }, [editor, onPlaceholderCountChange, contentKey])
 
+  // Replace the heading at absolute pos `pos` with `text`, then flush its
+  // section (returns the new version). Used by the TOC leaf inline-rename.
+  const renameHeadingAt = useCallback(
+    async (pos: number, text: string, sectionId: string): Promise<string> => {
+      const node = editor?.state.doc.nodeAt(pos)
+      if (editor && node) {
+        const { from, to } = headingTextRange(node.nodeSize, pos)
+        editor
+          .chain()
+          .command(({ tr }) => {
+            tr.insertText(text, from, to)
+            return true
+          })
+          .run()
+      }
+      return autosave.flushSection(sectionId)
+    },
+    [editor, autosave]
+  )
+
   // Hand the editor + flush to the parent for section-level operations.
   useEffect(() => {
     if (editor) {
-      onReady?.({ editor, flushSection: autosave.flushSection })
+      onReady?.({ editor, flushSection: autosave.flushSection, renameHeadingAt })
     }
-  }, [editor, onReady, autosave.flushSection])
+  }, [editor, onReady, autosave.flushSection, renameHeadingAt])
 
   // The drag handle's hovered target changed. Remember the block (for the insert
   // menu) and collapse any open menu, since it belonged to the previous block.

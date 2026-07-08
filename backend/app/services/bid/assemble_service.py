@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.services.bid.outline_stage3_service import ensure_stage3_outline
 from app.services.bid.parse_pipeline import BidPipelineError
 from app.services.bid.workspace import BidWorkspace
 
@@ -22,6 +23,7 @@ DOCX_REL = "workspace/投标文件.docx"
 
 
 def finalize(ws: BidWorkspace) -> Path:
+    outline_rel = ensure_stage3_outline(ws)
     resolve = subprocess.run(
         [
             sys.executable,
@@ -55,7 +57,7 @@ def finalize(ws: BidWorkspace) -> Path:
             "--final",
             "workspace/final",
             "--outline",
-            "workspace/outline.json",
+            outline_rel,
             "--tender",
             "workspace/tender.json",
             "--attachments",
