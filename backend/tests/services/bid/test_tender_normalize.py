@@ -123,3 +123,19 @@ def test_ensure_normalized_tender_is_idempotent(tmp_path):
     ensure_normalized_tender(ws)
 
     assert ws.read_json("workspace/tender_normalized.json").get("_sentinel") == 1
+
+
+def test_normalize_scoring_coerces_bool_must_keep_to_list():
+    # Regression: qwen/mimo sometimes emit scoring[].must_keep as a bool flag,
+    # which the frozen vendor check_coverage.py would `TypeError` on (it iterates
+    # must_keep as keywords). Normalize must coerce non-lists to [].
+    out = normalize_scoring(
+        {
+            "scoring": [
+                {"id": "T1", "must_keep": True},
+                {"id": "T2", "must_keep": ["守住这句"]},
+            ]
+        }
+    )
+    assert out[0]["must_keep"] == []
+    assert out[1]["must_keep"] == ["守住这句"]

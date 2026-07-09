@@ -59,8 +59,22 @@ def normalize_scoring(tender: dict) -> list:
             or s.get("target_section")
             or sid
         )
+        # Coerce must_keep to a list: the frozen vendor check_coverage.py iterates
+        # scoring[].must_keep as keywords, but qwen/mimo sometimes emit it as a
+        # bool flag (or omit it), which would `TypeError: 'bool' object is not
+        # iterable` the audit. A non-list becomes [] (no keywords).
+        must_keep = s.get("must_keep")
+        if not isinstance(must_keep, list):
+            must_keep = []
         normalized.append(
-            {**s, "id": sid, "category": category, "weight": weight, "item": item}
+            {
+                **s,
+                "id": sid,
+                "category": category,
+                "weight": weight,
+                "item": item,
+                "must_keep": must_keep,
+            }
         )
     return normalized
 
