@@ -372,10 +372,9 @@ test('Bugs 2/4/6: no first-line indent, H4/H5 headings, light-locked inputs', as
 
   // 问题4: bubble menu offers H2–H5; applying H5 sets a level-5 heading.
   const madeSel = await page.evaluate(targetSid => {
-    const pm = document.querySelector(
-      '[data-testid="bid-document-editor"] .ProseMirror'
-    ) as // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (HTMLElement & { editor?: any }) | null
+    const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      | (HTMLElement & { editor?: any })
+      | null
     const editor = pm?.editor
     if (!editor) return false
     let from = -1
@@ -397,10 +396,9 @@ test('Bugs 2/4/6: no first-line indent, H4/H5 headings, light-locked inputs', as
   await expect(page.getByTestId('bid-bubble-h5')).toBeVisible()
   await page.getByTestId('bid-bubble-h5').click()
   const isH5 = await page.evaluate(() => {
-    const pm = document.querySelector(
-      '[data-testid="bid-document-editor"] .ProseMirror'
-    ) as // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (HTMLElement & { editor?: any }) | null
+    const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      | (HTMLElement & { editor?: any })
+      | null
     return pm?.editor?.isActive('heading', { level: 5 }) ?? false
   })
   console.log('IS_H5:', isH5)
@@ -425,7 +423,10 @@ test('Bug 3: clicking a sub-heading TOC entry scrolls to that heading', async ({
 
   const heading = page.locator('[data-testid^="bid-generate-heading-"]').first()
   await heading.waitFor({ state: 'visible', timeout: 10_000 })
-  const text = ((await heading.textContent()) ?? '').trim()
+  // Read the heading text from its inner span only — the row's textContent
+  // also includes the +/− leaf affordance buttons added in C2, which would
+  // break the body-heading match below.
+  const text = ((await heading.locator('span').first().textContent()) ?? '').trim()
   console.log('TOC_HEADING:', text)
 
   // Scroll the document column to the very top so a working click must move it.
