@@ -293,3 +293,20 @@ test('add-chapter form submits title + brief to onAddChapter', async () => {
   fireEvent.click(screen.getByTestId('bid-add-chapter-submit'))
   await waitFor(() => expect(onAddChapter).toHaveBeenCalledWith('新章', '要点'))
 })
+
+test('chapter up arrow calls onMoveChapter(id, "up")', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  const onMoveChapter = jest.fn().mockResolvedValue(undefined)
+  render(
+    <GenerateRefineScreen projectId={1} outline={OUTLINE as never} onMoveChapter={onMoveChapter} />
+  )
+  // c1 is a top-level (depth-0) chapter in OUTLINE.
+  const up = await screen.findByTestId('bid-generate-move-chapter-up-c1')
+  fireEvent.click(up)
+  expect(onMoveChapter).toHaveBeenCalledWith('c1', 'up')
+})

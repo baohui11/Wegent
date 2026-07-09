@@ -40,6 +40,7 @@ export function GenerateRefineScreen({
   onRenameSection,
   onAddChapter,
   onDeleteChapter,
+  onMoveChapter,
 }: {
   projectId: number
   outline?: OutlineDoc
@@ -52,6 +53,8 @@ export function GenerateRefineScreen({
   onAddChapter?: (title: string, brief?: string) => Promise<void> | void
   // Delete a top-level chapter and its section.
   onDeleteChapter?: (sectionId: string) => Promise<void> | void
+  // Reorder a top-level chapter (up/down).
+  onMoveChapter?: (sectionId: string, direction: 'up' | 'down') => Promise<void> | void
 }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
@@ -544,6 +547,34 @@ export function GenerateRefineScreen({
                       ✕
                     </button>
                   )}
+                  {onMoveChapter && n.depth === 0 && (
+                    <>
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-move-chapter-up-${n.id}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          void onMoveChapter(n.id, 'up')
+                        }}
+                        className="flex-shrink-0 text-[11px] opacity-50 hover:opacity-100"
+                        title={t('drafting.move_chapter_up')}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-move-chapter-down-${n.id}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          void onMoveChapter(n.id, 'down')
+                        }}
+                        className="flex-shrink-0 text-[11px] opacity-50 hover:opacity-100"
+                        title={t('drafting.move_chapter_down')}
+                      >
+                        ↓
+                      </button>
+                    </>
+                  )}
                 </div>
                 {headings.map(h => (
                   <div
@@ -655,6 +686,62 @@ export function GenerateRefineScreen({
                       >
                         −
                       </button>
+                    )}
+                    {editorApiRef.current?.setLeafLevel && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-promote-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.setLeafLevel(h.pos, -1, h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_up')}
+                        >
+                          ⤒
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-demote-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.setLeafLevel(h.pos, +1, h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_down')}
+                        >
+                          ⤓
+                        </button>
+                      </>
+                    )}
+                    {editorApiRef.current?.moveLeafRange && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-up-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.moveLeafRange(h.pos, 'up', h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_up')}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-down-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.moveLeafRange(h.pos, 'down', h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_down')}
+                        >
+                          ↓
+                        </button>
+                      </>
                     )}
                   </div>
                 ))}

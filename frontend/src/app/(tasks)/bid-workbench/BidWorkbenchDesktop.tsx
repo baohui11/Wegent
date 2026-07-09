@@ -88,6 +88,7 @@ export function BidWorkbenchDesktop() {
     renameSection,
     addChapter,
     deleteChapter,
+    moveChapter,
     reset,
     enterMaterials,
     completeMaterials,
@@ -278,6 +279,7 @@ export function BidWorkbenchDesktop() {
             onRenameSection={renameSection}
             onAddChapter={addChapter}
             onDeleteChapter={deleteChapter}
+            onMoveChapter={moveChapter}
           />
         )}
         {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (
