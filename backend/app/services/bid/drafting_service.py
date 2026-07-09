@@ -39,6 +39,31 @@ def set_section_status(ws: BidWorkspace, section_id: str, status: str) -> None:
     ws.write_json(_STATUS, st)
 
 
+def add_section(ws: BidWorkspace, section_id: str) -> None:
+    """Add a newly-created section to the progress status as pending and bump the
+    denominator. Idempotent — a no-op if the section is already tracked. Used when
+    a chapter is added in stage 3 and re-drafted (Q5: keep total accurate)."""
+    st = read_status(ws)
+    if section_id not in st["sections"]:
+        st["sections"][section_id] = "pending"
+        st["total"] = st.get("total", 0) + 1
+        ws.write_json(_STATUS, st)
+
+
+def delete_section(ws: BidWorkspace, section_id: str) -> None:
+    """Remove a section: delete its markdown file and drop its status entry,
+    decrementing the denominator (Q5). Idempotent. The caller also clears any
+    review-accepted flag (a separate blackboard file)."""
+    p = ws.path(f"{_SECTIONS}/{section_id}.md")
+    if p.exists():
+        p.unlink()
+    st = read_status(ws)
+    if section_id in st["sections"]:
+        del st["sections"][section_id]
+        st["total"] = max(0, st.get("total", 0) - 1)
+        ws.write_json(_STATUS, st)
+
+
 def mark_finished(ws: BidWorkspace, error: str | None = None) -> None:
     st = read_status(ws)
     st["finished"] = True
