@@ -90,3 +90,31 @@ it('deleteChapter removes from stage3 and deletes the section', async () => {
   expect(saved.sections!.some(s => s.id === 's1')).toBe(false)
   expect(api.deleteSection).toHaveBeenCalledWith(1, 's1')
 })
+
+it('moveChapter swaps adjacent chapters in stage3 and saves', async () => {
+  const two = {
+    sections: [
+      { id: 'a', title: 'A' },
+      { id: 'b', title: 'B' },
+    ],
+    volumes: [],
+  }
+  api.getOutlineStage3.mockResolvedValue({ outline: two, differs_from_stage1: false })
+  api.saveOutlineStage3.mockImplementation((_id, o) =>
+    Promise.resolve({ outline: o, differs_from_stage1: true })
+  )
+  const { result } = renderHook(() => useBidProject())
+  await act(async () => {
+    await result.current.open({
+      id: 1,
+      current_phase: 4,
+      max_phase_reached: 4,
+      status: 'drafting',
+    } as never)
+  })
+  await act(async () => {
+    await result.current.moveChapter('b', 'up')
+  })
+  const saved = api.saveOutlineStage3.mock.calls.at(-1)![1]
+  expect(saved.sections!.map(s => s.id)).toEqual(['b', 'a'])
+})

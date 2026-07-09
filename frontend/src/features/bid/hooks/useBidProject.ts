@@ -310,6 +310,28 @@ export function useBidProject() {
     [projectId, stage3Outline, outline]
   )
 
+  // Reorder a top-level chapter in the stage-3 outline; the drafting screen
+  // re-derives section order from the outline (chapterOrder -> sectionIds ->
+  // doneSections) and the editor rebuilds in the new order (contentSignature is
+  // order-sensitive). Assembly binds by outline order, so export follows too.
+  const moveChapter = useCallback(
+    async (sectionId: string, direction: 'up' | 'down') => {
+      if (projectId == null) return
+      const base = stage3Outline ?? outline
+      const secs = [...(base?.sections ?? [])]
+      const i = secs.findIndex(s => s.id === sectionId)
+      const j = direction === 'up' ? i - 1 : i + 1
+      if (i < 0 || j < 0 || j >= secs.length) return
+      ;[secs[i], secs[j]] = [secs[j], secs[i]]
+      const edited = { ...(base ?? {}), sections: secs }
+      setStage3Outline(edited)
+      const res = await bidApis.saveOutlineStage3(projectId, edited)
+      setStage3Outline(res.outline)
+      setStage3Differs(res.differs_from_stage1)
+    },
+    [projectId, stage3Outline, outline]
+  )
+
   const reset = useCallback(() => {
     setPhase('idle')
     setProjectId(null)
@@ -396,6 +418,7 @@ export function useBidProject() {
     renameSection,
     addChapter,
     deleteChapter,
+    moveChapter,
     loadStage3,
     reset,
     enterMaterials,
