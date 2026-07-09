@@ -40,6 +40,7 @@ export function GenerateRefineScreen({
   onRenameSection,
   onAddChapter,
   onDeleteChapter,
+  onMoveChapter,
 }: {
   projectId: number
   outline?: OutlineDoc
@@ -52,6 +53,8 @@ export function GenerateRefineScreen({
   onAddChapter?: (title: string, brief?: string) => Promise<void> | void
   // Delete a top-level chapter and its section.
   onDeleteChapter?: (sectionId: string) => Promise<void> | void
+  // Reorder a top-level chapter (up/down).
+  onMoveChapter?: (sectionId: string, direction: 'up' | 'down') => Promise<void> | void
 }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
@@ -543,6 +546,34 @@ export function GenerateRefineScreen({
                     >
                       ✕
                     </button>
+                  )}
+                  {onMoveChapter && n.depth === 0 && (
+                    <>
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-move-chapter-up-${n.id}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          void onMoveChapter(n.id, 'up')
+                        }}
+                        className="flex-shrink-0 text-[11px] opacity-50 hover:opacity-100"
+                        title={t('drafting.move_chapter_up')}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-move-chapter-down-${n.id}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          void onMoveChapter(n.id, 'down')
+                        }}
+                        className="flex-shrink-0 text-[11px] opacity-50 hover:opacity-100"
+                        title={t('drafting.move_chapter_down')}
+                      >
+                        ↓
+                      </button>
+                    </>
                   )}
                 </div>
                 {headings.map(h => (

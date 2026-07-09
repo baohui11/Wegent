@@ -406,6 +406,8 @@
     "add_chapter_ok": "新增并起草",
     "delete_chapter": "删除本章",
     "delete_chapter_confirm": "删除本章将移除其正文，无法撤销。是否继续？",
+    "move_chapter_up": "上移本章",
+    "move_chapter_down": "下移本章",
     "log_done": "{{name}} 起草完成",
     "log_drafting": "正在起草 {{name}}…",
     "log_error": "{{name}} 生成失败",

@@ -406,6 +406,8 @@
     "add_chapter_ok": "Add & draft",
     "delete_chapter": "Delete chapter",
     "delete_chapter_confirm": "Deleting this chapter removes its body. This cannot be undone. Continue?",
+    "move_chapter_up": "Move chapter up",
+    "move_chapter_down": "Move chapter down",
     "log_done": "Finished drafting {{name}}",
     "log_drafting": "Drafting {{name}}…",
     "log_error": "{{name}} — generation failed",
