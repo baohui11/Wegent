@@ -597,6 +597,65 @@ export function GenerateRefineScreen({
                         {h.text}
                       </span>
                     )}
+                    {editorApiRef.current?.insertLeafHeading && (
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-leaf-add-${h.key}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          const title = window.prompt(t('drafting.add_chapter_name'))
+                          if (!title?.trim() || !editorApiRef.current) return
+                          void (async () => {
+                            const api = editorApiRef.current!
+                            const version = await api.insertLeafHeading(
+                              h.pos,
+                              title.trim(),
+                              h.sectionId
+                            )
+                            const editor = api.editor
+                            const node = editor?.state.doc.nodeAt(h.pos)
+                            const oldMd =
+                              node && editor
+                                ? serializeSection(editor, node)
+                                : (contents[h.sectionId] ?? '')
+                            // New heading lands at the first body block under it.
+                            const startLine = topBlockIndexOf(editor, h.sectionId) + 1
+                            const span = blockLineRange(oldMd, startLine)
+                            try {
+                              await bidApis.redraftRange(
+                                projectId,
+                                h.sectionId,
+                                span.startLine,
+                                span.endLine,
+                                `起草小节《${title.trim()}》`,
+                                version
+                              )
+                            } catch {
+                              /* surfaced via draft-status poll */
+                            }
+                          })()
+                        }}
+                        className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                        title={t('drafting.add_chapter')}
+                      >
+                        +
+                      </button>
+                    )}
+                    {editorApiRef.current?.deleteLeafRange && (
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-leaf-del-${h.key}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          if (!window.confirm(t('drafting.delete_chapter_confirm'))) return
+                          void editorApiRef.current?.deleteLeafRange(h.pos, h.sectionId)
+                        }}
+                        className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                        title={t('drafting.delete_chapter')}
+                      >
+                        −
+                      </button>
+                    )}
                   </div>
                 ))}
               </Fragment>

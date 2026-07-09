@@ -34,6 +34,17 @@ export function headingTextRange(nodeSize: number, pos: number): { from: number;
   return { from: pos + 1, to: pos + nodeSize - 1 }
 }
 
+// Index (into the heading list) where a leaf-delete range ends: the first later
+// heading whose level is <= the target's (a sibling or ancestor), or the list
+// length when none. Pure so it is unit-tested without a live editor.
+export function nextSiblingHeadingEnd(levels: number[], startIndex: number): number {
+  const level = levels[startIndex]
+  for (let i = startIndex + 1; i < levels.length; i++) {
+    if (levels[i] <= level) return i
+  }
+  return levels.length
+}
+
 // Public API surface the editor exposes to its parent (GenerateRefineScreen):
 // the live editor instance (for section-local block targeting / redraft-range)
 // and a flush that persists the active section and resolves to its post-save
@@ -44,6 +55,12 @@ export interface BidDocumentEditorApi {
   /** Replace the heading at absolute pos `pos` with `text`, then flush its
    * section (returns the new version). Used by the TOC leaf inline-rename. */
   renameHeadingAt: (pos: number, text: string, sectionId: string) => Promise<string>
+  /** Insert a new `##` heading + placeholder paragraph after the heading at
+   * `afterPos`, then flush(align) its section. Used by the TOC "add leaf". */
+  insertLeafHeading: (afterPos: number, title: string, sectionId: string) => Promise<string>
+  /** Delete the heading at `pos` through the next same-or-higher heading, then
+   * flush(align) its section. Used by the TOC "delete leaf". */
+  deleteLeafRange: (pos: number, sectionId: string) => Promise<string>
 }
 
 interface SectionSpec {
@@ -460,12 +477,72 @@ export function BidDocumentEditor({
     [editor, autosave]
   )
 
+  // Insert a new `##` heading + placeholder paragraph after the heading at
+  // `afterPos` (a stage-3 leaf add). flush(align) so the redraft-range that
+  // follows computes line numbers against the persisted bytes (§9).
+  const insertLeafHeading = useCallback(
+    async (afterPos: number, title: string, sectionId: string): Promise<string> => {
+      if (editor) {
+        const node = editor.state.doc.nodeAt(afterPos)
+        const insertAt = node ? afterPos + node.nodeSize : afterPos
+        editor
+          .chain()
+          .insertContentAt(insertAt, [
+            {
+              type: 'heading',
+              attrs: { level: 2 },
+              content: [{ type: 'text', text: title }],
+            },
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '待填（来源：..）' }],
+            },
+          ])
+          .run()
+      }
+      return autosave.flushSection(sectionId, { align: true })
+    },
+    [editor, autosave]
+  )
+
+  // Delete the heading at `pos` through the next same-or-higher heading (a
+  // stage-3 leaf delete), then flush(align) its section.
+  const deleteLeafRange = useCallback(
+    async (pos: number, sectionId: string): Promise<string> => {
+      if (editor) {
+        const headings: Array<{ pos: number; level: number }> = []
+        editor.state.doc.nodesBetween(0, editor.state.doc.content.size, (n, p) => {
+          if (n.type.name === 'heading')
+            headings.push({ pos: p, level: Number(n.attrs?.level ?? 2) })
+        })
+        const idx = headings.findIndex(h => h.pos === pos)
+        if (idx >= 0) {
+          const end = nextSiblingHeadingEnd(
+            headings.map(h => h.level),
+            idx
+          )
+          const from = headings[idx].pos
+          const to = end < headings.length ? headings[end].pos : editor.state.doc.content.size
+          editor.chain().deleteRange({ from, to }).run()
+        }
+      }
+      return autosave.flushSection(sectionId, { align: true })
+    },
+    [editor, autosave]
+  )
+
   // Hand the editor + flush to the parent for section-level operations.
   useEffect(() => {
     if (editor) {
-      onReady?.({ editor, flushSection: autosave.flushSection, renameHeadingAt })
+      onReady?.({
+        editor,
+        flushSection: autosave.flushSection,
+        renameHeadingAt,
+        insertLeafHeading,
+        deleteLeafRange,
+      })
     }
-  }, [editor, onReady, autosave.flushSection, renameHeadingAt])
+  }, [editor, onReady, autosave.flushSection, renameHeadingAt, insertLeafHeading, deleteLeafRange])
 
   // The drag handle's hovered target changed. Remember the block (for the insert
   // menu) and collapse any open menu, since it belonged to the previous block.
