@@ -51,6 +51,26 @@ export function clampHeadingLevel(level: number, delta: number): number {
   return Math.min(5, Math.max(2, level + delta))
 }
 
+// Heading-index bounds of the previous / current / next SIBLING leaf groups for
+// the leaf at `idx`. A sibling is the nearest heading (before/after the current
+// group) whose level is <= the target's — deeper headings stay inside the group.
+export function siblingLeafBounds(
+  levels: number[],
+  idx: number
+): { prevStart: number; curEnd: number; nextEnd: number } {
+  const level = levels[idx]
+  const curEnd = nextSiblingHeadingEnd(levels, idx)
+  let prevStart = -1
+  for (let i = idx - 1; i >= 0; i--) {
+    if (levels[i] <= level) {
+      prevStart = i
+      break
+    }
+  }
+  const nextEnd = curEnd < levels.length ? nextSiblingHeadingEnd(levels, curEnd) : levels.length
+  return { prevStart, curEnd, nextEnd }
+}
+
 // Public API surface the editor exposes to its parent (GenerateRefineScreen):
 // the live editor instance (for section-local block targeting / redraft-range)
 // and a flush that persists the active section and resolves to its post-save
@@ -70,6 +90,10 @@ export interface BidDocumentEditorApi {
   /** Promote/demote the heading at `pos` by `delta` levels (clamped to
    * [2,5]), then flush(align) its section. Used by the TOC leaf promote/demote. */
   setLeafLevel: (pos: number, delta: number, sectionId: string) => Promise<string>
+  /** Move the leaf group at `pos` up/down within its chapter (swap with the
+   * adjacent same-level sibling), then flush(align) its section. No-op (just
+   * flush) when there is no adjacent sibling. Used by the TOC leaf up/down. */
+  moveLeafRange: (pos: number, direction: 'up' | 'down', sectionId: string) => Promise<string>
 }
 
 interface SectionSpec {
@@ -560,6 +584,69 @@ export function BidDocumentEditor({
     [editor, autosave]
   )
 
+  // Move the leaf group at `pos` up/down within its chapter (swap with the
+  // adjacent same-level sibling). Collects headings strictly inside the target
+  // bidSection, uses siblingLeafBounds to compute the swap range, and does
+  // slice → delete → insert in one transaction. No-op (just flush) when there
+  // is no adjacent sibling.
+  const moveLeafRange = useCallback(
+    async (pos: number, direction: 'up' | 'down', sectionId: string): Promise<string> => {
+      if (editor) {
+        const { doc } = editor.state
+        // Section content bounds (positions strictly inside the bidSection).
+        let secStart = -1
+        let secEnd = -1
+        doc.forEach((n, offset) => {
+          if (n.type.name === 'bidSection' && String(n.attrs.sectionId) === sectionId) {
+            secStart = offset + 1
+            secEnd = offset + n.nodeSize - 1
+          }
+        })
+        if (secStart >= 0) {
+          const heads: Array<{ pos: number; level: number }> = []
+          doc.nodesBetween(secStart, secEnd, (n, p) => {
+            if (n.type.name === 'heading' && p >= secStart && p < secEnd)
+              heads.push({ pos: p, level: Number(n.attrs?.level ?? 2) })
+          })
+          const idx = heads.findIndex(h => h.pos === pos)
+          if (idx >= 0) {
+            const levels = heads.map(h => h.level)
+            const { prevStart, curEnd, nextEnd } = siblingLeafBounds(levels, idx)
+            const from = heads[idx].pos
+            const to = curEnd < heads.length ? heads[curEnd].pos : secEnd
+            if (direction === 'down' && curEnd < heads.length) {
+              // Swap current group with the next sibling group.
+              const nextGroupEnd = nextEnd < heads.length ? heads[nextEnd].pos : secEnd
+              editor
+                .chain()
+                .command(({ tr }) => {
+                  const slice = tr.doc.slice(from, to)
+                  tr.delete(from, to)
+                  tr.insert(tr.mapping.map(nextGroupEnd), slice.content)
+                  return true
+                })
+                .run()
+            } else if (direction === 'up' && prevStart >= 0) {
+              // Move current group before the previous sibling group.
+              const insertAt = heads[prevStart].pos // before `from`, unaffected by the delete
+              editor
+                .chain()
+                .command(({ tr }) => {
+                  const slice = tr.doc.slice(from, to)
+                  tr.delete(from, to)
+                  tr.insert(insertAt, slice.content)
+                  return true
+                })
+                .run()
+            }
+          }
+        }
+      }
+      return autosave.flushSection(sectionId, { align: true })
+    },
+    [editor, autosave]
+  )
+
   // Hand the editor + flush to the parent for section-level operations.
   useEffect(() => {
     if (editor) {
@@ -570,6 +657,7 @@ export function BidDocumentEditor({
         insertLeafHeading,
         deleteLeafRange,
         setLeafLevel,
+        moveLeafRange,
       })
     }
   }, [
@@ -580,6 +668,7 @@ export function BidDocumentEditor({
     insertLeafHeading,
     deleteLeafRange,
     setLeafLevel,
+    moveLeafRange,
   ])
 
   // The drag handle's hovered target changed. Remember the block (for the insert
