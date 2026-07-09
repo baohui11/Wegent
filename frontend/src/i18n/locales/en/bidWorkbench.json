@@ -314,6 +314,7 @@
     "json_error": "JSON format error"
   },
   "editor": {
+    "rename_hint": "Double-click to rename",
     "save_saving": "Saving…",
     "save_saved": "Saved",
     "save_error": "Save failed",
