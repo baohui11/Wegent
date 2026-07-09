@@ -51,3 +51,42 @@ it('renameSection writes stage3, not stage1', async () => {
   expect(result.current.stage3Outline?.sections?.[0]?.title).toBe('改过')
   expect(result.current.stage3Differs).toBe(true)
 })
+
+it('addChapter appends to stage3 and redrafts the new chapter with the brief', async () => {
+  api.redraftSection.mockResolvedValue({ status: 'drafting' })
+  const { result } = renderHook(() => useBidProject())
+  await act(async () => {
+    await result.current.open({
+      id: 1,
+      current_phase: 4,
+      max_phase_reached: 4,
+      status: 'drafting',
+    } as never)
+  })
+  await act(async () => {
+    await result.current.addChapter('新增章', '突出安全')
+  })
+  const saved = api.saveOutlineStage3.mock.calls.at(-1)![1]
+  const added = saved.sections!.at(-1)!
+  expect(added.title).toBe('新增章')
+  expect(api.redraftSection).toHaveBeenCalledWith(1, added.id, '突出安全')
+})
+
+it('deleteChapter removes from stage3 and deletes the section', async () => {
+  api.deleteSection.mockResolvedValue({ status: 'deleted' })
+  const { result } = renderHook(() => useBidProject())
+  await act(async () => {
+    await result.current.open({
+      id: 1,
+      current_phase: 4,
+      max_phase_reached: 4,
+      status: 'drafting',
+    } as never)
+  })
+  await act(async () => {
+    await result.current.deleteChapter('s1')
+  })
+  const saved = api.saveOutlineStage3.mock.calls.at(-1)![1]
+  expect(saved.sections!.some(s => s.id === 's1')).toBe(false)
+  expect(api.deleteSection).toHaveBeenCalledWith(1, 's1')
+})

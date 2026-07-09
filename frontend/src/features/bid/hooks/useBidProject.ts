@@ -9,6 +9,7 @@ import {
   type OutlineNode,
   type TenderDoc,
 } from '@/apis/bid'
+import { genNodeId } from '@/features/bid/canvas/outlineGraph'
 
 // Deep-copy the outline, replacing one node's title (matched by id). Pure so the
 // optimistic update and rollback both work off immutable snapshots.
@@ -273,6 +274,42 @@ export function useBidProject() {
     [projectId, stage3Outline, outline]
   )
 
+  // Add a top-level chapter to the stage-3 outline, then draft it (redraft_one
+  // writes a brand-new section file). The optional brief becomes the drafting
+  // instruction (Q2). The screen's draft-status poll surfaces the new section.
+  const addChapter = useCallback(
+    async (title: string, brief?: string) => {
+      if (projectId == null) return
+      const base = stage3Outline ?? outline ?? { sections: [] }
+      const id = genNodeId()
+      const edited = { ...base, sections: [...(base.sections ?? []), { id, title }] }
+      setStage3Outline(edited)
+      const res = await bidApis.saveOutlineStage3(projectId, edited)
+      setStage3Outline(res.outline)
+      setStage3Differs(res.differs_from_stage1)
+      await bidApis.redraftSection(projectId, id, brief || undefined)
+    },
+    [projectId, stage3Outline, outline]
+  )
+
+  // Delete a top-level chapter from the stage-3 outline and its section file.
+  const deleteChapter = useCallback(
+    async (sectionId: string) => {
+      if (projectId == null) return
+      const base = stage3Outline ?? outline ?? { sections: [] }
+      const edited = {
+        ...base,
+        sections: (base.sections ?? []).filter(s => s.id !== sectionId),
+      }
+      setStage3Outline(edited)
+      const res = await bidApis.saveOutlineStage3(projectId, edited)
+      setStage3Outline(res.outline)
+      setStage3Differs(res.differs_from_stage1)
+      await bidApis.deleteSection(projectId, sectionId)
+    },
+    [projectId, stage3Outline, outline]
+  )
+
   const reset = useCallback(() => {
     setPhase('idle')
     setProjectId(null)
@@ -357,6 +394,8 @@ export function useBidProject() {
     buildOutline,
     saveOutline,
     renameSection,
+    addChapter,
+    deleteChapter,
     loadStage3,
     reset,
     enterMaterials,

@@ -351,6 +351,8 @@ const realBidApis = {
     }),
   acceptSection: (id: number, sectionId: string): Promise<{ status: string }> =>
     apiClient.post(`/bid/projects/${id}/sections/${sectionId}/accept`),
+  deleteSection: (id: number, sectionId: string): Promise<{ status: string }> =>
+    apiClient.delete(`/bid/projects/${id}/sections/${sectionId}`),
   getReviewStatus: (id: number): Promise<{ accepted: Record<string, boolean> }> =>
     apiClient.get(`/bid/projects/${id}/review/status`),
   completeReview: (id: number): Promise<{ status: string }> =>
