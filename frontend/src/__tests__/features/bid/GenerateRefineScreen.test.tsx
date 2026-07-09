@@ -270,3 +270,26 @@ test('mounting the document does NOT autosave every section (mount-time PUT guar
   expect(bidApis.saveSection).not.toHaveBeenCalled()
   jest.useRealTimers()
 })
+
+test('add-chapter form submits title + brief to onAddChapter', async () => {
+  ;(bidApis.getDraftStatus as jest.Mock).mockResolvedValue({
+    total: 1,
+    finished: true,
+    error: null,
+    sections: { s1: 'done' },
+  })
+  const onAddChapter = jest.fn().mockResolvedValue(undefined)
+  render(
+    <GenerateRefineScreen projectId={1} outline={OUTLINE as never} onAddChapter={onAddChapter} />
+  )
+  const addBtn = await screen.findByTestId('bid-generate-add-chapter')
+  fireEvent.click(addBtn)
+  fireEvent.change(screen.getByTestId('bid-add-chapter-name'), {
+    target: { value: '新章' },
+  })
+  fireEvent.change(screen.getByTestId('bid-add-chapter-brief'), {
+    target: { value: '要点' },
+  })
+  fireEvent.click(screen.getByTestId('bid-add-chapter-submit'))
+  await waitFor(() => expect(onAddChapter).toHaveBeenCalledWith('新章', '要点'))
+})

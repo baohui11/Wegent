@@ -86,6 +86,8 @@ export function BidWorkbenchDesktop() {
     open,
     saveOutline,
     renameSection,
+    addChapter,
+    deleteChapter,
     reset,
     enterMaterials,
     completeMaterials,
@@ -274,6 +276,8 @@ export function BidWorkbenchDesktop() {
             onStateChange={setDraftState}
             onPlaceholderCountChange={setPlaceholderCount}
             onRenameSection={renameSection}
+            onAddChapter={addChapter}
+            onDeleteChapter={deleteChapter}
           />
         )}
         {(phase === 'audit' || phase === 'finalizing' || phase === 'done') && projectId != null && (
