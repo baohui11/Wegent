@@ -86,3 +86,48 @@ test('C3: moving a chapter down reorders the stage-3 chapter list', async ({ pag
   // The stage-3 outline (chapter list) swaps the first two chapters.
   await expect.poll(async () => (await chapterOrder(page))[0], { timeout: 15_000 }).toBe(before[1])
 })
+
+test('C3: demoting a leaf deepens its heading level', async ({ page }) => {
+  page.on('pageerror', err => console.log('PAGEERROR:', String(err).slice(0, 300)))
+  await stubSession(page)
+  await gotoStage3(page)
+
+  const demote = page.locator('[data-testid^="bid-generate-leaf-demote-"]').first()
+  await demote.waitFor({ state: 'visible', timeout: 15_000 })
+
+  // Read the first body heading's level before demoting.
+  const levelBefore = await firstHeadingLevel(page)
+  expect(levelBefore).not.toBeNull()
+
+  await demote.dispatchEvent('click')
+
+  // After demote, the first heading's level increases (deeper), clamped to 5.
+  await expect
+    .poll(() => firstHeadingLevel(page), { timeout: 15_000 })
+    .toBe(Math.min(5, (levelBefore as number) + 1))
+})
+
+// Read the first heading level in the editor doc (null if none).
+async function firstHeadingLevel(page: Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as
+      | (HTMLElement & { editor?: unknown })
+      | null
+    type EditorLike = {
+      state?: {
+        doc?: {
+          descendants?: (
+            cb: (n: { type?: { name?: string }; attrs?: Record<string, unknown> }) => boolean | void
+          ) => void
+        }
+      }
+    }
+    const editor = pm?.editor as EditorLike | undefined
+    let lvl: number | null = null
+    editor?.state?.doc?.descendants?.(n => {
+      if (lvl == null && n.type?.name === 'heading') lvl = Number(n.attrs?.level ?? 2)
+      return lvl == null
+    })
+    return lvl
+  })
+}

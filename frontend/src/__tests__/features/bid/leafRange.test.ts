@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-import { nextSiblingHeadingEnd } from '@/features/bid/components/BidDocumentEditor'
+import {
+  clampHeadingLevel,
+  nextSiblingHeadingEnd,
+} from '@/features/bid/components/BidDocumentEditor'
 
 describe('nextSiblingHeadingEnd', () => {
   it('stops at the next heading of same-or-higher level', () => {
@@ -14,5 +17,16 @@ describe('nextSiblingHeadingEnd', () => {
   })
   it('runs to the end when no later sibling/ancestor heading', () => {
     expect(nextSiblingHeadingEnd([2, 3, 3], 0)).toBe(3) // == length
+  })
+})
+
+describe('clampHeadingLevel', () => {
+  it('promotes/demotes within [2,5]', () => {
+    expect(clampHeadingLevel(3, -1)).toBe(2)
+    expect(clampHeadingLevel(3, +1)).toBe(4)
+  })
+  it('clamps at the H2 top and H5 bottom', () => {
+    expect(clampHeadingLevel(2, -1)).toBe(2) // never H1 (chapter title)
+    expect(clampHeadingLevel(5, +1)).toBe(5)
   })
 })

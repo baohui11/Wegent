@@ -45,6 +45,12 @@ export function nextSiblingHeadingEnd(levels: number[], startIndex: number): num
   return levels.length
 }
 
+// Clamp a heading level change to [2,5]: H2 is the highest in-body sub-heading
+// (H1 is the chapter title, injected separately), H5 the deepest we render.
+export function clampHeadingLevel(level: number, delta: number): number {
+  return Math.min(5, Math.max(2, level + delta))
+}
+
 // Public API surface the editor exposes to its parent (GenerateRefineScreen):
 // the live editor instance (for section-local block targeting / redraft-range)
 // and a flush that persists the active section and resolves to its post-save
@@ -61,6 +67,9 @@ export interface BidDocumentEditorApi {
   /** Delete the heading at `pos` through the next same-or-higher heading, then
    * flush(align) its section. Used by the TOC "delete leaf". */
   deleteLeafRange: (pos: number, sectionId: string) => Promise<string>
+  /** Promote/demote the heading at `pos` by `delta` levels (clamped to
+   * [2,5]), then flush(align) its section. Used by the TOC leaf promote/demote. */
+  setLeafLevel: (pos: number, delta: number, sectionId: string) => Promise<string>
 }
 
 interface SectionSpec {
@@ -531,6 +540,26 @@ export function BidDocumentEditor({
     [editor, autosave]
   )
 
+  // Promote/demote the heading at `pos` by `delta` levels (clamped to [2,5]),
+  // then flush(align) its section. Used by the TOC leaf promote/demote.
+  const setLeafLevel = useCallback(
+    async (pos: number, delta: number, sectionId: string): Promise<string> => {
+      const node = editor?.state.doc.nodeAt(pos)
+      if (editor && node && node.type.name === 'heading') {
+        const level = clampHeadingLevel(Number(node.attrs?.level ?? 2), delta)
+        editor
+          .chain()
+          .command(({ tr }) => {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, level })
+            return true
+          })
+          .run()
+      }
+      return autosave.flushSection(sectionId, { align: true })
+    },
+    [editor, autosave]
+  )
+
   // Hand the editor + flush to the parent for section-level operations.
   useEffect(() => {
     if (editor) {
@@ -540,9 +569,18 @@ export function BidDocumentEditor({
         renameHeadingAt,
         insertLeafHeading,
         deleteLeafRange,
+        setLeafLevel,
       })
     }
-  }, [editor, onReady, autosave.flushSection, renameHeadingAt, insertLeafHeading, deleteLeafRange])
+  }, [
+    editor,
+    onReady,
+    autosave.flushSection,
+    renameHeadingAt,
+    insertLeafHeading,
+    deleteLeafRange,
+    setLeafLevel,
+  ])
 
   // The drag handle's hovered target changed. Remember the block (for the insert
   // menu) and collapse any open menu, since it belonged to the previous block.

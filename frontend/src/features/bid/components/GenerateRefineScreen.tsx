@@ -687,6 +687,34 @@ export function GenerateRefineScreen({
                         −
                       </button>
                     )}
+                    {editorApiRef.current?.setLeafLevel && (
+                      <>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-promote-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.setLeafLevel(h.pos, -1, h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_up')}
+                        >
+                          ⤒
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`bid-generate-leaf-demote-${h.key}`}
+                          onClick={e => {
+                            e.stopPropagation()
+                            void editorApiRef.current?.setLeafLevel(h.pos, +1, h.sectionId)
+                          }}
+                          className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                          title={t('drafting.move_chapter_down')}
+                        >
+                          ⤓
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </Fragment>
