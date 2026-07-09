@@ -780,6 +780,9 @@ async def redraft_section(
         outline = {}
     if find_section(outline, section_id) is None:
         raise HTTPException(status_code=404, detail="section not in outline")
+    drafting.add_section(
+        ws, section_id
+    )  # no-op for existing; total++ for a new chapter
     drafting.set_section_status(ws, section_id, "drafting")
     model, model_config = _resolve_and_validate_model(db, current_user, project)
     launch_redraft(
@@ -819,6 +822,26 @@ async def redraft_section_range(
         model_config,
     )
     return SimpleStatusResponse(status="drafting")
+
+
+@router.delete(
+    "/projects/{project_id}/sections/{section_id}",
+    response_model=SimpleStatusResponse,
+)
+def delete_section_endpoint(
+    project_id: int,
+    section_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Remove a chapter deleted from the stage-3 outline: drop its body, status
+    # entry (total--), and any review-accepted flag. Without this the section
+    # file would be resurrected by GET /sections (which merges on-disk files).
+    project = _require(db, current_user, project_id)
+    ws = BidWorkspace(project.workspace_ref)
+    drafting.delete_section(ws, section_id)
+    review.clear_accepted(ws, section_id)
+    return SimpleStatusResponse(status="deleted")
 
 
 @router.post(

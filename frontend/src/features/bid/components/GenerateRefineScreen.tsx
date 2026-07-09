@@ -38,6 +38,8 @@ export function GenerateRefineScreen({
   onStateChange,
   onPlaceholderCountChange,
   onRenameSection,
+  onAddChapter,
+  onDeleteChapter,
 }: {
   projectId: number
   outline?: OutlineDoc
@@ -46,6 +48,10 @@ export function GenerateRefineScreen({
   onPlaceholderCountChange?: (count: number) => void
   // Rename a chapter title — persisted to the outline (single source).
   onRenameSection?: (sectionId: string, title: string) => Promise<void> | void
+  // Add a top-level chapter (optional brief guides drafting, Q2).
+  onAddChapter?: (title: string, brief?: string) => Promise<void> | void
+  // Delete a top-level chapter and its section.
+  onDeleteChapter?: (sectionId: string) => Promise<void> | void
 }) {
   const { t } = useTranslation('bidWorkbench')
   const [status, setStatus] = useState<DraftStatus | null>(null)
@@ -55,6 +61,9 @@ export function GenerateRefineScreen({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
   const [editingHeadingKey, setEditingHeadingKey] = useState<string | null>(null)
+  const [addChapterOpen, setAddChapterOpen] = useState(false)
+  const [newChapterName, setNewChapterName] = useState('')
+  const [newChapterBrief, setNewChapterBrief] = useState('')
   const [instruction, setInstruction] = useState('')
   // Last AI-operation failure, shown in the right rail (redraft / regen errors
   // must not fail silently and strand the review panel).
@@ -203,8 +212,8 @@ export function GenerateRefineScreen({
   // section can differ from the operation's target — flushing the wrong one
   // rewrites stale bytes and desyncs the CAS version.
   const flushSectionId = useCallback(
-    async (sid: string): Promise<string> => {
-      if (editorApiRef.current) return editorApiRef.current.flushSection(sid)
+    async (sid: string, opts?: { align?: boolean }): Promise<string> => {
+      if (editorApiRef.current) return editorApiRef.current.flushSection(sid, opts)
       return versions[sid] ?? ''
     },
     [versions]
@@ -290,7 +299,7 @@ export function GenerateRefineScreen({
       if (!sid) return
       setOpError(null)
       const editor = editorApiRef.current?.editor ?? null
-      const baseVersion = await flushSectionId(sid)
+      const baseVersion = await flushSectionId(sid, { align: true })
       // Serialize the section's body (title-less) — the exact bytes the backend
       // now stores — and map the cursor block (section-local index) to its line
       // range within that body. This body is also the diff baseline.
@@ -520,6 +529,21 @@ export function GenerateRefineScreen({
                     </span>
                   )}
                   {accepted[n.id] && <span style={{ color: 'var(--bid-success)' }}>✓</span>}
+                  {onDeleteChapter && n.depth === 0 && (
+                    <button
+                      type="button"
+                      data-testid={`bid-generate-delete-chapter-${n.id}`}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (window.confirm(t('drafting.delete_chapter_confirm')))
+                          void onDeleteChapter(n.id)
+                      }}
+                      className="flex-shrink-0 text-[11px] opacity-50 hover:opacity-100"
+                      title={t('drafting.delete_chapter')}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
                 {headings.map(h => (
                   <div
@@ -573,11 +597,81 @@ export function GenerateRefineScreen({
                         {h.text}
                       </span>
                     )}
+                    {editorApiRef.current?.insertLeafHeading && (
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-leaf-add-${h.key}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          const title = window.prompt(t('drafting.add_chapter_name'))
+                          if (!title?.trim() || !editorApiRef.current) return
+                          void (async () => {
+                            const api = editorApiRef.current!
+                            const version = await api.insertLeafHeading(
+                              h.pos,
+                              title.trim(),
+                              h.sectionId
+                            )
+                            const editor = api.editor
+                            const node = editor?.state.doc.nodeAt(h.pos)
+                            const oldMd =
+                              node && editor
+                                ? serializeSection(editor, node)
+                                : (contents[h.sectionId] ?? '')
+                            // New heading lands at the first body block under it.
+                            const startLine = topBlockIndexOf(editor, h.sectionId) + 1
+                            const span = blockLineRange(oldMd, startLine)
+                            try {
+                              await bidApis.redraftRange(
+                                projectId,
+                                h.sectionId,
+                                span.startLine,
+                                span.endLine,
+                                `起草小节《${title.trim()}》`,
+                                version
+                              )
+                            } catch {
+                              /* surfaced via draft-status poll */
+                            }
+                          })()
+                        }}
+                        className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                        title={t('drafting.add_chapter')}
+                      >
+                        +
+                      </button>
+                    )}
+                    {editorApiRef.current?.deleteLeafRange && (
+                      <button
+                        type="button"
+                        data-testid={`bid-generate-leaf-del-${h.key}`}
+                        onClick={e => {
+                          e.stopPropagation()
+                          if (!window.confirm(t('drafting.delete_chapter_confirm'))) return
+                          void editorApiRef.current?.deleteLeafRange(h.pos, h.sectionId)
+                        }}
+                        className="flex-shrink-0 px-1 text-[11px] opacity-40 hover:opacity-100"
+                        title={t('drafting.delete_chapter')}
+                      >
+                        −
+                      </button>
+                    )}
                   </div>
                 ))}
               </Fragment>
             )
           })}
+        {onAddChapter && (
+          <button
+            type="button"
+            data-testid="bid-generate-add-chapter"
+            onClick={() => setAddChapterOpen(true)}
+            className="mt-2 w-full rounded-md border border-dashed py-1.5 text-[12px]"
+            style={{ borderColor: 'var(--bid-border)', color: 'var(--bid-muted-2)' }}
+          >
+            {t('drafting.add_chapter')}
+          </button>
+        )}
       </div>
 
       {/* Center: serif document, streamed then editable in place */}
@@ -861,6 +955,58 @@ export function GenerateRefineScreen({
           </div>
         </div>
       </div>
+      {addChapterOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          data-testid="bid-add-chapter-dialog"
+        >
+          <div className="w-[420px] rounded-lg bg-white p-5" style={{ background: '#fff' }}>
+            <div className="mb-3 text-sm font-semibold">{t('drafting.add_chapter_title')}</div>
+            <input
+              data-testid="bid-add-chapter-name"
+              value={newChapterName}
+              onChange={e => setNewChapterName(e.target.value)}
+              placeholder={t('drafting.add_chapter_name')}
+              className="mb-2 w-full rounded border px-2 py-1.5 text-sm"
+              style={{ borderColor: 'var(--bid-border)' }}
+            />
+            <textarea
+              data-testid="bid-add-chapter-brief"
+              value={newChapterBrief}
+              onChange={e => setNewChapterBrief(e.target.value)}
+              placeholder={t('drafting.add_chapter_brief')}
+              rows={3}
+              className="mb-3 w-full rounded border px-2 py-1.5 text-sm"
+              style={{ borderColor: 'var(--bid-border)' }}
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAddChapterOpen(false)}
+                className="rounded-md border px-3 py-1.5 text-sm"
+                style={{ borderColor: 'var(--bid-border)' }}
+              >
+                {t('outline.delete_cancel')}
+              </button>
+              <button
+                type="button"
+                data-testid="bid-add-chapter-submit"
+                disabled={!newChapterName.trim()}
+                onClick={() => {
+                  void onAddChapter?.(newChapterName.trim(), newChapterBrief.trim() || undefined)
+                  setAddChapterOpen(false)
+                  setNewChapterName('')
+                  setNewChapterBrief('')
+                }}
+                className="rounded-md px-3 py-1.5 text-sm font-bold text-white"
+                style={{ background: 'var(--bid-primary)' }}
+              >
+                {t('drafting.add_chapter_ok')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

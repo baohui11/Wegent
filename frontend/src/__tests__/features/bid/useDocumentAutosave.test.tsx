@@ -168,3 +168,26 @@ describe('useDocumentAutosave', () => {
     jest.useRealTimers()
   })
 })
+
+test('align flush forces a save even when the body is unchanged vs snapshot', async () => {
+  jest.useFakeTimers()
+  const { editor } = mkEditor([{ sid: 'a', version: 'v1a', md: 'A body' }])
+  const onSaved = jest.fn()
+  const { result } = renderHook(() => useDocumentAutosave({ projectId: 1, editor, onSaved }))
+  // Seed the snapshot baseline so the body is NOT dirty (no-op guard applies).
+  act(() => result.current.seedSnapshots())
+
+  // Without align: unchanged body short-circuits -> no PUT.
+  await act(async () => {
+    await result.current.flushSection('a')
+  })
+  expect(bidApis.saveSection).not.toHaveBeenCalled()
+
+  // With align: the no-op guard is bypassed -> PUT fires (disk == serialized).
+  await act(async () => {
+    await result.current.flushSection('a', { align: true })
+  })
+  expect(bidApis.saveSection).toHaveBeenCalledTimes(1)
+  expect(bidApis.saveSection).toHaveBeenCalledWith(1, 'a', 'A body', 'v1a')
+  jest.useRealTimers()
+})

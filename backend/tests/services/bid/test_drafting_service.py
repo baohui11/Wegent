@@ -30,3 +30,32 @@ def test_section_read_and_list(tmp_path):
     assert ds.read_section(ws, "s1") == "正文"
     with pytest.raises(FileNotFoundError):
         ds.read_section(ws, "nope")
+
+
+def test_delete_section_removes_md_status_key_and_decrements_total(tmp_path):
+    from app.services.bid import drafting_service as ds
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("del-1", root=tmp_path)
+    ds.init_status(ws, ["s1", "s2"])
+    ds.write_section(ws, "s1", "正文一")
+    ds.delete_section(ws, "s1")
+    st = ds.read_status(ws)
+    assert "s1" not in st["sections"] and st["total"] == 1
+    assert not ws.path("workspace/sections/s1.md").exists()
+    # Idempotent: deleting an unknown section is a no-op.
+    ds.delete_section(ws, "nope")
+    assert ds.read_status(ws)["total"] == 1
+
+
+def test_add_section_appends_pending_and_bumps_total_once(tmp_path):
+    from app.services.bid import drafting_service as ds
+    from app.services.bid.workspace import BidWorkspace
+
+    ws = BidWorkspace("add-1", root=tmp_path)
+    ds.init_status(ws, ["s1"])
+    ds.add_section(ws, "s2")
+    st = ds.read_status(ws)
+    assert st["sections"]["s2"] == "pending" and st["total"] == 2
+    ds.add_section(ws, "s2")  # idempotent
+    assert ds.read_status(ws)["total"] == 2

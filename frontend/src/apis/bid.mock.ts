@@ -673,6 +673,11 @@ export const bidMockApis = {
     sectionContentOverrides[sectionId] = content
     return delay({ version: sectionVersion(sectionId) }, 80)
   },
+  deleteSection: (id: number, sectionId: string): Promise<{ status: string }> => {
+    need(id)
+    delete sectionContentOverrides[sectionId]
+    return delay({ status: 'deleted' })
+  },
   acceptSection: (id: number, sectionId: string): Promise<{ status: string }> => {
     const p = need(id)
     p.accepted = { ...(p.accepted ?? {}), [sectionId]: true }
