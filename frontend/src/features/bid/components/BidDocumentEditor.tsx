@@ -40,7 +40,7 @@ export function headingTextRange(nodeSize: number, pos: number): { from: number;
 // CAS version.
 export interface BidDocumentEditorApi {
   editor: Editor | null
-  flushSection: (sectionId: string) => Promise<string>
+  flushSection: (sectionId: string, opts?: { align?: boolean }) => Promise<string>
   /** Replace the heading at absolute pos `pos` with `text`, then flush its
    * section (returns the new version). Used by the TOC leaf inline-rename. */
   renameHeadingAt: (pos: number, text: string, sectionId: string) => Promise<string>

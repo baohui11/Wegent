@@ -57,13 +57,15 @@ export function useDocumentAutosave({
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const saveOne = useCallback(
-    async (sid: string): Promise<string> => {
+    async (sid: string, opts?: { align?: boolean }): Promise<string> => {
       if (!editor) return ''
       const entry = sections(editor).find(s => s.sid === sid)
       if (!entry) return snapshots.current[sid] ?? ''
       const md = serializeSection(editor, entry.node)
-      // No-op edit: body unchanged vs the last persisted snapshot.
-      if (md === snapshots.current[sid]) return entry.version
+      // No-op edit: body unchanged vs the last persisted snapshot. `align` forces
+      // the write anyway so the on-disk bytes equal the serialized body a
+      // redraft-range will compute line numbers against (§9).
+      if (!opts?.align && md === snapshots.current[sid]) return entry.version
       setSaveState(s => ({ ...s, [sid]: 'saving' }))
       try {
         const r = await bidApis.saveSection(projectId, sid, md, entry.version)
@@ -93,12 +95,12 @@ export function useDocumentAutosave({
   )
 
   const flushSection = useCallback(
-    async (sid: string): Promise<string> => {
+    async (sid: string, opts?: { align?: boolean }): Promise<string> => {
       if (timers.current[sid]) {
         clearTimeout(timers.current[sid])
         delete timers.current[sid]
       }
-      return saveOne(sid)
+      return saveOne(sid, opts)
     },
     [saveOne]
   )

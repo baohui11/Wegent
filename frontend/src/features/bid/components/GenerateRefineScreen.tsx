@@ -212,8 +212,8 @@ export function GenerateRefineScreen({
   // section can differ from the operation's target — flushing the wrong one
   // rewrites stale bytes and desyncs the CAS version.
   const flushSectionId = useCallback(
-    async (sid: string): Promise<string> => {
-      if (editorApiRef.current) return editorApiRef.current.flushSection(sid)
+    async (sid: string, opts?: { align?: boolean }): Promise<string> => {
+      if (editorApiRef.current) return editorApiRef.current.flushSection(sid, opts)
       return versions[sid] ?? ''
     },
     [versions]
@@ -299,7 +299,7 @@ export function GenerateRefineScreen({
       if (!sid) return
       setOpError(null)
       const editor = editorApiRef.current?.editor ?? null
-      const baseVersion = await flushSectionId(sid)
+      const baseVersion = await flushSectionId(sid, { align: true })
       // Serialize the section's body (title-less) — the exact bytes the backend
       // now stores — and map the cursor block (section-local index) to its line
       // range within that body. This body is also the diff baseline.
