@@ -918,3 +918,26 @@ def test_draft_resets_stage3_to_stage1(test_client, test_token, tmp_path, monkey
         ws.read_json("workspace/outline_stage3.json")["sections"][0]["title"]
         == "第一章"
     )
+
+
+def test_delete_section_endpoint(test_client, test_token, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "BID_WORKSPACE_ROOT", str(tmp_path))
+    h = {"Authorization": f"Bearer {test_token}"}
+    pid = test_client.post("/api/bid/projects", json={"title": "DS"}, headers=h).json()[
+        "id"
+    ]
+    ref = test_client.get(f"/api/bid/projects/{pid}", headers=h).json()["workspace_ref"]
+    from app.services.bid import drafting_service as ds
+    from app.services.bid import review_service as review
+
+    ws = BidWorkspace(ref)
+    ds.init_status(ws, ["s1", "s2"])
+    ds.write_section(ws, "s1", "正文一")
+    review.mark_accepted(ws, "s1")
+
+    r = test_client.delete(f"/api/bid/projects/{pid}/sections/s1", headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "deleted"
+    st = ds.read_status(ws)
+    assert "s1" not in st["sections"] and st["total"] == 1
+    assert review.read_review(ws)["accepted"].get("s1") is None
+    assert not ws.path("workspace/sections/s1.md").exists()
