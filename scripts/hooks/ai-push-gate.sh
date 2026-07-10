@@ -140,33 +140,67 @@ run_changed_python_syntax_check() {
     fi
 }
 
+ZERO_SHA="0000000000000000000000000000000000000000"
+
+# Git feeds a pre-push hook one "<local ref> <local sha> <remote ref> <remote sha>"
+# line per ref on stdin. Consume it once here so several helpers can inspect it;
+# a command substitution would otherwise swallow it in a subshell.
+# When invoked without a pipe (e.g. manually), stdin stays a terminal and is left alone.
+PUSH_REFS=""
+if ! [ -t 0 ]; then
+    PUSH_REFS=$(cat)
+fi
+
+# Only branch updates carry new code. Tag pushes and ref deletions do not, and
+# must never be diffed against the default base - that would mistake the whole
+# current branch for "the code being pushed".
+push_has_branch_updates() {
+    local local_ref local_sha remote_ref remote_sha
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        [ -n "$local_ref" ] || continue
+        [ "$local_sha" = "$ZERO_SHA" ] && continue
+        case "$remote_ref" in
+            refs/heads/*) return 0 ;;
+        esac
+    done <<< "$PUSH_REFS"
+
+    return 1
+}
+
 # Get the commits being pushed
 # When run by pre-commit, stdin may not be available, so we detect changes differently
 get_changed_files() {
     local files=""
 
-    # Try to read from stdin first (direct pre-push hook provides ref info)
-    if ! [ -t 0 ]; then
-        # stdin is available (piped), try to read pre-push hook format
-        while read local_ref local_sha remote_ref remote_sha 2>/dev/null; do
-            if [ -n "$local_sha" ] && [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
-                if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-                    # New branch, compare with default branch
-                    local default_base
-                    default_base=$(resolve_default_base "$REMOTE_NAME" || true)
-                    if [ -n "$default_base" ]; then
-                        files=$(git diff --name-only "$default_base...$local_sha" 2>/dev/null || true)
-                    fi
-                else
-                    # Existing branch, compare with remote
-                    files=$(git diff --name-only "$remote_sha...$local_sha" 2>/dev/null || true)
+    if [ -n "$PUSH_REFS" ]; then
+        local local_ref local_sha remote_ref remote_sha
+        while read -r local_ref local_sha remote_ref remote_sha; do
+            [ -n "$local_ref" ] || continue
+            [ "$local_sha" = "$ZERO_SHA" ] && continue
+            case "$remote_ref" in
+                refs/heads/*) ;;
+                *) continue ;;
+            esac
+
+            if [ "$remote_sha" = "$ZERO_SHA" ]; then
+                # New branch, compare with default branch
+                local default_base
+                default_base=$(resolve_default_base "$REMOTE_NAME" || true)
+                if [ -n "$default_base" ]; then
+                    files=$(git diff --name-only "$default_base...$local_sha" 2>/dev/null || true)
                 fi
-                if [ -n "$files" ]; then
-                    echo "$files"
-                    return
-                fi
+            else
+                # Existing branch, compare with remote
+                files=$(git diff --name-only "$remote_sha...$local_sha" 2>/dev/null || true)
             fi
-        done
+            if [ -n "$files" ]; then
+                echo "$files"
+                return
+            fi
+        done <<< "$PUSH_REFS"
+
+        # stdin described the push exhaustively; do not guess from the working tree.
+        return
     fi
 
     # Fallback: Compare current branch with its upstream or origin/main
@@ -184,6 +218,11 @@ get_changed_files() {
     # Last resort: compare with last commit
     git diff --name-only HEAD~1 HEAD 2>/dev/null || true
 }
+
+if [ -n "$PUSH_REFS" ] && ! push_has_branch_updates; then
+    echo -e "${GREEN}✅ No branch updates in this push (tags/deletions only), skipping checks${NC}"
+    exit 0
+fi
 
 # Get list of changed files in the commits being pushed
 CHANGED_FILES=$(get_changed_files)
