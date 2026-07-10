@@ -43,7 +43,23 @@ export default defineConfig({
   webServer: {
     // Invoke next dev directly with an explicit port so the dev script's
     // own port negotiation (scripts/dev.cjs ignores --port) doesn't drift.
-    command: 'NEXT_PUBLIC_BID_MOCK=1 TURBOPACK=1 npx next dev --turbopack --port 3099',
+    // NEXT_DIST_DIR keeps this mock-mode server's build cache out of `.next`;
+    // sharing it would make a dev server on :3000 serve mock-mode chunks.
+    //
+    // A custom distDir makes `next dev` rewrite two tracked files:
+    //  * tsconfig.json — NEXT_TSCONFIG_PATH absorbs that write into a git-ignored
+    //    throwaway, which must already `extends` the real config or Next creates
+    //    a bare one and the `@/*` path aliases stop resolving.
+    //  * next-env.d.ts — Next rewrites its distDir reference unconditionally
+    //    (writeAppTypeDeclarations has no opt-out) and lands the write after
+    //    Playwright tears the server down, so it cannot be restored from here.
+    //    It shows up modified after a smoke run; `pnpm dev` rewrites it back.
+    //    It stays tracked because CI type-checks with a bare `tsc --noEmit`.
+    command: [
+      `[ -f tsconfig.smoke.json ] || echo '{ "extends": "./tsconfig.json" }' > tsconfig.smoke.json`,
+      'NEXT_PUBLIC_BID_MOCK=1 TURBOPACK=1 NEXT_DIST_DIR=.next-smoke NEXT_TSCONFIG_PATH=tsconfig.smoke.json' +
+        ' npx next dev --turbopack --port 3099',
+    ].join('; '),
     url: 'http://localhost:3099/bid-workbench',
     timeout: 120_000,
     reuseExistingServer: true,

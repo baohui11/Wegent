@@ -54,13 +54,23 @@ async function gotoStage3(page: Page) {
   await page.getByTestId('bid-workbench-shell').waitFor({ state: 'visible' })
   await page.getByTestId('bid-stepper-stage-3').click()
   await page.getByTestId('bid-document-editor').waitFor({ state: 'visible' })
-  // Wait for the ProseMirror editor instance + at least one bidSection to load.
+  // Wait for the editor instance AND at least one section BODY. childCount > 0
+  // only proves the section shells exist: a chapter title is an attr rendered by
+  // the NodeView, so a body-less section still has empty textContent. Asserting
+  // between those two ticks is what made this spec flaky on a cold server.
   await page.waitForFunction(
     () => {
-      const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as
-        | (HTMLElement & { editor?: { state?: { doc?: { childCount?: number } } } })
+      const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        | (HTMLElement & { editor?: any })
         | null
-      return !!pm?.editor?.state?.doc && (pm.editor.state.doc.childCount ?? 0) > 0
+      const doc = pm?.editor?.state?.doc
+      if (!doc || doc.childCount === 0) return false
+      let loaded = false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      doc.forEach((n: any) => {
+        if (n.type?.name === 'bidSection' && (n.textContent ?? '').trim().length > 0) loaded = true
+      })
+      return loaded
     },
     { timeout: 30_000 }
   )
@@ -215,6 +225,283 @@ test('A4: injecting an H2 into a section body adds a live heading sub-entry to t
   console.log('A4_SCROLL_OK: heading entry click did not throw')
 })
 
+// .bid-drag-handle must stay flush against its block. The plugin hides the
+// handle on `mouseleave` of `view.dom` unless the pointer lands inside the
+// plugin's own wrapper, so any offset on the wrapper (a margin, say) opens a
+// horizontal strip belonging to neither, and the hover dies there — before the
+// pointer ever reaches the ⠿/+. The visual gap from the text belongs on the
+// control INSIDE the wrapper (.bid-block-insert's translateX), which moves the
+// pixels without moving the hit box.
+// Walk the pointer from inside a block onto the handle and assert it stays
+// visible the whole way — that is the user's actual gesture. HANDLE_GAP_PX must
+// stay 0; if it ever grows, this test walks through the dead strip and fails.
+test('block handle survives the pointer travelling from the block to the handle', async ({
+  page,
+}) => {
+  await stubSession(page)
+  await gotoStage3(page)
+
+  const paragraph = page.locator('[data-testid="bid-document-editor"] .ProseMirror p').first()
+  await paragraph.scrollIntoViewIfNeeded()
+  // hover() scrolls the block clear of the sticky stepper and parks the pointer
+  // inside it, which is what makes the plugin surface the handle.
+  await paragraph.hover()
+  const block = await paragraph.boundingBox()
+  expect(block, 'found a paragraph to hover').toBeTruthy()
+
+  // Nudge inside the block (away from its edges, where the plugin declines to
+  // retarget) so the rAF-throttled mousemove definitely runs.
+  await page.mouse.move(block!.x + 120, block!.y + block!.height / 2, { steps: 4 })
+  const handle = page.locator('.bid-drag-handle').first()
+  await expect(handle, 'handle shows while the pointer is inside the block').toBeVisible()
+
+  const grip = await handle.boundingBox()
+  expect(grip, 'handle has a box once shown').toBeTruthy()
+  const gap = block!.x - (grip!.x + grip!.width)
+  console.log('HANDLE_GAP_PX:', gap.toFixed(1))
+  // The invariant the walk below can only probe indirectly: no dead strip exists
+  // in the first place, because the wrapper's hit box abuts the block.
+  expect(gap, 'no dead strip between the handle hit box and its block').toBeLessThanOrEqual(1)
+
+  // Travel along the handle's own row: the handle is top-aligned to its block,
+  // so its vertical middle is the height a user's pointer actually crosses on
+  // the way to the ⠿/+. It also clears the plugin's 12px top-edge band, inside
+  // which it deliberately declines to retarget.
+  const y = grip!.y + grip!.height / 2
+
+  // Walk leftwards in small steps: inside the block, through the gap, onto the
+  // handle. The handle must never blink out — losing it mid-travel means the
+  // user can never click ⠿/+.
+  const targets = [
+    { x: block!.x + 120, where: 'well inside the block' },
+    { x: block!.x + 4, where: 'inside block, at its left edge' },
+    { x: block!.x - gap / 2, where: 'midway across the gap' },
+    { x: grip!.x + grip!.width - 2, where: "at the handle's right edge" },
+    { x: grip!.x + grip!.width / 2, where: 'on the handle itself' },
+  ]
+  for (const { x, where } of targets) {
+    await page.mouse.move(x, y, { steps: 3 })
+    await page.waitForTimeout(120)
+    await expect(handle, `handle stays visible ${where}`).toBeVisible()
+  }
+
+  // And it is genuinely usable at the end of the travel: the ⠿ opens its menu.
+  await page.getByTestId('bid-block-actions-trigger').click()
+  await expect(page.getByTestId('bid-block-actions-menu')).toBeVisible()
+  console.log('HANDLE_TRAVEL_OK')
+})
+
+// The handle is pinned to the TEXT COLUMN, not to the hovered block's own left
+// edge. A list item is indented from the column by its list's padding; pinning
+// to the block would push the ⠿/+ onto the "1."/"•" marker, and compensating
+// with one fixed nudge for every block type strands the handle out in the page
+// margin whenever the block is NOT indented (which is most of them).
+// So: a paragraph's handle and a list item's handle must land on the same x.
+test('block handle pins to the text column for both plain and indented blocks', async ({
+  page,
+}) => {
+  await stubSession(page)
+  await gotoStage3(page)
+
+  // Where the handle settles when hovering `locator`, plus the editor's text
+  // column, both in viewport px.
+  //
+  // Measure the CONTROL (.bid-block-insert), never its .bid-drag-handle wrapper:
+  // the control carries a translateX that the wrapper's own rect does not
+  // include, so the wrapper's box can line up perfectly while the ⠿/+ the user
+  // sees are 20px off.
+  const handleRightAfterHovering = async (locator: ReturnType<Page['locator']>) => {
+    await locator.scrollIntoViewIfNeeded()
+    await locator.hover()
+    const box = (await locator.boundingBox())!
+    await page.mouse.move(box.x + 100, box.y + box.height / 2, { steps: 4 })
+    const handle = page.locator('.bid-drag-handle').first()
+    await expect(handle).toBeVisible()
+    return page.evaluate(() => {
+      const pm = document.querySelector(
+        '[data-testid="bid-document-editor"] .ProseMirror'
+      ) as HTMLElement
+      const control = document.querySelector('[data-testid="bid-drag-handle-inner"]') as HTMLElement
+      const padLeft = parseFloat(getComputedStyle(pm).paddingLeft) || 0
+      return {
+        handleRight: control.getBoundingClientRect().right,
+        textColumnLeft: pm.getBoundingClientRect().left + padLeft,
+      }
+    })
+  }
+
+  const ids = await sectionIds(page)
+  const paragraph = page.locator('[data-testid="bid-document-editor"] .ProseMirror p').first()
+  const forParagraph = await handleRightAfterHovering(paragraph)
+
+  // An ordered list has the widest markers, so it is the strictest marker case.
+  const injected = await page.evaluate(targetSid => {
+    const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      | (HTMLElement & { editor?: any })
+      | null
+    const editor = pm?.editor
+    if (!editor) return false
+    let start = -1
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    editor.state.doc.forEach((node: any, offset: number) => {
+      if (node.type?.name === 'bidSection' && String(node.attrs?.sectionId) === targetSid) {
+        if (start < 0) start = offset + 1
+      }
+    })
+    if (start < 0) return false
+    editor.chain().focus().insertContentAt(start, '10. 列对齐冒烟项\n11. 列对齐冒烟项\n\n').run()
+    return true
+  }, ids[0])
+  expect(injected, 'injected an ordered list into the first section').toBeTruthy()
+
+  const listItem = page
+    .locator('[data-testid="bid-document-editor"] .ProseMirror ol li')
+    .filter({ hasText: '列对齐冒烟项' })
+    .first()
+  await listItem.waitFor({ state: 'visible' })
+  const forListItem = await handleRightAfterHovering(listItem)
+
+  const listLeft = await listItem
+    .locator('xpath=ancestor::ol[1]')
+    .evaluate(el => el.getBoundingClientRect().left)
+
+  console.log('HANDLE_COLUMN:', JSON.stringify({ forParagraph, forListItem, listLeft }))
+
+  // Both handles land on the same column …
+  expect(
+    Math.abs(forListItem.handleRight - forParagraph.handleRight),
+    'the list item and the paragraph put the handle on the same x'
+  ).toBeLessThanOrEqual(1)
+
+  // … which is a small, deliberate gap from the text — not out in the margin.
+  const gap = forParagraph.textColumnLeft - forParagraph.handleRight
+  expect(gap, 'handle hugs the text column').toBeGreaterThan(0)
+  expect(gap, 'handle is not stranded in the page margin').toBeLessThanOrEqual(12)
+
+  // … and it still clears the list markers, which live in the list's padding.
+  expect(forListItem.handleRight, 'handle clears the "1."/"•" markers').toBeLessThanOrEqual(
+    listLeft + 2
+  )
+  console.log('HANDLE_COLUMN_OK')
+})
+
+// Scrolling must not strand the handle. Two distinct failures hide here:
+//   * the plugin's handle wrapper is absolutely positioned, so without a
+//     positioned ancestor it lives in DOCUMENT coordinates while the document
+//     card scrolls inside a nested overflow container — the handle stays pinned
+//     to the viewport and slides away from its own block;
+//   * the plugin only picks a target on `mousemove`, so a scroll under a resting
+//     pointer leaves the handle (and ⠿/+) bound to the block that moved away.
+// A small scroll exercises the first (same block stays under the pointer), a
+// large one the second (a different block arrives under the pointer).
+test('block handle follows the block under the pointer while scrolling', async ({ page }) => {
+  await stubSession(page)
+  await gotoStage3(page)
+
+  const scrollBy = (dy: number) =>
+    page.evaluate(delta => {
+      let el: HTMLElement | null = document.querySelector(
+        '[data-testid="bid-document-editor"] .ProseMirror'
+      )
+      while (el && !/auto|scroll/.test(getComputedStyle(el).overflowY)) el = el.parentElement
+      if (el) el.scrollTop += delta
+    }, dy)
+
+  // Handle top vs. the top of whatever block the pointer is currently over.
+  const alignment = (x: number, y: number) =>
+    page.evaluate(
+      ({ px, py }) => {
+        const handle = document.querySelector('.bid-drag-handle') as HTMLElement
+        const under = document.elementFromPoint(px, py)
+        const block = under?.closest('p, h2, h3, h4, li') as HTMLElement | null
+        return {
+          visible: getComputedStyle(handle).visibility === 'visible',
+          handleTop: handle.getBoundingClientRect().top,
+          blockTop: block ? block.getBoundingClientRect().top : null,
+          blockText: block ? (block.textContent ?? '').slice(0, 16) : null,
+        }
+      },
+      { px: x, py: y }
+    )
+
+  // A multi-line paragraph: the small scroll below must keep the pointer inside
+  // it, so a short one (a single 29px line) would drop the pointer into the gap
+  // between blocks and prove nothing.
+  const paragraphIndex = await page.evaluate(() => {
+    const ps = [...document.querySelectorAll('[data-testid="bid-document-editor"] .ProseMirror p')]
+    return ps.findIndex(p => p.getBoundingClientRect().height > 80)
+  })
+  expect(paragraphIndex, 'found a multi-line paragraph to hover').toBeGreaterThanOrEqual(0)
+
+  const paragraph = page
+    .locator('[data-testid="bid-document-editor"] .ProseMirror p')
+    .nth(paragraphIndex)
+  await paragraph.scrollIntoViewIfNeeded()
+  await paragraph.hover()
+  const box = (await paragraph.boundingBox())!
+  const x = box.x + 90
+  const y = box.y + box.height / 2
+  await page.mouse.move(x, y, { steps: 4 })
+  await expect(page.locator('.bid-drag-handle').first()).toBeVisible()
+  await page.waitForTimeout(300)
+
+  const parked = await alignment(x, y)
+  expect(parked.blockTop, 'pointer rests on a block').not.toBeNull()
+  expect(
+    Math.abs(parked.handleTop - parked.blockTop!),
+    'handle starts aligned with the block it points at'
+  ).toBeLessThanOrEqual(2)
+
+  // Small scroll: the same block stays under the pointer, so the plugin retargets
+  // nothing. Only the handle's containing block keeps it aligned here.
+  await scrollBy(24)
+  await page.waitForTimeout(300)
+  const nudged = await alignment(x, y)
+  expect(nudged.visible, 'handle survives a small scroll').toBeTruthy()
+  expect(nudged.blockText, 'the same block is still under the pointer').toBe(parked.blockText)
+  expect(
+    Math.abs(nudged.handleTop - nudged.blockTop!),
+    'handle scrolled with its block, not with the viewport'
+  ).toBeLessThanOrEqual(2)
+
+  // Large scroll: bring a LATER block under the resting pointer, so the handle
+  // must retarget rather than stay with the block it came from. Land the pointer
+  // 16px below that block's top: the plugin deliberately declines to retarget
+  // within 12px of a block's top/left edge, so aiming at a short block's middle
+  // would prove nothing.
+  const POINTER_INSET = 16
+  const delta = await page.evaluate(
+    ({ px, py, inset }) => {
+      const under = document.elementFromPoint(px, py)!
+      const block = under.closest('p, h2, h3, h4, li')!
+      const blocks = [
+        ...document.querySelectorAll(
+          '[data-testid="bid-document-editor"] .ProseMirror p, [data-testid="bid-document-editor"] .ProseMirror h2, [data-testid="bid-document-editor"] .ProseMirror h3, [data-testid="bid-document-editor"] .ProseMirror h4, [data-testid="bid-document-editor"] .ProseMirror li'
+        ),
+      ]
+      const target = blocks
+        .slice(blocks.indexOf(block) + 1)
+        .find(el => el.getBoundingClientRect().height > inset + 8)
+      if (!target) return null
+      return target.getBoundingClientRect().top - py + inset
+    },
+    { px: x, py: y, inset: POINTER_INSET }
+  )
+  expect(delta, 'found a later block tall enough to scroll onto').not.toBeNull()
+
+  await scrollBy(delta!)
+  await page.waitForTimeout(400)
+  const moved = await alignment(x, y)
+  console.log('HANDLE_SCROLL:', JSON.stringify({ parked, nudged, moved, delta }))
+  expect(moved.visible, 'handle survives a large scroll').toBeTruthy()
+  expect(moved.blockText, 'a different block is now under the pointer').not.toBe(parked.blockText)
+  expect(
+    Math.abs(moved.handleTop - moved.blockTop!),
+    'handle retargeted to the block now under the pointer'
+  ).toBeLessThanOrEqual(2)
+  console.log('HANDLE_SCROLL_OK')
+})
+
 // Fixes for the three reported Stage-3 editor bugs, all real-browser-only
 // (Jest mocks tiptap, so none of this runs under Jest):
 //   Bug 1 — the left TOC had a dual highlight (focus-click vs caret) that lit
@@ -314,9 +601,11 @@ test('Bugs 1/2/3: single-active TOC, caret-driven section, rendered lists', asyn
 
   // Handle-vs-marker: hovering the list item surfaces the drag/insert handle;
   // it must sit LEFT of the whole list box (markers live in the list's left
-  // padding), so the ⠿/+ never overlaps the "1."/"•". The handle only appears
-  // on a real hover the plugin recognizes; best-effort (the geometry is a CSS
-  // nudge on .bid-drag-handle), and we always screenshot for visual review.
+  // padding), so the ⠿/+ never overlaps the "1."/"•". Measure the CONTROL, not
+  // its .bid-drag-handle wrapper — the wrapper is flush against the <li> and the
+  // marker clearance comes from the control's translateX, which is not part of
+  // the wrapper's rect. The handle only appears on a real hover the plugin
+  // recognizes; best-effort, and we always screenshot for visual review.
   const li = ul.locator('li').first()
   await li.hover().catch(() => {})
   const rects = await page
@@ -325,13 +614,15 @@ test('Bugs 1/2/3: single-active TOC, caret-driven section, rendered lists', asyn
     .waitFor({ state: 'visible', timeout: 4_000 })
     .then(() =>
       page.evaluate(() => {
-        const h = document.querySelector('.bid-drag-handle') as HTMLElement | null
+        const control = document.querySelector(
+          '[data-testid="bid-drag-handle-inner"]'
+        ) as HTMLElement | null
         const list = document.querySelector(
           '[data-testid="bid-document-editor"] .ProseMirror ul, [data-testid="bid-document-editor"] .ProseMirror ol'
         ) as HTMLElement | null
-        if (!h || !list) return null
+        if (!control || !list) return null
         return {
-          handleRight: h.getBoundingClientRect().right,
+          handleRight: control.getBoundingClientRect().right,
           listLeft: list.getBoundingClientRect().left,
         }
       })

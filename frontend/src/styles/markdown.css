@@ -337,6 +337,16 @@
   font-family: var(--bid-serif);
   color: var(--bid-ink-2);
   font-size: 14.5px;
+
+  /* Block-handle geometry. Declared here because the drag-handle plugin mounts
+     the handle outside .ProseMirror, so the handle and the editor must read
+     these from a common ancestor. */
+  /* Breathing room between the handle and the text column. */
+  --bid-handle-gap: 8px;
+  /* Left padding of ol/ul, i.e. how far a list item is indented from the text
+     column. The handle targets the <li>, so it must subtract this to line up
+     with the handles of unindented blocks. */
+  --bid-list-indent: 1.5em;
 }
 
 /* Section anchor for TOC click-to-scroll: offset so the scrolled-to section
@@ -389,8 +399,9 @@
   margin-bottom: 0.75em;
   /* Restore list markers + indent that Tailwind preflight resets (reset:0 on
      ol/ul). Without this, ordered/unordered lists render as flat, marker-less,
-     un-indented lines inside the editor — indistinguishable from paragraphs. */
-  padding-left: 1.5em;
+     un-indented lines inside the editor — indistinguishable from paragraphs.
+     The block handle subtracts the same amount, so keep them one token. */
+  padding-left: var(--bid-list-indent);
 }
 
 .bid-prose ul {
@@ -411,15 +422,10 @@
   margin-bottom: 0.25em;
 }
 
-/* The block drag/insert handle is placed just left of the hovered block. For a
-   list item that band is exactly where the "1."/"•" marker sits (list markers
-   render outside, left of the item box), so the ⠿/+ handle overlaps the marker.
-   Shift the handle into a dedicated left gutter — clears the widest markers
-   while staying inside the document card's padding, and keeps list hanging
-   indent intact (no list-style-position change). */
-.bid-drag-handle {
-  margin-left: -1.9em;
-}
+/* The plugin pins .bid-drag-handle flush against its block's left edge; the gap
+   from the text and the list-indent compensation both live on the control inside
+   it (.bid-block-insert's translateX, below). Nothing to offset here — an extra
+   margin would double both and strand the ⠿/+ out in the page margin. */
 
 .bid-prose blockquote {
   border-left: 3px solid var(--bid-primary);
@@ -466,6 +472,16 @@
 .bid-prose th {
   background: var(--bid-paper);
   font-weight: 700;
+}
+
+/* The drag-handle plugin appends an absolutely-positioned wrapper here and
+   positions the handle inside it in that wrapper's coordinates. With no
+   positioned ancestor the wrapper's containing block is the document, so the
+   handle stays put while the document card scrolls inside its own overflow
+   container — the handle visibly detaches from its block. Anchor the wrapper to
+   the editor so both scroll together. */
+.bid-editor-content {
+  position: relative;
 }
 
 /* ==========================================================================
@@ -523,7 +539,7 @@
      @floating-ui offset() middleware (fixed 8px gap from the block) with pure CSS
      — no extra dependency. */
   height: 29px; /* body font-size (~14.5px) × line-height 2 */
-  transform: translateX(-8px);
+  transform: translateX(calc(-1 * var(--bid-handle-gap)));
 }
 
 /* Headings have a taller line box; let the handle sit at its natural height and
@@ -539,7 +555,7 @@
    block handles line up (top-level list; nested lists keep their extra indent,
    matching Notion). */
 .bid-prose .bid-block-insert[data-node-type='listItem'] {
-  transform: translateX(calc(-8px - 1.5em));
+  transform: translateX(calc(-1 * (var(--bid-handle-gap) + var(--bid-list-indent))));
 }
 
 .bid-prose .bid-block-insert > button {

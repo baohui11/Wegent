@@ -341,6 +341,12 @@ export function BidDocumentEditor({
   // leave (node === null) so an open menu still knows its target.
   const [hovered, setHovered] = useState<{ node: ProseMirrorNode; pos: number } | null>(null)
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null)
+  // The drag-handle plugin mounts its handle inside this root (as a sibling of
+  // .ProseMirror), so the scroll handler below reaches it from here.
+  const proseRef = useRef<HTMLDivElement | null>(null)
+  // Last pointer position, replayed into the drag-handle plugin on scroll (a
+  // scroll changes which block is under a resting pointer but fires no mousemove).
+  const pointerRef = useRef<{ x: number; y: number } | null>(null)
   // Two independent re-sync signals (see docSync.ts): contentKey drives the
   // rebuild-and-reseed path; attrKey drives targeted attribute updates. Keeping
   // version/accepted OUT of contentKey is what stops an autosave (which only
@@ -681,6 +687,49 @@ export function BidDocumentEditor({
     []
   )
 
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      pointerRef.current = { x: e.clientX, y: e.clientY }
+    }
+    window.addEventListener('mousemove', onMove, { passive: true })
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
+
+  // The drag-handle plugin only picks a target on `mousemove`. Scrolling moves a
+  // different block under a resting pointer without firing one, so the handle
+  // keeps pointing at — and ⠿/+ keep acting on — the block that used to be
+  // there. Replay the pointer's position into the plugin on every scroll so it
+  // retargets. (.bid-editor-content keeps the handle glued to its block in
+  // between, so nothing to do when the target is unchanged.)
+  useEffect(() => {
+    const view = editor?.view
+    // While a menu is open the plugin is deliberately locked; leave it alone.
+    if (!view || openMenu !== null) return
+
+    const onScroll = () => {
+      const pointer = pointerRef.current
+      const handle = proseRef.current?.querySelector<HTMLElement>('.bid-drag-handle')
+      // No handle on screen means nothing to retarget; the next real mousemove
+      // will surface it. Avoids a transaction per scroll frame.
+      if (!pointer || !handle || handle.style.visibility === 'hidden') return
+
+      const under = document.elementFromPoint(pointer.x, pointer.y)
+      if (!under || handle.contains(under)) return
+      if (!view.dom.contains(under)) {
+        view.dispatch(view.state.tr.setMeta('hideDragHandle', true))
+        return
+      }
+      view.dom.dispatchEvent(
+        new MouseEvent('mousemove', { clientX: pointer.x, clientY: pointer.y, bubbles: true })
+      )
+    }
+
+    // Capture: `scroll` does not bubble, and the document card scrolls inside a
+    // nested overflow container, not the window.
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => window.removeEventListener('scroll', onScroll, { capture: true })
+  }, [editor, openMenu])
+
   // Freeze the drag handle while either menu is open so moving the pointer
   // doesn't reposition/hide it out from under the user. The React DragHandle has
   // no `locked` prop; the underlying plugin consumes a `lockDragHandle` tr meta.
@@ -710,7 +759,7 @@ export function BidDocumentEditor({
   const activeSaveState = activeSection ? autosave.saveState[activeSection] : undefined
 
   return (
-    <div className="bid-prose" data-testid="bid-document-editor">
+    <div className="bid-prose" data-testid="bid-document-editor" ref={proseRef}>
       {editor && <SectionBubbleMenu editor={editor} onRegenerateBlock={onRegenerateBlock} />}
       {editor && (
         // Notion-style block handle: ⠿ drags the hovered block, + inserts a new
@@ -749,7 +798,10 @@ export function BidDocumentEditor({
           </span>
         </div>
       )}
-      <EditorContent editor={editor} />
+      {/* The drag-handle plugin appends its handle wrapper to this div. The
+          wrapper is absolutely positioned, so this div must establish its
+          containing block — see .bid-editor-content. */}
+      <EditorContent editor={editor} className="bid-editor-content" />
     </div>
   )
 }

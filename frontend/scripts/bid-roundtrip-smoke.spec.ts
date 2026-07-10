@@ -50,6 +50,27 @@ const COMPOSITE_BODY = [
 // host element carries the TipTap editor instance on .editor).
 async function waitForEditor(page: Page): Promise<string> {
   await page.getByTestId('bid-document-editor').waitFor({ state: 'visible' })
+  // Wait for section BODIES, not just the shell. A bidSection's chapter title is
+  // an attr rendered by the NodeView, so a section with no body has empty
+  // textContent — mounting the editor and loading the sections are separate
+  // ticks, and asserting in between is what made this spec flaky on a cold
+  // server.
+  await page.waitForFunction(
+    () => {
+      const pm = document.querySelector('[data-testid="bid-document-editor"] .ProseMirror') as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        | (HTMLElement & { editor?: any })
+        | null
+      const doc = pm?.editor?.state?.doc
+      if (!doc || doc.childCount === 0) return false
+      let loaded = false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      doc.forEach((n: any) => {
+        if (n.type?.name === 'bidSection' && (n.textContent ?? '').trim().length > 0) loaded = true
+      })
+      return loaded
+    },
+    { timeout: 30_000 }
+  )
   // The ProseMirror contenteditable is inside; surface the editor instance id.
   const editorHandle = await page.evaluate(() => {
     const root = document.querySelector('[data-testid="bid-document-editor"]')

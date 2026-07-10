@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 .next/
+# Isolated build cache + tsconfig of the smoke Playwright web server, so its
+# `next dev` rewrites neither `.next` nor the tracked tsconfig.json
+# (NEXT_DIST_DIR / NEXT_TSCONFIG_PATH — see playwright.smoke.config.ts).
+.next-smoke/
+tsconfig.smoke.json
 
 # Playwright
 e2e/.auth/

@@ -12,6 +12,19 @@ const isTurbopack = process.env.TURBOPACK === '1'
 const nextConfig = {
   reactStrictMode: false,
   output: 'standalone',
+  // Build cache directory. A second `next dev` on another port still writes to
+  // the same `.next` by default, so its chunks (compiled with a different
+  // NEXT_PUBLIC_* env, e.g. the mock-mode smoke server) get served to the
+  // already-running dev server. Give such servers their own dir via
+  // NEXT_DIST_DIR — see playwright.smoke.config.ts.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  // `next dev` rewrites tsconfig.json + next-env.d.ts to point at the active
+  // distDir, so a non-default NEXT_DIST_DIR would leave both tracked files dirty
+  // after every smoke run. Send those writes to a throwaway tsconfig instead
+  // (git-ignored); NEXT_TSCONFIG_PATH is set alongside NEXT_DIST_DIR.
+  ...(process.env.NEXT_TSCONFIG_PATH
+    ? { typescript: { tsconfigPath: process.env.NEXT_TSCONFIG_PATH } }
+    : {}),
   outputFileTracingRoot: path.join(__dirname, '..'),
   turbopack: {
     root: path.join(__dirname, '..'),
